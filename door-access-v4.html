@@ -1,0 +1,2381 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام التحكم في الدخول</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap');
+:root{
+  --accent:#3b82f6;--accent2:#06b6d4;--success:#10b981;--danger:#ef4444;
+  --warning:#f59e0b;--purple:#818cf8;--r:16px;
+}
+[data-theme="dark"]{--bg:#0a0f1e;--surface:#111827;--surface2:#1e293b;--border:#1e3a5f;--text:#f1f5f9;--text2:#94a3b8;}
+[data-theme="light"]{--bg:#f0f4ff;--surface:#ffffff;--surface2:#e8eef8;--border:#c7d7f0;--text:#0f172a;--text2:#475569;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background .3s,color .2s;}
+.page{display:none;min-height:100vh;flex-direction:column;}
+.page.active{display:flex;}
+
+/* LANDING */
+#landing{align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,#0a0f1e 70%);padding:2rem;}
+.logo{width:80px;height:80px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:24px;display:flex;align-items:center;justify-content:center;margin:0 auto 2rem;font-size:2rem;box-shadow:0 0 40px rgba(59,130,246,.4);}
+.landing-title{font-size:2rem;font-weight:900;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,#fff,var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.landing-sub{color:var(--text2);text-align:center;margin-bottom:3rem;}
+.landing-btns{display:flex;flex-direction:column;gap:1rem;max-width:400px;width:100%;}
+.btn-land{padding:1.2rem;border-radius:var(--r);border:none;font-family:'Cairo',sans-serif;font-size:1.1rem;font-weight:700;cursor:pointer;transition:all .3s;display:flex;align-items:center;justify-content:center;gap:.75rem;}
+.bl-admin{background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;box-shadow:0 4px 20px rgba(59,130,246,.4);}
+.bl-admin:hover{transform:translateY(-2px);}
+.bl-user{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.bl-user:hover{background:#2d3748;transform:translateY(-2px);}
+.bl-super{background:transparent;color:var(--warning);border:1px solid var(--warning);font-size:.9rem;padding:.8rem;}
+
+/* AUTH */
+#auth{align-items:center;justify-content:center;padding:2rem;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,#0a0f1e 70%);}
+.auth-box{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:2rem;width:100%;max-width:400px;}
+.auth-back{background:none;border:none;color:var(--text2);cursor:pointer;font-family:'Cairo',sans-serif;font-size:.9rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:.5rem;}
+.auth-title{font-size:1.5rem;font-weight:700;margin-bottom:.25rem;}
+.auth-sub{color:var(--text2);font-size:.85rem;margin-bottom:2rem;}
+.fg{margin-bottom:1rem;}
+.fg label{display:block;font-size:.85rem;color:var(--text2);margin-bottom:.5rem;font-weight:600;}
+.fg input,.fg select{width:100%;padding:.875rem 1rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Cairo',sans-serif;font-size:.95rem;outline:none;transition:border-color .3s;}
+.fg input:focus,.fg select:focus{border-color:var(--accent);}
+.btn-pri{width:100%;padding:1rem;background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;border:none;border-radius:12px;font-family:'Cairo',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:all .3s;margin-top:.5rem;}
+.btn-pri:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(59,130,246,.4);}
+.auth-toggle{text-align:center;margin-top:1rem;font-size:.85rem;color:var(--text2);}
+.auth-toggle span{color:var(--accent);cursor:pointer;font-weight:600;}
+.pending-msg{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:1rem;text-align:center;color:var(--warning);font-size:.9rem;margin-top:1rem;display:none;}
+
+/* TOPBAR */
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.tb-title{font-size:1.1rem;font-weight:700;}
+.tb-sub{font-size:.75rem;color:var(--text2);}
+.avatar{width:40px;height:40px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;}
+.logout-btn{background:none;border:none;color:var(--text2);cursor:pointer;font-size:1.2rem;}
+.logout-btn:hover{color:var(--danger);}
+
+/* NAV */
+.nav-bar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;overflow-x:auto;scrollbar-width:none;flex-shrink:0;}
+.nav-bar::-webkit-scrollbar{display:none;}
+.nav-tab{padding:1rem 1.1rem;background:none;border:none;color:var(--text2);font-family:'Cairo',sans-serif;font-size:.82rem;font-weight:600;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all .3s;}
+.nav-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+/* CONTENT */
+.content{flex:1;padding:1.5rem;overflow-y:auto;}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
+
+/* STATUS */
+.status-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;display:flex;align-items:center;gap:1rem;margin-bottom:1rem;}
+.si{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;}
+.si.ok{background:rgba(16,185,129,.15);}
+.si.warn{background:rgba(245,158,11,.15);}
+.si.err{background:rgba(239,68,68,.15);}
+.st h3{font-size:.95rem;font-weight:700;margin-bottom:.2rem;}
+.st p{font-size:.8rem;color:var(--text2);}
+
+/* ═══════════════════════════════════
+   ANIMATED DOOR SVG
+═══════════════════════════════════ */
+.door-visual-wrap{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:1.5rem;
+  background:var(--surface2);
+  border-radius:var(--r);
+  margin-bottom:1rem;
+  border:1px solid var(--border);
+  gap:1rem;
+}
+.door-svg-container{
+  position:relative;
+  width:160px;
+  height:220px;
+}
+/* Frame */
+.door-frame{
+  position:absolute;
+  inset:0;
+}
+/* The door panel that rotates in 3D perspective */
+.door-panel-wrap{
+  position:absolute;
+  left:8px; top:8px;
+  width:130px; height:195px;
+  transform-origin:left center;
+  transform-style:preserve-3d;
+  transition:transform 1.2s cubic-bezier(0.4,0,0.2,1);
+  perspective:600px;
+}
+.door-panel-wrap.open{
+  transform:perspective(400px) rotateY(-75deg);
+}
+.door-status-label{
+  font-size:1rem;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+}
+.door-status-label.open-lbl{color:var(--success);}
+.door-status-label.closed-lbl{color:var(--danger);}
+.door-status-label.moving-lbl{color:var(--warning);}
+
+/* DOOR CARD */
+.door-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.5rem;margin-bottom:1rem;}
+.door-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;}
+.door-name{font-size:1.1rem;font-weight:700;}
+.badge-on{background:rgba(16,185,129,.15);color:var(--success);padding:.25rem .75rem;border-radius:99px;font-size:.75rem;font-weight:600;}
+.badge-off{background:rgba(239,68,68,.15);color:var(--danger);padding:.25rem .75rem;border-radius:99px;font-size:.75rem;font-weight:600;}
+.door-btns{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.6rem;margin-top:1rem;}
+.dbtn{padding:.9rem .3rem;border-radius:12px;border:none;font-family:'Cairo',sans-serif;font-size:.77rem;font-weight:700;cursor:pointer;transition:all .3s;display:flex;flex-direction:column;align-items:center;gap:.35rem;}
+.dbtn .ic{font-size:1.3rem;}
+.dbtn:disabled{opacity:.4;cursor:not-allowed;transform:none!important;}
+.db-open{background:rgba(16,185,129,.15);color:var(--success);border:1px solid rgba(16,185,129,.3);}
+.db-open:hover:not(:disabled){background:rgba(16,185,129,.25);transform:translateY(-2px);}
+.db-close{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3);}
+.db-close:hover:not(:disabled){background:rgba(239,68,68,.25);transform:translateY(-2px);}
+.db-stop{background:rgba(245,158,11,.15);color:var(--warning);border:1px solid rgba(245,158,11,.3);}
+.db-stop:hover:not(:disabled){background:rgba(245,158,11,.25);transform:translateY(-2px);}
+.db-auto{background:rgba(129,140,248,.15);color:var(--purple);border:1px solid rgba(129,140,248,.3);}
+.db-auto:hover:not(:disabled){background:rgba(129,140,248,.25);transform:translateY(-2px);}
+.db-auto.running{background:rgba(129,140,248,.25);border-color:var(--purple);}
+
+/* Countdown ring */
+.cring{width:38px;height:38px;position:relative;display:none;}
+.cring svg{transform:rotate(-90deg);}
+.cring circle{fill:none;stroke:rgba(129,140,248,.25);stroke-width:3.5;}
+.cring .cp{stroke:var(--purple);stroke-dasharray:100;stroke-dashoffset:0;transition:stroke-dashoffset 1s linear;stroke-linecap:round;}
+.cring .cn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:.82rem;font-weight:900;color:var(--purple);}
+
+/* SECTION */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;}
+.sec-title{font-size:1.1rem;font-weight:700;}
+.btn-sm{padding:.5rem 1rem;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:'Cairo',sans-serif;font-size:.8rem;font-weight:700;cursor:pointer;transition:all .3s;}
+.btn-sm:hover{background:#2563eb;}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3);}
+.btn-danger:hover{background:rgba(239,68,68,.25);}
+.btn-success{background:rgba(16,185,129,.15);color:var(--success);border:1px solid rgba(16,185,129,.3);}
+.btn-success:hover{background:rgba(16,185,129,.25);}
+
+/* USERS */
+.user-list{display:flex;flex-direction:column;gap:.75rem;}
+.user-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.25rem;}
+.ui-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;}
+.ui-info{display:flex;align-items:center;gap:.75rem;}
+.mini-av{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;}
+.ui-name{font-weight:700;font-size:.95rem;}
+.ui-email{font-size:.75rem;color:var(--text2);}
+.ui-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem;}
+.bdg{padding:.2rem .6rem;border-radius:99px;font-size:.7rem;font-weight:700;}
+.bdg-pend{background:rgba(245,158,11,.15);color:var(--warning);border:1px solid rgba(245,158,11,.3);}
+.bdg-active{background:rgba(16,185,129,.15);color:var(--success);border:1px solid rgba(16,185,129,.3);}
+.bdg-frozen{background:rgba(129,140,248,.15);color:var(--purple);border:1px solid rgba(129,140,248,.3);}
+.bdg-admin{background:rgba(59,130,246,.15);color:var(--accent);border:1px solid rgba(59,130,246,.3);}
+
+/* GPS SETTINGS — per-institute */
+.gps-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;margin-bottom:1rem;}
+.gps-card h3{font-size:.95rem;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem;}
+.gps-row{display:flex;align-items:center;gap:1rem;}
+.gps-display{flex:1;background:var(--surface2);border-radius:12px;padding:1.25rem;text-align:center;}
+.gps-num{font-size:2.8rem;font-weight:900;color:var(--accent);line-height:1;}
+.gps-unit{font-size:.8rem;color:var(--text2);margin-top:.2rem;}
+.gps-col{display:flex;flex-direction:column;gap:.5rem;}
+.gps-btn{width:48px;height:48px;border-radius:12px;border:none;font-size:1.5rem;font-weight:900;cursor:pointer;transition:all .2s;font-family:'Cairo',sans-serif;}
+.gps-plus{background:rgba(16,185,129,.15);color:var(--success);border:1px solid rgba(16,185,129,.3);}
+.gps-plus:hover{background:rgba(16,185,129,.3);}
+.gps-minus{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3);}
+.gps-minus:hover{background:rgba(239,68,68,.3);}
+.step-row{display:flex;gap:.5rem;margin-top:.75rem;align-items:center;}
+.step-lbl{font-size:.8rem;color:var(--text2);flex-shrink:0;}
+.step-btn{flex:1;padding:.4rem;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:'Cairo',sans-serif;font-size:.8rem;cursor:pointer;transition:all .2s;}
+.step-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(59,130,246,.1);}
+
+/* SCHEDULE */
+.sch-day{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.25rem;display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;}
+.day-lbl{font-weight:700;width:72px;flex-shrink:0;font-size:.88rem;}
+.tog{position:relative;width:44px;height:24px;flex-shrink:0;}
+.tog input{opacity:0;width:0;height:0;}
+.tog-sl{position:absolute;inset:0;background:var(--surface2);border-radius:99px;cursor:pointer;transition:.3s;border:1px solid var(--border);}
+.tog-sl:before{content:'';position:absolute;width:16px;height:16px;background:var(--text2);border-radius:50%;top:3px;left:3px;transition:.3s;}
+.tog input:checked+.tog-sl{background:var(--accent);border-color:var(--accent);}
+.tog input:checked+.tog-sl:before{transform:translateX(20px);background:#fff;}
+.time-wrap{display:flex;gap:.5rem;align-items:center;flex:1;}
+.time-inp{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;padding:.4rem .5rem;font-size:.82rem;width:84px;text-align:center;outline:none;}
+.time-inp:focus{border-color:var(--accent);}
+
+/* ALERTS */
+.alert-item{background:var(--surface);border:1px solid rgba(239,68,68,.3);border-radius:var(--r);padding:1rem 1.25rem;margin-bottom:.75rem;display:flex;gap:1rem;}
+.al-icon{font-size:1.3rem;flex-shrink:0;}
+.al-text h4{font-size:.9rem;font-weight:700;color:var(--danger);margin-bottom:.25rem;}
+.al-text p{font-size:.8rem;color:var(--text2);}
+.al-loc{color:var(--warning);font-size:.75rem;margin-top:.25rem;}
+.al-map-btn{display:inline-flex;align-items:center;gap:.4rem;margin-top:.5rem;padding:.3rem .75rem;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:var(--warning);font-size:.75rem;font-weight:700;text-decoration:none;}
+
+/* HISTORY */
+.hist-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:.5rem;display:flex;gap:1rem;align-items:center;}
+.hist-ic{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
+.h-open{background:rgba(16,185,129,.15);}
+.h-close{background:rgba(239,68,68,.15);}
+.h-stop{background:rgba(245,158,11,.15);}
+.hist-text h4{font-size:.85rem;font-weight:700;}
+.hist-text p{font-size:.75rem;color:var(--text2);}
+
+/* INSTITUTES */
+.inst-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;margin-bottom:.75rem;}
+.inst-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem;}
+.inst-name{font-size:1rem;font-weight:700;}
+.inst-meta{font-size:.8rem;color:var(--text2);margin-top:.2rem;}
+.inst-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;}
+.stat-box{background:var(--surface2);border-radius:10px;padding:.75rem;text-align:center;}
+.stat-num{font-size:1.3rem;font-weight:900;color:var(--accent);}
+.stat-lbl{font-size:.7rem;color:var(--text2);}
+
+/* MODAL */
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center;padding:1.5rem;}
+.modal-ov.active{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:2rem;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;}
+.modal-title{font-size:1.2rem;font-weight:700;margin-bottom:1.5rem;}
+.modal-actions{display:flex;gap:.75rem;margin-top:1.5rem;}
+.btn-cancel{flex:1;padding:.875rem;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:12px;font-family:'Cairo',sans-serif;font-size:.9rem;font-weight:600;cursor:pointer;}
+
+/* TOAST */
+.toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.875rem 1.5rem;font-size:.9rem;font-weight:600;z-index:999;transition:transform .3s;white-space:nowrap;box-shadow:0 10px 40px rgba(0,0,0,.5);}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.success{border-color:var(--success);color:var(--success);}
+.toast.error{border-color:var(--danger);color:var(--danger);}
+.toast.info{border-color:var(--accent);color:var(--accent);}
+.empty{color:var(--text2);text-align:center;padding:2rem;font-size:.9rem;}
+
+/* AVATAR UPLOAD */
+.avatar-upload-wrap{display:flex;flex-direction:column;align-items:center;gap:.75rem;margin-bottom:1.25rem;}
+.av-circle{width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;color:#fff;overflow:hidden;border:3px solid var(--border);cursor:pointer;position:relative;}
+.av-circle img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.av-overlay{position:absolute;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;font-size:.75rem;color:#fff;border-radius:50%;}
+.av-circle:hover .av-overlay{display:flex;}
+.av-upload-lbl{font-size:.78rem;color:var(--accent);cursor:pointer;background:none;border:none;font-family:'Cairo',sans-serif;}
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1rem;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1rem;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.15);}
+.stat-card .big{font-size:2rem;font-weight:900;color:var(--accent);}
+.stat-card .lbl{font-size:.78rem;color:var(--text2);margin-top:.25rem;}
+/* BAR CHART */
+.chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;margin-bottom:1rem;}
+.chart-title{font-size:.95rem;font-weight:700;margin-bottom:1rem;}
+.bar-chart{display:flex;align-items:flex-end;gap:.4rem;height:120px;padding-bottom:.25rem;border-bottom:1px solid var(--border);}
+.bar-col{display:flex;flex-direction:column;align-items:center;gap:.3rem;flex:1;}
+.bar{background:linear-gradient(to top,var(--accent),var(--accent2));border-radius:4px 4px 0 0;width:100%;min-height:4px;transition:height .6s ease;}
+.bar-lbl{font-size:.6rem;color:var(--text2);text-align:center;}
+.bar-val{font-size:.68rem;font-weight:700;color:var(--accent);}
+/* TOP LIST */
+.top-item{display:flex;align-items:center;gap:.75rem;padding:.65rem;background:var(--surface2);border-radius:10px;margin-bottom:.5rem;}
+.top-rank{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:.72rem;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.top-bar-wrap{flex:1;background:var(--border);border-radius:99px;height:6px;}
+.top-bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent2));}
+/* LOCATION CARD */
+.loc-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;margin-bottom:.75rem;}
+.loc-hdr{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;}
+.loc-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:.4rem;}
+.dot-near{background:var(--success);box-shadow:0 0 6px var(--success);}
+.dot-far{background:var(--warning);}
+.dot-unknown{background:var(--text2);}
+/* THEME/LANG BAR */
+.tl-bar{display:flex;gap:.75rem;justify-content:center;margin-top:1.5rem;}
+.tl-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:10px;padding:.5rem 1rem;font-family:'Cairo',sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;}
+.tl-btn:hover{border-color:var(--accent);color:var(--accent);}
+/* EXPORT */
+.export-row{display:flex;gap:.5rem;margin-bottom:1rem;}
+.export-btn{display:flex;align-items:center;gap:.4rem;padding:.5rem .9rem;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:'Cairo',sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;}
+.export-btn:hover{border-color:var(--accent);color:var(--accent);}
+/* TOPBAR ICON BTN */
+.icon-btn{background:var(--surface2);border:1px solid var(--border);border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;color:var(--text2);}
+.icon-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+
+/* INSTITUTE HEADER BANNER */
+.inst-banner{
+  background:linear-gradient(135deg,rgba(59,130,246,.15),rgba(6,182,212,.1));
+  border:1px solid rgba(59,130,246,.25);
+  border-radius:var(--r);
+  padding:1.25rem 1.5rem;
+  margin-bottom:1.25rem;
+  display:flex;
+  align-items:center;
+  gap:1rem;
+}
+.inst-banner-icon{
+  width:52px;height:52px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border-radius:14px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.5rem;
+  flex-shrink:0;
+  box-shadow:0 4px 16px rgba(59,130,246,.3);
+}
+.inst-banner-name{
+  font-size:1.35rem;
+  font-weight:900;
+  background:linear-gradient(135deg,var(--text),var(--accent2));
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  line-height:1.2;
+}
+.inst-banner-sub{
+  font-size:.78rem;
+  color:var(--text2);
+  margin-top:.2rem;
+}
+/* USER TOPBAR INST NAME */
+.tb-inst{
+  font-size:1.1rem;
+  font-weight:900;
+  background:linear-gradient(135deg,var(--text),var(--accent2));
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  line-height:1.1;
+}
+.tb-user-greet{font-size:.75rem;color:var(--text2);margin-top:.1rem;}
+/* NOTE ON USER */
+.user-note{background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.2);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;color:var(--text2);margin-top:.5rem;display:flex;align-items:center;gap:.4rem;}
+.user-note span{color:var(--purple);font-size:.8rem;}
+
+
+
+/* HERO ANIMATION */
+@keyframes heroIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.inst-hero{animation:heroIn .4s ease both;}
+
+/* BEAUTIFUL INSTITUTE BANNER in content area */
+.inst-hero{
+  background:linear-gradient(135deg,rgba(59,130,246,.15),rgba(6,182,212,.08));
+  border:1px solid rgba(59,130,246,.35);
+  border-radius:22px;
+  padding:1.4rem 1.5rem;
+  margin-bottom:1.25rem;
+  display:flex;align-items:center;gap:1.1rem;
+  position:relative;overflow:hidden;
+  box-shadow:0 4px 24px rgba(59,130,246,.12);
+}
+.inst-hero::before{
+  content:'';position:absolute;top:-40px;left:-40px;
+  width:160px;height:160px;
+  background:radial-gradient(circle,rgba(59,130,246,.18),transparent 70%);
+  pointer-events:none;
+}
+.inst-hero::after{
+  content:'';position:absolute;bottom:-20px;right:-20px;
+  width:100px;height:100px;
+  background:radial-gradient(circle,rgba(6,182,212,.12),transparent 70%);
+  pointer-events:none;
+}
+.inst-hero-icon{
+  width:58px;height:58px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border-radius:17px;display:flex;align-items:center;justify-content:center;
+  font-size:1.7rem;flex-shrink:0;
+  box-shadow:0 8px 24px rgba(59,130,246,.4);
+}
+.inst-hero-name{
+  font-size:1.45rem;font-weight:900;
+  background:linear-gradient(120deg,var(--text) 30%,var(--accent2) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+  line-height:1.2;letter-spacing:-.01em;
+}
+.inst-hero-sub{
+  font-size:.82rem;color:var(--text2);margin-top:.3rem;
+  display:flex;align-items:center;gap:.35rem;
+}
+
+/* USER NOTE */
+.note-badge{
+  display:flex;align-items:flex-start;gap:.5rem;
+  background:rgba(129,140,248,.08);
+  border:1px solid rgba(129,140,248,.25);
+  border-radius:10px;padding:.6rem .85rem;
+  font-size:.8rem;color:var(--text2);margin-top:.6rem;line-height:1.5;
+}
+.note-badge-icon{font-size:.9rem;flex-shrink:0;margin-top:.05rem;}
+
+/* BACKUP CARD */
+.backup-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;margin-bottom:1rem;}
+.backup-card h3{font-size:.95rem;font-weight:700;margin-bottom:1rem;}
+.backup-row{display:flex;gap:.75rem;flex-wrap:wrap;}
+.backup-btn{flex:1;min-width:120px;padding:.875rem;border-radius:12px;border:none;font-family:'Cairo',sans-serif;font-size:.88rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;transition:all .2s;}
+.backup-export{background:rgba(16,185,129,.12);color:var(--success);border:1px solid rgba(16,185,129,.3);}
+.backup-export:hover{background:rgba(16,185,129,.22);}
+.backup-import{background:rgba(59,130,246,.12);color:var(--accent);border:1px solid rgba(59,130,246,.3);}
+.backup-import:hover{background:rgba(59,130,246,.22);}
+.backup-reset{background:rgba(239,68,68,.1);color:var(--danger);border:1px solid rgba(239,68,68,.25);}
+.backup-reset:hover{background:rgba(239,68,68,.2);}
+
+/* NOTE MODAL TEXTAREA */
+.note-ta{width:100%;padding:.875rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Cairo',sans-serif;font-size:.9rem;outline:none;resize:vertical;min-height:100px;line-height:1.6;}
+.note-ta:focus{border-color:var(--accent);}
+
+</style>
+</head>
+<body>
+
+<!-- LANDING → direct login -->
+<div id="landing" class="page active">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,var(--bg) 70%);padding:2rem;">
+    <div class="logo">🔐</div>
+    <h1 class="landing-title">نظام التحكم في الدخول</h1>
+    <p class="landing-sub">نظام ذكي لإدارة أبواب المؤسسات</p>
+
+    <div class="auth-box" style="margin-top:1.5rem">
+      <!-- LOGIN FORM -->
+      <div id="land-login">
+        <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="l-email" placeholder="example@email.com" onkeydown="if(event.key==='Enter')el('l-pass').focus()"></div>
+        <div class="fg"><label>كلمة المرور</label><input type="password" id="l-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')smartLogin()"></div>
+        <button class="btn-pri" onclick="smartLogin()" id="l-btn">🔐 دخول</button>
+        <div class="auth-toggle" style="margin-top:1rem">ليس لديك حساب؟ <span onclick="showLandRegister()">إنشاء حساب</span></div>
+      </div>
+
+      <!-- REGISTER FORM -->
+      <div id="land-register" style="display:none">
+        <button class="auth-back" onclick="showLandLogin()" style="margin-bottom:1rem">← رجوع</button>
+        <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:1.25rem">إنشاء حساب جديد</h3>
+
+        <!-- account type selector -->
+        <div style="display:flex;gap:.5rem;margin-bottom:1.25rem;background:var(--surface2);border-radius:12px;padding:.3rem;">
+          <button id="rtype-user" onclick="setRegType('user')" style="flex:1;padding:.6rem;border:none;border-radius:9px;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;background:var(--accent);color:#fff;transition:all .2s">👤 مستخدم</button>
+          <button id="rtype-admin" onclick="setRegType('admin')" style="flex:1;padding:.6rem;border:none;border-radius:9px;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;background:transparent;color:var(--text2);transition:all .2s">🏛️ مدير</button>
+        </div>
+
+        <!-- avatar -->
+        <div class="avatar-upload-wrap" id="av-wrap">
+          <div class="av-circle" id="av-preview" onclick="el('av-file').click()">
+            <span id="av-letter">م</span>
+            <div class="av-overlay">📷 تغيير</div>
+          </div>
+          <button class="av-upload-lbl" onclick="el('av-file').click()" type="button">📷 إضافة صورة (اختياري)</button>
+          <input type="file" id="av-file" accept="image/*" style="display:none" onchange="previewAv(this)">
+        </div>
+
+        <div class="fg"><label>الاسم الكامل</label><input id="r-name" placeholder="محمد أحمد" oninput="updateAvLetter(this.value)"></div>
+        <div class="fg" id="inst-sel-grp"><label>المؤسسة</label><select id="r-inst"><option value="">اختر المؤسسة</option></select></div>
+        <div class="fg" id="inst-name-grp" style="display:none"><label>اسم المؤسسة الجديدة</label><input id="r-inst-name" placeholder="معهد حميدة بكير"></div>
+        <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="r-email" placeholder="example@email.com"></div>
+        <div class="fg"><label>كلمة المرور</label><input type="password" id="r-pass" placeholder="••••••••"></div>
+        <button class="btn-pri" onclick="smartRegister()">✅ إنشاء الحساب</button>
+        <div class="pending-msg" id="pend-msg">⏳ تم إرسال طلبك، في انتظار موافقة مدير المؤسسة</div>
+      </div>
+    </div>
+
+    <div class="tl-bar">
+      <button class="tl-btn" id="theme-btn" onclick="toggleTheme()">☀️ Light Mode</button>
+      <button class="tl-btn" id="lang-btn" onclick="toggleLang()">🇫🇷 Français</button>
+    </div>
+  </div>
+</div>
+
+<!-- AUTH page removed — login integrated in landing -->
+
+<!-- USER DASHBOARD -->
+<div id="user-dash" class="page">
+  <div class="topbar">
+    <div>
+      <div class="tb-inst" id="u-inst-name">المؤسسة</div>
+      <div class="tb-user-greet" id="u-greeting">مرحباً</div>
+    </div>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <button class="icon-btn" onclick="toggleTheme()" id="theme-btn">🌙</button>
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem;overflow:hidden;flex-shrink:0;border:2px solid var(--border)" id="u-av-sm"><span id="u-av-letter">م</span></div>
+      <button class="icon-btn" onclick="logout()">⏏️</button>
+    </div>
+  </div>
+  <div class="content" style="display:flex;flex-direction:column;gap:1rem;">
+    <div class="inst-hero" id="u-inst-hero">
+      <div class="inst-hero-icon">🏛️</div>
+      <div style="flex:1;min-width:0">
+        <div class="inst-hero-name" id="u-inst-hero-name">المؤسسة</div>
+        <div class="inst-hero-sub" id="u-inst-hero-sub">مرحباً بك</div>
+      </div>
+    </div>
+    <div class="status-card"><div class="si ok" id="geo-ic">📍</div><div class="st"><h3 id="geo-t">جاري التحقق من موقعك...</h3><p id="geo-s">يجب أن تكون قريباً من الباب ليتم الفتح</p></div></div>
+
+    <!-- GPS Permission Banner -->
+    <div id="geo-perm-banner" style="display:none;background:linear-gradient(135deg,rgba(239,68,68,0.12),rgba(239,68,68,0.06));border:1px solid rgba(239,68,68,0.4);border-radius:16px;padding:1.25rem;gap:1rem;align-items:flex-start;flex-direction:column;">
+      <div style="display:flex;gap:.75rem;align-items:center;width:100%">
+        <div style="width:44px;height:44px;background:rgba(239,68,68,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0">📍</div>
+        <div>
+          <div style="font-weight:700;font-size:.95rem;margin-bottom:.2rem">يجب السماح بتحديد الموقع</div>
+          <div style="font-size:.8rem;color:var(--text2)">يجب أن تكون قريباً من الباب ليتم فتحه</div>
+        </div>
+      </div>
+      <button onclick="requestGeoPermission()" style="width:100%;padding:.875rem;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;border:none;border-radius:12px;font-family:Cairo,sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem">
+        📍 السماح بتحديد الموقع
+      </button>
+    </div>
+
+    <!-- Fake GPS Warning -->
+    <div id="geo-fake-warning" style="display:none;background:linear-gradient(135deg,rgba(239,68,68,0.15),rgba(239,68,68,0.08));border:2px solid rgba(239,68,68,0.5);border-radius:16px;padding:1.25rem;flex-direction:column;gap:1rem;">
+      <div style="display:flex;gap:.75rem;align-items:center">
+        <div style="width:48px;height:48px;background:rgba(239,68,68,0.2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0">🚫</div>
+        <div>
+          <div style="font-weight:900;font-size:1rem;color:var(--danger);margin-bottom:.25rem">تم اكتشاف موقع مزيف!</div>
+          <div id="fake-gps-reason" style="font-size:.8rem;color:var(--text2)">موقع GPS مزيف</div>
+        </div>
+      </div>
+      <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:1rem;font-size:.82rem;color:var(--text2);line-height:1.7">
+        <div style="color:var(--danger);font-weight:700;margin-bottom:.5rem">⚠️ لا يمكن فتح الباب عند استخدام GPS مزيف</div>
+        <div>يرجى إيقاف تطبيق Fake GPS وإعادة المحاولة من موقعك الحقيقي</div>
+      </div>
+      <button onclick="requestGeoPermission()" style="width:100%;padding:.75rem;background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid rgba(239,68,68,0.4);border-radius:12px;font-family:Cairo,sans-serif;font-size:.9rem;font-weight:700;cursor:pointer">
+        🔄 إعادة التحقق من الموقع
+      </button>
+    </div>
+
+    <!-- GPS Settings Guide (when permanently denied) -->
+    <div id="geo-settings-guide" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.05));border:1px solid rgba(245,158,11,0.4);border-radius:16px;padding:1.25rem;">
+      <div style="display:flex;gap:.75rem;align-items:center;margin-bottom:1rem">
+        <div style="width:44px;height:44px;background:rgba(245,158,11,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0">⚙️</div>
+        <div>
+          <div style="font-weight:700;font-size:.95rem;margin-bottom:.2rem">فعّل الموقع من الإعدادات</div>
+          <div style="font-size:.8rem;color:var(--text2)">يجب أن تكون قريباً من الباب ليتم فتحه</div>
+        </div>
+      </div>
+      <div style="background:var(--surface2);border-radius:12px;padding:1rem;font-size:.82rem;color:var(--text2);line-height:1.8">
+        <div style="margin-bottom:.5rem">🔧 <strong style="color:var(--text)">Android:</strong> الإعدادات ← التطبيقات ← المتصفح ← الأذونات ← الموقع ← السماح</div>
+        <div>🍎 <strong style="color:var(--text)">iPhone:</strong> الإعدادات ← الخصوصية ← خدمات الموقع ← Safari ← دائماً</div>
+      </div>
+      <button onclick="requestGeoPermission()" style="width:100%;padding:.75rem;background:rgba(245,158,11,0.15);color:var(--warning);border:1px solid rgba(245,158,11,0.4);border-radius:12px;font-family:Cairo,sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;margin-top:.75rem">
+        🔄 المحاولة مجدداً
+      </button>
+    </div>
+
+    <div class="status-card"><div class="si ok" id="time-ic">⏰</div><div class="st"><h3 id="time-t">جاري التحقق من الوقت...</h3><p id="time-s">يتم التحقق من ساعات العمل</p></div></div>
+    <h2 style="font-size:1rem;color:var(--text2);font-weight:600;">الأبواب المتاحة</h2>
+    <div id="u-doors"></div>
+  </div>
+</div>
+
+<!-- ADMIN DASHBOARD -->
+<div id="admin-dash" class="page">
+  <div class="topbar">
+    <div>
+      <div class="tb-inst" id="ad-inst-name">لوحة التحكم</div>
+      <div class="tb-user-greet">مدير المؤسسة</div>
+    </div>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <button class="icon-btn" onclick="toggleTheme()" id="theme-btn">🌙</button>
+      <button class="icon-btn" onclick="toggleLang()">🌍</button>
+      <button class="icon-btn" onclick="logout()">⏏️</button>
+    </div>
+  </div>
+  <div class="nav-bar">
+    <button class="nav-tab active" onclick="swTab('admin','users',this)">👥 المستخدمون</button>
+    <button class="nav-tab" onclick="swTab('admin','doors',this)">🚪 الأبواب</button>
+    <button class="nav-tab" onclick="swTab('admin','stats',this)">📊 الإحصائيات</button>
+    <button class="nav-tab" onclick="swTab('admin','alerts',this)">🚨 التنبيهات</button>
+    <button class="nav-tab" onclick="swTab('admin','schedule',this)">⏰ الجدول</button>
+    <button class="nav-tab" onclick="swTab('admin','settings',this)">⚙️ الإعدادات</button>
+    <button class="nav-tab" onclick="swTab('admin','history',this)">📋 السجل</button>
+  </div>
+  <div class="content">
+    <div class="tab-pane active" id="admin-users">
+      <div class="inst-hero" id="ad-inst-hero">
+        <div class="inst-hero-icon">🏛️</div>
+        <div>
+          <div class="inst-hero-name" id="ad-inst-hero-name">المؤسسة</div>
+          <div class="inst-hero-sub" id="ad-inst-hero-sub">لوحة التحكم</div>
+        </div>
+      </div>
+      <div id="pend-section" style="margin-bottom:1.5rem;display:none">
+        <p style="color:var(--warning);font-size:.85rem;font-weight:700;margin-bottom:.75rem">⏳ طلبات الانتظار</p>
+        <div id="pend-list" class="user-list"></div>
+      </div>
+      <div class="sec-hdr"><span class="sec-title">المستخدمون</span><button class="btn-sm" onclick="openModal('m-add-user')">+ إضافة</button></div>
+      <div id="admin-user-list" class="user-list"></div>
+    </div>
+    <div class="tab-pane" id="admin-doors">
+      <div class="sec-hdr"><span class="sec-title">الأبواب</span><button class="btn-sm" onclick="openModal('m-add-door')">+ إضافة باب</button></div>
+      <div id="admin-door-list"></div>
+    </div>
+    <div class="tab-pane" id="admin-stats">
+      <div style="font-size:1.1rem;font-weight:700;margin-bottom:1rem">📊 الإحصائيات</div>
+      <div class="stats-grid" id="a-stats-grid"></div>
+      <div class="chart-wrap">
+        <div class="chart-title">النشاط الأسبوعي (آخر 7 أيام)</div>
+        <div class="bar-chart" id="a-weekly-chart"></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title">أكثر المستخدمين نشاطاً</div>
+        <div id="a-top-users"></div>
+      </div>
+    </div>
+    <div class="tab-pane" id="admin-alerts">
+      <div class="sec-hdr"><span class="sec-title">محاولات مشبوهة</span><span id="al-count" style="font-size:.8rem;color:var(--text2)">0 تنبيه</span></div>
+      <div id="admin-alert-list"></div>
+    </div>
+    <div class="tab-pane" id="admin-schedule">
+      <div class="sec-hdr"><span class="sec-title">الجدول الأسبوعي</span><button class="btn-sm" onclick="saveSch()">💾 حفظ</button></div>
+      <div id="sch-grid"></div>
+    </div>
+    <div class="tab-pane" id="admin-settings">
+      <div class="sec-title" style="margin-bottom:1rem">⚙️ إعدادات المؤسسة</div>
+      <!-- BACKUP -->
+      <div class="backup-card">
+        <h3>💾 النسخ الاحتياطي</h3>
+        <p style="font-size:.82rem;color:var(--text2);margin-bottom:1rem">احفظ بياناتك واستعدها في أي وقت</p>
+        <div class="backup-row">
+          <button class="backup-btn backup-export" onclick="backupExport()">📤 تصدير النسخة</button>
+          <label class="backup-btn backup-import" style="cursor:pointer">
+            📥 استعادة
+            <input type="file" accept=".json" style="display:none" onchange="backupImport(this)">
+          </label>
+        </div>
+        <div id="backup-info" style="margin-top:.75rem;font-size:.78rem;color:var(--text2);display:none"></div>
+      </div>
+      <div class="gps-card">
+        <h3>📍 نطاق GPS لهذه المؤسسة فقط</h3>
+        <div class="gps-row">
+          <div class="gps-display"><div class="gps-num" id="ad-gps-n">30</div><div class="gps-unit">متر</div></div>
+          <div class="gps-col">
+            <button class="gps-btn gps-plus" onclick="adjGps(1,'ad')">+</button>
+            <button class="gps-btn gps-minus" onclick="adjGps(-1,'ad')">−</button>
+          </div>
+        </div>
+        <div class="step-row">
+          <span class="step-lbl">الخطوة:</span>
+          <button class="step-btn active" id="ad-s1" onclick="setStep('ad',1)">1م</button>
+          <button class="step-btn" id="ad-s5" onclick="setStep('ad',5)">5م</button>
+          <button class="step-btn" id="ad-s10" onclick="setStep('ad',10)">10م</button>
+          <button class="step-btn" id="ad-s50" onclick="setStep('ad',50)">50م</button>
+        </div>
+        <button class="btn-sm" style="margin-top:1rem;width:100%" onclick="saveGps('ad')">💾 حفظ نطاق هذه المؤسسة</button>
+      </div>
+    </div>
+    <div class="tab-pane" id="admin-history">
+      <div class="sec-hdr"><span class="sec-title">سجل النشاطات</span></div>
+      <div class="export-row">
+        <button class="export-btn" onclick="exportCSV()">📊 CSV</button>
+        <button class="export-btn" onclick="exportPDF()">📄 PDF</button>
+      </div>
+      <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap">
+        <select id="hist-filter-user" onchange="renderHistFiltered()" style="flex:1;min-width:120px;padding:.65rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:Cairo,sans-serif;font-size:.82rem;outline:none">
+          <option value="">👤 جميع المستخدمين</option>
+        </select>
+        <select id="hist-filter-door" onchange="renderHistFiltered()" style="flex:1;min-width:120px;padding:.65rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:Cairo,sans-serif;font-size:.82rem;outline:none">
+          <option value="">🚪 جميع الأبواب</option>
+        </select>
+        <select id="hist-filter-action" onchange="renderHistFiltered()" style="flex:1;min-width:100px;padding:.65rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:Cairo,sans-serif;font-size:.82rem;outline:none">
+          <option value="">جميع الأحداث</option>
+          <option value="open">🟢 فتح</option>
+          <option value="close">🔴 غلق</option>
+          <option value="stop">🟡 إيقاف</option>
+        </select>
+      </div>
+      <div id="admin-hist-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SUPER DASHBOARD -->
+<div id="super-dash" class="page">
+  <div class="topbar">
+    <div><div class="tb-title">Super Admin</div><div class="tb-sub">إدارة جميع المؤسسات</div></div>
+    <button class="logout-btn" onclick="logout()">⏏️</button>
+  </div>
+  <div class="nav-bar">
+    <button class="nav-tab active" onclick="swTab('super','institutes',this)">🏫 المؤسسات</button>
+    <button class="nav-tab" onclick="swTab('super','all-users',this)">👥 المستخدمون</button>
+    <button class="nav-tab" onclick="swTab('super','locations',this)">📍 المواقع</button>
+    <button class="nav-tab" onclick="swTab('super','sp-stats',this)">📊 الإحصائيات</button>
+    <button class="nav-tab" onclick="swTab('super','sp-settings',this)">⚙️ الإعدادات</button>
+  </div>
+  <div class="content">
+    <div class="tab-pane active" id="super-institutes">
+      <div class="sec-hdr"><span class="sec-title">المؤسسات</span><button class="btn-sm" onclick="openModal('m-add-inst')">+ إضافة</button></div>
+      <div id="inst-list"></div>
+    </div>
+    <div class="tab-pane" id="super-all-users">
+      <div class="sec-hdr"><span class="sec-title">جميع المستخدمين</span></div>
+      <div class="fg" style="margin-bottom:1rem">
+        <select id="sp-inst-filter" onchange="renderAllUsers()" style="width:100%;padding:.75rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Cairo',sans-serif;outline:none;">
+          <option value="">جميع المؤسسات</option>
+        </select>
+      </div>
+      <div id="all-user-list" class="user-list"></div>
+    </div>
+    <div class="tab-pane" id="super-locations">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <span style="font-size:1.1rem;font-weight:700">📍 مواقع المستخدمين</span>
+        <button class="btn-sm" style="background:var(--success)" onclick="refreshLocations()">🔄 تحديث</button>
+      </div>
+      <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.8rem;color:var(--text2)">
+        🔒 هذه المعلومات سرية — المستخدمون لا يعلمون بهذا التتبع
+      </div>
+      <div style="margin-bottom:1rem">
+        <select id="loc-inst-filter" onchange="renderLocations()" style="width:100%;padding:.7rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Cairo,sans-serif;outline:none;font-size:.85rem">
+          <option value="">جميع المؤسسات</option>
+        </select>
+      </div>
+      <div id="locations-list"></div>
+    </div>
+
+    <div class="tab-pane" id="super-sp-stats">
+      <div style="font-size:1.1rem;font-weight:700;margin-bottom:1rem">📊 إحصائيات عامة</div>
+      <div class="stats-grid" id="sp-stats-grid"></div>
+      <div class="chart-wrap">
+        <div class="chart-title">النشاط الأسبوعي — جميع المؤسسات</div>
+        <div class="bar-chart" id="sp-weekly-chart"></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title">المؤسسات الأكثر نشاطاً</div>
+        <div id="sp-top-insts"></div>
+      </div>
+    </div>
+
+    <div class="tab-pane" id="super-sp-settings">
+      <div class="sec-title" style="margin-bottom:1rem">⚙️ ضبط GPS لكل مؤسسة</div>
+      <div id="sp-inst-gps-list"></div>
+      <!-- SUPER BACKUP -->
+      <div class="backup-card" style="margin-top:1.5rem">
+        <h3>💾 النسخ الاحتياطي الكامل</h3>
+        <p style="font-size:.82rem;color:var(--text2);margin-bottom:1rem">نسخة كاملة لجميع المؤسسات والمستخدمين والبيانات</p>
+        <div class="backup-row">
+          <button class="backup-btn backup-export" onclick="backupExport()">📤 تصدير الكل</button>
+          <label class="backup-btn backup-import" style="cursor:pointer">
+            📥 استعادة
+            <input type="file" accept=".json" style="display:none" onchange="backupImport(this)">
+          </label>
+          <button class="backup-btn backup-reset" onclick="backupReset()">🗑️ مسح الكل</button>
+        </div>
+      </div>
+
+      <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border)">
+        <p style="font-size:.85rem;color:var(--text2);margin-bottom:1rem;font-weight:600">⚡ تطبيق نطاق موحد على جميع المؤسسات</p>
+        <div class="gps-card">
+          <h3>📍 نطاق GPS موحد</h3>
+          <div class="gps-row">
+            <div class="gps-display"><div class="gps-num" id="sp-gps-n">30</div><div class="gps-unit">متر</div></div>
+            <div class="gps-col">
+              <button class="gps-btn gps-plus" onclick="adjGps(1,'sp')">+</button>
+              <button class="gps-btn gps-minus" onclick="adjGps(-1,'sp')">−</button>
+            </div>
+          </div>
+          <div class="step-row">
+            <span class="step-lbl">الخطوة:</span>
+            <button class="step-btn active" id="sp-s1" onclick="setStep('sp',1)">1م</button>
+            <button class="step-btn" id="sp-s5" onclick="setStep('sp',5)">5م</button>
+            <button class="step-btn" id="sp-s10" onclick="setStep('sp',10)">10م</button>
+            <button class="step-btn" id="sp-s50" onclick="setStep('sp',50)">50م</button>
+          </div>
+          <button class="btn-sm" style="margin-top:1rem;width:100%;background:var(--warning);color:#000" onclick="saveGps('sp')">⚠️ تطبيق على جميع المؤسسات</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<!-- NOTE MODAL -->
+<div class="modal-ov" id="m-note">
+  <div class="modal">
+    <h3 class="modal-title">📝 ملاحظة — <span id="note-user-name"></span></h3>
+    <div class="fg">
+      <label>الملاحظة</label>
+      <textarea class="note-ta" id="note-text" placeholder="أستاذ رياضيات — قسم أ، عقده ينتهي في جوان..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('m-note')">إلغاء</button>
+      <button class="btn-pri" style="flex:2;margin-top:0" onclick="saveNote()">💾 حفظ الملاحظة</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-ov" id="m-add-user">
+  <div class="modal">
+    <h3 class="modal-title">إضافة مستخدم</h3>
+    <div class="fg"><label>الاسم</label><input id="nu-name" placeholder="محمد أحمد"></div>
+    <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="nu-email" placeholder="email@example.com"></div>
+    <div class="fg"><label>كلمة المرور المؤقتة</label><input id="nu-pass"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('m-add-user')">إلغاء</button>
+      <button class="btn-pri" style="flex:2;margin-top:0" onclick="addUser()">إضافة</button>
+    </div>
+  </div>
+</div>
+<div class="modal-ov" id="m-add-door">
+  <div class="modal">
+    <h3 class="modal-title">إضافة باب جديد</h3>
+    <div class="fg"><label>اسم الباب</label><input id="nd-name" placeholder="الباب الرئيسي"></div>
+    <div class="fg"><label>Device ID (Tuya)</label><input id="nd-devid" placeholder="bf7c670914391fc80cwayk"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('m-add-door')">إلغاء</button>
+      <button class="btn-pri" style="flex:2;margin-top:0" onclick="addDoor()">إضافة</button>
+    </div>
+  </div>
+</div>
+<div class="modal-ov" id="m-hist">
+  <div class="modal" style="max-width:480px">
+    <h3 class="modal-title" id="m-hist-title">سجل المستخدم</h3>
+    <!-- Mini tabs inside modal -->
+    <div style="display:flex;gap:.5rem;margin-bottom:1.25rem;background:var(--surface2);border-radius:12px;padding:.35rem;">
+      <button id="mh-tab-user" onclick="switchHistTab('user')" style="flex:1;padding:.6rem;border:none;border-radius:9px;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;background:var(--accent);color:#fff;transition:all .2s">👤 سجل المستخدم</button>
+      <button id="mh-tab-door" onclick="switchHistTab('door')" style="flex:1;padding:.6rem;border:none;border-radius:9px;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;background:transparent;color:var(--text2);transition:all .2s">🚪 سجل الباب</button>
+    </div>
+    <!-- User history -->
+    <div id="mh-pane-user">
+      <div id="m-hist-body"></div>
+    </div>
+    <!-- Door history: pick door then show its log -->
+    <div id="mh-pane-door" style="display:none">
+      <div class="fg" style="margin-bottom:1rem">
+        <select id="mh-door-select" onchange="renderDoorHistModal()" style="width:100%;padding:.75rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Cairo,sans-serif;outline:none;font-size:.9rem">
+          <option value="">اختر الباب</option>
+        </select>
+      </div>
+      <div id="m-door-hist-body"></div>
+    </div>
+    <div class="modal-actions" style="margin-top:1rem"><button class="btn-pri" style="margin-top:0" onclick="closeModal('m-hist')">إغلاق</button></div>
+  </div>
+</div>
+<div class="modal-ov" id="m-add-inst">
+  <div class="modal">
+    <h3 class="modal-title">إضافة مؤسسة</h3>
+    <div class="fg"><label>اسم المؤسسة</label><input id="ni-name" placeholder="معهد الأمل"></div>
+    <div class="fg"><label>بريد المدير</label><input type="email" id="ni-email" placeholder="admin@inst.com"></div>
+    <div class="fg"><label>كلمة مرور المدير</label><input type="password" id="ni-pass" placeholder="••••••••"></div>
+    <div class="fg"><label>نطاق GPS (متر)</label><input type="number" id="ni-gps" value="30" min="5" max="500"></div>
+    <div class="fg"><label>Device ID الباب الرئيسي</label><input id="ni-dev" placeholder="bf7c..."></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('m-add-inst')">إلغاء</button>
+      <button class="btn-pri" style="flex:2;margin-top:0" onclick="addInstitute()">إضافة</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════════
+const TUYA={clientId:'59gmr8xdf3m5vdt55c89',secret:'f551321a6229419098b3c40728460bdd',base:'https://openapi.tuyaeu.com'};
+const DOOR_LOC={lat:36.837534,lng:10.106981};
+const DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+
+// ════════════════════════════════════════════
+// ANIMATED DOOR SVG BUILDER
+// ════════════════════════════════════════════
+function buildDoorSVG(doorId, pfx) {
+  const uid = `${pfx}-${doorId}`;
+  return `
+  <div class="door-visual-wrap" id="dvw-${uid}">
+    <div style="position:relative;width:180px;height:240px;">
+      <svg width="180" height="240" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+        <!-- Wall / frame background -->
+        <rect x="0" y="0" width="180" height="240" rx="4" fill="#0d1525"/>
+
+        <!-- Floor -->
+        <rect x="0" y="215" width="180" height="25" fill="#0a0f1e"/>
+        <line x1="0" y1="215" x2="180" y2="215" stroke="#1e3a5f" stroke-width="2"/>
+
+        <!-- Door frame outer -->
+        <rect x="20" y="10" width="140" height="210" rx="4"
+              fill="none" stroke="#1e3a5f" stroke-width="3"/>
+
+        <!-- Frame sides (3D effect) -->
+        <rect x="20" y="10" width="12" height="210" fill="#162035"/>
+        <rect x="148" y="10" width="12" height="210" fill="#162035"/>
+        <rect x="20" y="10" width="140" height="12" fill="#162035"/>
+
+        <!-- Door shadow (always visible behind door) -->
+        <rect x="33" y="23" width="114" height="186" fill="#080d18" rx="2"/>
+
+        <!-- Perspective shadow when door is open -->
+        <polygon id="dp-shadow-${uid}"
+          points="33,23 33,209 33,209 33,23"
+          fill="rgba(0,0,0,0.5)"
+          style="transition:all 1.2s cubic-bezier(0.4,0,0.2,1)"/>
+      </svg>
+
+      <!-- Door panel (CSS 3D transform) -->
+      <div id="dp-${uid}" style="
+        position:absolute;
+        left:33px; top:23px;
+        width:114px; height:186px;
+        transform-origin:left center;
+        transform:perspective(400px) rotateY(0deg);
+        transition:transform 1.2s cubic-bezier(0.4,0,0.2,1);
+        transform-style:preserve-3d;
+      ">
+        <!-- Front face -->
+        <svg width="114" height="186" viewBox="0 0 114 186" style="position:absolute;top:0;left:0;backface-visibility:hidden;">
+          <!-- Door body -->
+          <rect x="0" y="0" width="114" height="186" rx="2"
+                fill="url(#dg-${uid})"/>
+          <defs>
+            <linearGradient id="dg-${uid}" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#1a4080"/>
+              <stop offset="40%" stop-color="#2563eb"/>
+              <stop offset="100%" stop-color="#1e3a6e"/>
+            </linearGradient>
+          </defs>
+          <!-- Panel inset top -->
+          <rect x="10" y="12" width="94" height="72" rx="3"
+                fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+          <rect x="13" y="15" width="88" height="66" rx="2"
+                fill="rgba(255,255,255,0.04)"/>
+          <!-- Panel inset bottom -->
+          <rect x="10" y="96" width="94" height="78" rx="3"
+                fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+          <rect x="13" y="99" width="88" height="72" rx="2"
+                fill="rgba(255,255,255,0.04)"/>
+          <!-- Handle -->
+          <circle cx="96" cy="100" r="6" fill="#f59e0b"/>
+          <circle cx="96" cy="100" r="3.5" fill="#d97706"/>
+          <rect x="94" y="100" width="4" height="12" rx="2" fill="#d97706"/>
+          <!-- Hinges -->
+          <rect x="2" y="22" width="6" height="16" rx="2" fill="#94a3b8"/>
+          <rect x="2" y="148" width="6" height="16" rx="2" fill="#94a3b8"/>
+          <!-- Light reflection -->
+          <rect x="1" y="0" width="3" height="186"
+                fill="rgba(255,255,255,0.06)" rx="1"/>
+        </svg>
+        <!-- Back face (inside of door) -->
+        <svg width="114" height="186" viewBox="0 0 114 186" style="position:absolute;top:0;left:0;transform:rotateY(180deg);backface-visibility:hidden;">
+          <rect x="0" y="0" width="114" height="186" rx="2" fill="#0f1f3d"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Status label -->
+    <div class="door-status-label closed-lbl" id="ds-lbl-${uid}">
+      <span id="ds-ic-${uid}">🔒</span>
+      <span id="ds-txt-${uid}">مغلق</span>
+    </div>
+  </div>`;
+}
+
+// Door state machine per door
+const doorStates = {}; // uid -> 'closed'|'opening'|'open'|'closing'
+
+function animateDoor(doorId, pfx, toState) {
+  const uid = `${pfx}-${doorId}`;
+  const panel = document.getElementById(`dp-${uid}`);
+  const shadow = document.getElementById(`dp-shadow-${uid}`);
+  const lbl = document.getElementById(`ds-lbl-${uid}`);
+  const ic = document.getElementById(`ds-ic-${uid}`);
+  const txt = document.getElementById(`ds-txt-${uid}`);
+  if(!panel) return;
+
+  doorStates[uid] = toState;
+
+  if(toState === 'opening') {
+    if(lbl){lbl.className='door-status-label moving-lbl';}
+    if(ic) ic.textContent='⏳';
+    if(txt) txt.textContent='يفتح...';
+    panel.style.transform='perspective(400px) rotateY(-70deg)';
+    if(shadow) shadow.setAttribute('points','33,23 33,209 80,195 80,37');
+    setTimeout(()=>{
+      if(doorStates[uid]==='opening') animateDoor(doorId,pfx,'open');
+    },1300);
+  } else if(toState === 'open') {
+    if(lbl){lbl.className='door-status-label open-lbl';}
+    if(ic) ic.textContent='🔓';
+    if(txt) txt.textContent='مفتوح';
+    panel.style.transform='perspective(400px) rotateY(-75deg)';
+    if(shadow) shadow.setAttribute('points','33,23 33,209 85,200 85,32');
+  } else if(toState === 'closing') {
+    if(lbl){lbl.className='door-status-label moving-lbl';}
+    if(ic) ic.textContent='⏳';
+    if(txt) txt.textContent='يغلق...';
+    panel.style.transform='perspective(400px) rotateY(0deg)';
+    if(shadow) shadow.setAttribute('points','33,23 33,209 33,209 33,23');
+    setTimeout(()=>{
+      if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed');
+    },1300);
+  } else { // closed
+    if(lbl){lbl.className='door-status-label closed-lbl';}
+    if(ic) ic.textContent='🔒';
+    if(txt) txt.textContent='مغلق';
+    panel.style.transform='perspective(400px) rotateY(0deg)';
+    if(shadow) shadow.setAttribute('points','33,23 33,209 33,209 33,23');
+  }
+}
+
+// ════════════════════════════════════════════
+// DB
+// ════════════════════════════════════════════
+function initDB(){
+  const KEY='dac_db_v4';
+  if(!localStorage.getItem(KEY)){
+    localStorage.setItem(KEY,JSON.stringify({
+      globalGps:30,
+      institutes:[{
+        id:'inst_1',name:'معهد حميدة بكير',gps:30,
+        doors:[{id:'door_1',name:'الباب الرئيسي',devId:'bf7c670914391fc80cwayk',active:true}],
+        schedule:defSch(),alerts:[],history:[]
+      }],
+      users:[
+        {id:'su1',name:'Super Admin',email:'super@admin.com',pw:'super123',role:'super',status:'active',instId:null}
+      ]
+    }));
+  }
+  A.db=JSON.parse(localStorage.getItem(KEY));
+}
+function saveDB(){localStorage.setItem('dac_db_v4',JSON.stringify(A.db));}
+function defSch(){
+  const o={};DAYS.forEach((d,i)=>o[d]={on:i<5,from:'08:00',to:'17:00'});return o;
+}
+function getInst(id){return A.db.institutes.find(i=>i.id===id);}
+function myInst(){return getInst(A.user?.instId);}
+
+// ════════════════════════════════════════════
+// APP STATE
+// ════════════════════════════════════════════
+let A={user:null,mode:'login',utype:'user',db:null,geoOk:false,timeOk:false,geoPos:null,steps:{ad:1,sp:1},timers:{}};
+
+// ════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════
+function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');}
+function swTab(dash,tab,btn){
+  const prefix=dash==='admin'?'admin':'super';
+  document.querySelectorAll(`#${dash}-dash .tab-pane`).forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll(`#${dash}-dash .nav-tab`).forEach(t=>t.classList.remove('active'));
+  document.getElementById(`${prefix}-${tab}`).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ════════════════════════════════════════════
+// AUTH
+// ════════════════════════════════════════════
+function goAuth(type){A.utype=type;A.mode='login';renderAuth();showPage('auth');}
+function renderAuth(){
+  const reg=A.mode==='register';
+  el('auth-title').textContent=A.utype==='super'?'⚙️ Super Admin':reg?(A.utype==='admin'?'إنشاء حساب مدير':'إنشاء حساب'):'تسجيل الدخول';
+  el('auth-sub').textContent=reg?'أدخل بياناتك لإنشاء حساب جديد':'أدخل بياناتك للمتابعة';
+  el('auth-btn').textContent=reg?'إنشاء حساب':'تسجيل الدخول';
+  el('reg-fields').style.display=reg?'block':'none';
+  el('auth-tog').style.display=A.utype==='super'?'none':'block';
+  el('auth-tog').innerHTML=reg?'لديك حساب؟ <span onclick="toggleMode()">تسجيل الدخول</span>':'ليس لديك حساب؟ <span onclick="toggleMode()">إنشاء حساب</span>';
+  el('inst-sel-grp').style.display=(reg&&A.utype==='user')?'block':'none';
+  el('inst-name-grp').style.display=(reg&&A.utype==='admin')?'block':'none';
+  if(reg&&A.utype==='user'){const s=el('r-inst');s.innerHTML='<option value="">اختر المؤسسة</option>';A.db.institutes.forEach(i=>s.innerHTML+=`<option value="${i.id}">${i.name}</option>`);}
+  el('pend-msg').style.display='none';
+  ['a-email','a-pass'].forEach(id=>el(id).value='');
+}
+function toggleMode(){A.mode=A.mode==='login'?'register':'login';renderAuth();}
+function handleAuth(){
+  const email=v('a-email'),pass=v('a-pass');
+  if(!email||!pass){toast('يرجى ملء جميع الحقول','error');return;}
+  A.mode==='login'?doLogin(email,pass):doRegister(email,pass);
+}
+function doLogin(email,pass){
+  const u=A.db.users.find(u=>u.email===email&&u.pw===pass);
+  if(!u){toast('بيانات خاطئة','error');return;}
+  if(u.status==='pending'){toast('حسابك في انتظار موافقة المدير','info');return;}
+  if(u.status==='frozen'){toast('حسابك موقوف','error');return;}
+  A.user=u;
+  if(u.role==='super')loadSuper();else if(u.role==='admin')loadAdmin();else loadUser();
+}
+function doRegister(email,pass){
+  const name=v('r-name');if(!name){toast('يرجى إدخال الاسم','error');return;}
+  if(A.db.users.find(u=>u.email===email)){toast('البريد مسجل مسبقاً','error');return;}
+  if(A.utype==='admin'){
+    const instName=v('r-inst-name');if(!instName){toast('يرجى إدخال اسم المؤسسة','error');return;}
+    const iid='inst_'+Date.now();
+    A.db.institutes.push({id:iid,name:instName,gps:30,doors:[{id:'door_'+Date.now(),name:'الباب الرئيسي',devId:'',active:true}],schedule:defSch(),alerts:[],history:[]});
+    const u={id:'u'+Date.now(),name,email,pw:pass,role:'admin',status:'active',instId:iid};
+    A.db.users.push(u);saveDB();A.user=u;loadAdmin();return;
+  }
+  const instId=el('r-inst').value;if(!instId){toast('يرجى اختيار المؤسسة','error');return;}
+  A.db.users.push({id:'u'+Date.now(),name,email,pw:pass,role:'user',status:'pending',instId});
+  saveDB();el('pend-msg').style.display='block';toast('تم إرسال طلبك بنجاح','success');
+}
+function logout(){
+  Object.values(A.timers).forEach(t=>clearInterval(t.iv));
+  A.timers={};A.user=null;
+  showPage('landing');
+  showLandLogin();
+  if(el('l-email')) el('l-email').value='';
+  if(el('l-pass'))  el('l-pass').value='';
+}
+
+// ════════════════════════════════════════════
+// USER DASHBOARD
+// ════════════════════════════════════════════
+function loadUser(){
+  const inst=myInst();
+  el('u-inst-name').textContent=inst?.name||'المؤسسة';
+  el('u-greeting').textContent='مرحباً، '+(A.user.name.split(' ')[0]);
+  el('u-av').textContent=A.user.name[0];
+  el('u-doors').innerHTML=(inst?.doors||[]).map(d=>userDoorCard(d,inst)).join('');
+  checkGeo(inst,'user');checkTime(inst,'user');
+  showPage('user-dash');
+}
+function userDoorCard(d,inst){
+  return `<div class="door-card">
+    <div class="door-hdr"><div class="door-name">🚪 ${d.name}</div><span class="${d.active?'badge-on':'badge-off'}">${d.active?'متصل':'غير متصل'}</span></div>
+    <div class="door-btns">
+      <button class="dbtn db-open" id="u-op-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','open','u')"><span class="ic">🟢</span>فتح الباب</button>
+      <button class="dbtn db-close" id="u-cl-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','close','u')"><span class="ic">🔴</span>غلق الباب</button>
+      <button class="dbtn db-stop" id="u-st-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','stop','u')"><span class="ic">🟡</span>إيقاف</button>
+      <button class="dbtn db-auto" id="u-au-${d.id}" onclick="autoTimer('${d.id}','${inst.id}','u')">
+        <div class="cring" id="cr-u-${d.id}"><svg width="38" height="38" viewBox="0 0 38 38"><circle cx="19" cy="19" r="16"/><circle class="cp" id="cp-u-${d.id}" cx="19" cy="19" r="16" style="stroke-dasharray:100;stroke-dashoffset:0"/></svg><div class="cn" id="cn-u-${d.id}">30</div></div>
+        <span class="ic" id="au-ic-u-${d.id}">⏱️</span><span id="au-lb-u-${d.id}">فتح 30ث</span>
+      </button>
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════
+// GEO & TIME  +  FAKE GPS DETECTION
+// ════════════════════════════════════════════
+
+// Store last few readings for jump-detection
+const geoHistory = [];
+
+/**
+ * Fake GPS detection — 3 layers:
+ * 1. Accuracy too perfect (exactly 0) or too bad (>200m) = suspicious
+ * 2. Position jumps impossibly fast between readings
+ * 3. Speed reported as 0 but position changed (mock apps forget to update speed)
+ */
+function detectFakeGps(pos) {
+  const acc = pos.coords.accuracy;
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
+  const now = Date.now();
+
+  // Layer 1: Teleportation check
+  if (geoHistory.length > 0) {
+    const prev = geoHistory[geoHistory.length - 1];
+    const timeDiff = (now - prev.time) / 1000; // seconds
+    const distMoved = dist(prev.lat, prev.lng, lat, lng);
+    // Max realistic walking/running speed ~10 m/s
+    // If moved more than 50m in under 1 second = fake
+    if (timeDiff < 1 && distMoved > 50) {
+      return { fake: true, reason: 'انتقال فوري مشبوه للموقع' };
+    }
+    // Teleported more than 500m in under 3 seconds
+    if (timeDiff < 3 && distMoved > 500) {
+      return { fake: true, reason: 'موقع GPS مزيف (انتقال سريع)' };
+    }
+  }
+
+  // Layer 3: Speed vs movement mismatch
+  // Mock apps often report speed=0 but position changes a lot
+  const speed = pos.coords.speed;
+  if (geoHistory.length > 1 && speed !== null) {
+    const prev = geoHistory[geoHistory.length - 1];
+    const timeDiff = (now - prev.time) / 1000;
+    const distMoved = dist(prev.lat, prev.lng, lat, lng);
+    const calcSpeed = distMoved / Math.max(timeDiff, 0.1);
+    // Reported speed=0 but actually moved 20m+ = suspicious
+    if (speed === 0 && calcSpeed > 5 && distMoved > 20) {
+      return { fake: true, reason: 'تناقض في بيانات GPS' };
+    }
+  }
+
+  // Record this reading
+  geoHistory.push({ lat, lng, time: now, acc });
+  if (geoHistory.length > 5) geoHistory.shift();
+
+  return { fake: false };
+}
+
+function checkGeo(inst, ctx) {
+  const radius = inst?.gps || 30;
+  if (!navigator.geolocation) {
+    if (ctx === 'user') { A.geoOk = false; setGeoUI(false, 'الموقع غير متاح', 'هاتفك لا يدعم GPS'); }
+    return;
+  }
+  if (ctx === 'user') setGeoUI('loading', 'جاري تحديد موقعك...', 'يرجى الانتظار لحظة');
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      // Check for fake GPS first
+      const fakeCheck = detectFakeGps(pos);
+      if (fakeCheck.fake) {
+        if (ctx === 'user') {
+          A.geoOk = false;
+          setGeoUI(false, '⚠️ موقع GPS مزيف', fakeCheck.reason + ' — لا يمكن فتح الباب');
+          showFakeGpsWarning(fakeCheck.reason);
+        }
+        return;
+      }
+
+      A.geoPos = pos;
+      saveUserLocationSilent(pos);
+      const d = dist(pos.coords.latitude, pos.coords.longitude, DOOR_LOC.lat, DOOR_LOC.lng);
+      const ok = d <= radius;
+      if (ctx === 'user') {
+        A.geoOk = ok;
+        hideBanners();
+        if (ok) {
+          setGeoUI(true, `أنت قريب من الباب ✓`, `المسافة: ${Math.round(d)}م — في النطاق (${radius}م)`);
+        } else {
+          setGeoUI(false, `يجب أن تكون قريباً من الباب`, `📍 المسافة: ${Math.round(d)}م | المطلوب أقل من ${radius}م`);
+        }
+      }
+    },
+    err => {
+      if (ctx === 'user') {
+        A.geoOk = false;
+        if (err.code === 1) { // PERMISSION_DENIED
+          setGeoUI(false, 'لم يُسمح بتحديد الموقع', 'يجب أن تكون قريباً من الباب ليتم الفتح');
+          showGeoPermBanner(); // Always show — don't hide after first denial
+        } else if (err.code === 2) {
+          setGeoUI(false, 'تعذر تحديد الموقع', 'تأكد من تفعيل GPS في إعدادات الهاتف');
+        } else {
+          setGeoUI(false, 'انتهت مهلة تحديد الموقع', 'حاول مجدداً في مكان مكشوف');
+          showGeoPermBanner();
+        }
+      }
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+  );
+}
+
+function showGeoPermBanner() {
+  // Always show — remove the once-per-session restriction
+  hideBanners();
+  const banner = el('geo-perm-banner');
+  if (banner) banner.style.display = 'flex';
+}
+function hideBanners() {
+  ['geo-perm-banner','geo-settings-guide','geo-fake-warning'].forEach(id=>{
+    const b=el(id); if(b) b.style.display='none';
+  });
+}
+function showFakeGpsWarning(reason) {
+  hideBanners();
+  const banner = el('geo-fake-warning');
+  if (banner) {
+    const reasonEl = el('fake-gps-reason');
+    if (reasonEl) reasonEl.textContent = reason;
+    banner.style.display = 'flex';
+  }
+}
+function requestGeoPermission() {
+  hideBanners();
+  setGeoUI('loading', 'جاري طلب الإذن...', 'يرجى الموافقة على طلب الموقع');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const fakeCheck = detectFakeGps(pos);
+      if (fakeCheck.fake) {
+        A.geoOk = false;
+        setGeoUI(false, '⚠️ موقع GPS مزيف', fakeCheck.reason);
+        showFakeGpsWarning(fakeCheck.reason);
+        return;
+      }
+      A.geoPos = pos;
+      const inst = myInst(), radius = inst?.gps || 30;
+      const d = dist(pos.coords.latitude, pos.coords.longitude, DOOR_LOC.lat, DOOR_LOC.lng);
+      A.geoOk = d <= radius;
+      if (A.geoOk) {
+        setGeoUI(true, `أنت قريب من الباب ✓`, `المسافة: ${Math.round(d)}م — في النطاق (${radius}م)`);
+      } else {
+        setGeoUI(false, `يجب أن تكون قريباً من الباب`, `📍 المسافة: ${Math.round(d)}م | المطلوب أقل من ${radius}م`);
+      }
+    },
+    err => {
+      if (err.code === 1) {
+        // Still denied — show settings guide
+        setGeoUI(false, 'الموقع محظور في الإعدادات', 'يجب أن تكون قريباً من الباب ليتم الفتح');
+        const guide = el('geo-settings-guide');
+        if (guide) { hideBanners(); guide.style.display = 'flex'; }
+      } else {
+        setGeoUI(false, 'تعذر تحديد الموقع', 'تأكد من تفعيل GPS في إعدادات الهاتف');
+        showGeoPermBanner();
+      }
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+  );
+}
+function showGeoSettingsGuide() {
+  setGeoUI(false, 'الموقع محظور في الإعدادات', 'يجب أن تكون قريباً من الباب ليتم الفتح');
+  hideBanners();
+  const banner = el('geo-settings-guide');
+  if (banner) banner.style.display = 'flex';
+}
+function checkTime(inst,ctx){
+  if(!inst)return;
+  const now=new Date(),dn=DAYS[now.getDay()],s=inst.schedule[dn];
+  if(!s||!s.on){if(ctx==='user'){A.timeOk=false;setTimeUI(false,'اليوم غير مسموح',`${dn} - خارج أوقات العمل`);}return;}
+  const[fh,fm]=s.from.split(':').map(Number),[th,tm]=s.to.split(':').map(Number);
+  const nm=now.getHours()*60+now.getMinutes(),ok=nm>=(fh*60+fm)&&nm<=(th*60+tm);
+  if(ctx==='user'){A.timeOk=ok;setTimeUI(ok,ok?`الوقت مسموح ✓`:`خارج وقت الدخول`,`${dn}: ${s.from} - ${s.to}`);}
+}
+function setGeoUI(ok,t,s){const ic=el('geo-ic');if(ok==='loading'){ic.className='si warn';ic.textContent='⏳';}else{ic.className=`si ${ok?'ok':'err'}`;ic.textContent=ok?'📍':'⚠️';}el('geo-t').textContent=t;el('geo-s').textContent=s;}
+function setTimeUI(ok,t,s){el('time-ic').className=`si ${ok?'ok':'warn'}`;el('time-ic').textContent=ok?'✅':'⏰';el('time-t').textContent=t;el('time-s').textContent=s;}
+function dist(la1,ln1,la2,ln2){
+  const R=6371000,dL=(la2-la1)*Math.PI/180,dn=(ln2-ln1)*Math.PI/180,
+  a=Math.sin(dL/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dn/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// ════════════════════════════════════════════
+// DOOR CONTROL
+// ════════════════════════════════════════════
+async function ctrlDoor(doorId,instId,action,pfx){
+  const inst=getInst(instId),door=inst.doors.find(d=>d.id===doorId),radius=inst.gps||30;
+  if(action==='close'&&A.timers[doorId]){clearInterval(A.timers[doorId].iv);delete A.timers[doorId];resetAutoBtn(doorId,pfx);}
+  if(pfx==='u'){
+    // Re-check for fake GPS at moment of action
+    if(A.geoPos){
+      const freshCheck=detectFakeGps(A.geoPos);
+      if(freshCheck.fake){
+        toast('🚫 موقع GPS مزيف — لا يمكن فتح الباب','error');
+        showFakeGpsWarning(freshCheck.reason);
+        logAlert(inst,door,'محاولة بموقع GPS مزيف: '+freshCheck.reason);
+        return;
+      }
+    }
+    if(!A.geoOk){toast(`❌ يجب أن تكون قريباً من الباب (${radius}م)`,'error');logAlert(inst,door,'خارج النطاق الجغرافي');return;}
+    if(!A.timeOk&&action!=='stop'){toast('❌ خارج أوقات الدخول المسموحة','error');logAlert(inst,door,'خارج وقت العمل');return;}
+  }
+  const btns=['op','cl','st','au'].map(x=>el(`${pfx}-${x}-${doorId}`));
+  btns.forEach(b=>b&&(b.disabled=true));
+  const lbl={open:'فتح',close:'غلق',stop:'إيقاف'};
+  // Animate door
+  if(action==='open') animateDoor(doorId,pfx,'opening');
+  else if(action==='close') animateDoor(doorId,pfx,'closing');
+  toast(`جاري ${lbl[action]} الباب...`,'info');
+  try{
+    await tuyaCmd(door.devId,action);
+    if(action==='open') setTimeout(()=>animateDoor(doorId,pfx,'open'),1300);
+    else if(action==='close') setTimeout(()=>animateDoor(doorId,pfx,'closed'),1300);
+    toast(`✅ تم ${lbl[action]} الباب`,'success');
+    logHist(inst,door,action);
+  }catch(e){
+    if(action==='open') animateDoor(doorId,pfx,'closed');
+    else if(action==='close') animateDoor(doorId,pfx,'open');
+    toast(`❌ فشل في ${lbl[action]} الباب`,'error');
+  }
+  setTimeout(()=>btns.forEach(b=>b&&(b.disabled=false)),2000);
+}
+
+// ════════════════════════════════════════════
+// AUTO TIMER
+// ════════════════════════════════════════════
+function autoTimer(doorId,instId,pfx){
+  const inst=getInst(instId),door=inst.doors.find(d=>d.id===doorId),radius=inst.gps||30;
+  if(A.timers[doorId]){clearInterval(A.timers[doorId].iv);delete A.timers[doorId];resetAutoBtn(doorId,pfx);return;}
+  if(pfx==='u'){
+    if(!A.geoOk){toast(`❌ خارج النطاق (${radius}م)`,'error');return;}
+    if(!A.timeOk){toast('❌ خارج أوقات الدخول','error');return;}
+  }
+  // Open door & animate
+  tuyaCmd(door.devId,'open').then(()=>{logHist(inst,door,'open');}).catch(()=>{});
+  animateDoor(doorId,pfx,'opening');
+  setTimeout(()=>animateDoor(doorId,pfx,'open'),1300);
+  toast('✅ تم فتح الباب — سيغلق بعد 30 ثانية','success');
+  const cring=el(`cr-${pfx}-${doorId}`),auic=el(`au-ic-${pfx}-${doorId}`);
+  const aulb=el(`au-lb-${pfx}-${doorId}`),cpEl=el(`cp-${pfx}-${doorId}`),cnEl=el(`cn-${pfx}-${doorId}`);
+  const autoBtn=el(`${pfx}-au-${doorId}`);
+  cring.style.display='block';auic.style.display='none';
+  autoBtn.classList.add('running');aulb.textContent='إيقاف';
+  let rem=30;cnEl.textContent='30';cpEl.style.strokeDashoffset='0';
+  const iv=setInterval(()=>{
+    rem--;cnEl.textContent=rem;cpEl.style.strokeDashoffset=String(100-(rem/30)*100);
+    if(rem<=0){
+      tuyaCmd(door.devId,'close').then(()=>logHist(inst,door,'close')).catch(()=>{});
+      animateDoor(doorId,pfx,'closing');
+      setTimeout(()=>animateDoor(doorId,pfx,'closed'),1300);
+      toast('🔒 تم غلق الباب تلقائياً','info');
+      clearInterval(iv);delete A.timers[doorId];resetAutoBtn(doorId,pfx);
+    }
+  },1000);
+  A.timers[doorId]={iv,rem};
+}
+function resetAutoBtn(doorId,pfx){
+  const cring=el(`cr-${pfx}-${doorId}`),auic=el(`au-ic-${pfx}-${doorId}`),aulb=el(`au-lb-${pfx}-${doorId}`),cpEl=el(`cp-${pfx}-${doorId}`),cnEl=el(`cn-${pfx}-${doorId}`),autoBtn=el(`${pfx}-au-${doorId}`);
+  if(cring)cring.style.display='none';if(auic)auic.style.display='inline';if(aulb)aulb.textContent='فتح 30ث';if(cpEl)cpEl.style.strokeDashoffset='0';if(cnEl)cnEl.textContent='30';if(autoBtn)autoBtn.classList.remove('running');
+}
+
+// ════════════════════════════════════════════
+// TUYA API
+// ════════════════════════════════════════════
+async function tuyaCmd(devId,action){
+  if(!devId){await new Promise(r=>setTimeout(r,700));return;}
+  const tok=await getTok();if(!tok)throw new Error('no token');
+  const ts=Date.now().toString(),sign=await hmac256(TUYA.clientId+tok+ts,TUYA.secret);
+  const cmds={open:[{code:'switch_1',value:true}],close:[{code:'switch_1',value:false}],stop:[{code:'switch_1',value:false}]};
+  const r=await fetch(`${TUYA.base}/v1.0/devices/${devId}/commands`,{method:'POST',headers:{'client_id':TUYA.clientId,'access_token':tok,'sign':sign,'t':ts,'sign_method':'HMAC-SHA256','Content-Type':'application/json'},body:JSON.stringify({commands:cmds[action]})});
+  const d=await r.json();if(!d.success)throw new Error(d.msg);
+}
+async function getTok(){
+  try{const ts=Date.now().toString(),sign=await hmac256(TUYA.clientId+ts,TUYA.secret);const r=await fetch(`${TUYA.base}/v1.0/token?grant_type=1`,{headers:{'client_id':TUYA.clientId,'sign':sign,'t':ts,'sign_method':'HMAC-SHA256'}});return(await r.json()).result?.access_token;}catch{return null;}
+}
+async function hmac256(str,secret){const e=new TextEncoder(),k=await crypto.subtle.importKey('raw',e.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',k,e.encode(str)))).map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();}
+
+// ════════════════════════════════════════════
+// LOG
+// ════════════════════════════════════════════
+function logAlert(inst,door,reason){inst.alerts.unshift({id:'al'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,reason,lat:A.geoPos?.coords.latitude||null,lng:A.geoPos?.coords.longitude||null,dst:A.geoPos?Math.round(dist(A.geoPos.coords.latitude,A.geoPos.coords.longitude,DOOR_LOC.lat,DOOR_LOC.lng)):null,time:new Date().toLocaleString('ar-TN')});saveDB();}
+function logHist(inst,door,action){inst.history.unshift({id:'h'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,action,time:new Date().toLocaleString('ar-TN')});saveDB();}
+
+// ════════════════════════════════════════════
+// ADMIN DASHBOARD
+// ════════════════════════════════════════════
+function loadAdmin(){
+  const inst=myInst();
+  el('ad-inst-name').textContent=inst?.name||'لوحة التحكم';
+  el('ad-gps-n').textContent=inst?.gps||30;
+  renderAdminUsers(inst);renderAdminDoors(inst);renderAlerts(inst);renderSch(inst);renderHist(inst);
+  showPage('admin-dash');
+}
+
+// ── ADMIN DOORS WITH ANIMATED SVG ──
+function renderAdminDoors(inst){
+  if(!inst)return;
+  el('admin-door-list').innerHTML=inst.doors.map(d=>`
+    <div class="door-card">
+      <div class="door-hdr">
+        <div><div class="door-name">🚪 ${d.name}</div><div style="font-size:.75rem;color:var(--text2);margin-top:.2rem">ID: ${d.devId||'—'}</div></div>
+        <button class="btn-sm btn-danger" onclick="delDoor('${d.id}')">حذف</button>
+      </div>
+      ${buildDoorSVG(d.id,'a')}
+      <button onclick="showDoorHist('${d.id}','${inst.id}')" style="width:100%;padding:.65rem;margin-bottom:.75rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text2);font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;transition:all .2s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
+        📋 عرض سجل هذا الباب
+      </button>
+      <div class="door-btns">
+        <button class="dbtn db-open" id="a-op-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','open','a')"><span class="ic">🟢</span>فتح</button>
+        <button class="dbtn db-close" id="a-cl-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','close','a')"><span class="ic">🔴</span>غلق</button>
+        <button class="dbtn db-stop" id="a-st-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','stop','a')"><span class="ic">🟡</span>إيقاف</button>
+        <button class="dbtn db-auto" id="a-au-${d.id}" onclick="autoTimer('${d.id}','${inst.id}','a')">
+          <div class="cring" id="cr-a-${d.id}"><svg width="38" height="38" viewBox="0 0 38 38"><circle cx="19" cy="19" r="16"/><circle class="cp" id="cp-a-${d.id}" cx="19" cy="19" r="16" style="stroke-dasharray:100;stroke-dashoffset:0"/></svg><div class="cn" id="cn-a-${d.id}">30</div></div>
+          <span class="ic" id="au-ic-a-${d.id}">⏱️</span><span id="au-lb-a-${d.id}">فتح 30ث</span>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function renderAdminUsers(inst){
+  if(!inst)return;
+  const all=A.db.users.filter(u=>u.instId===inst.id&&u.role==='user');
+  const pend=all.filter(u=>u.status==='pending'),rest=all.filter(u=>u.status!=='pending');
+  el('pend-section').style.display=pend.length?'block':'none';
+  el('pend-list').innerHTML=pend.map(u=>`<div class="user-item">
+    <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}</div></div></div><span class="bdg bdg-pend">انتظار</span></div>
+    <div class="ui-actions"><button class="btn-sm" onclick="approveU('${u.id}')">✅ قبول</button><button class="btn-sm btn-danger" onclick="delU('${u.id}')">❌ رفض</button></div>
+  </div>`).join('');
+  el('admin-user-list').innerHTML=rest.map(u=>`<div class="user-item">
+    <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}</div></div></div>
+    <span class="bdg ${u.status==='frozen'?'bdg-frozen':'bdg-active'}">${u.status==='frozen'?'موقوف':'نشط'}</span></div>
+    ${u.note ? `<div style="display:flex;align-items:flex-start;gap:.4rem;background:rgba(129,140,248,.07);border:1px solid rgba(129,140,248,.2);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;color:var(--text2);margin-bottom:.5rem"><span style="font-size:.85rem;flex-shrink:0">📝</span><span>${u.note}</span></div>` : ''}
+    <div class="ui-actions">
+      <button class="btn-sm" onclick="showHist('${u.id}')">📋</button>
+      <button class="btn-sm" style="background:rgba(129,140,248,.12);color:var(--purple);border:1px solid rgba(129,140,248,.3)" onclick="openNote('${u.id}')">📝 ${u.note?'✎':'+'}</button>
+      <button class="btn-sm ${u.status==='frozen'?'btn-success':'btn-danger'}" onclick="freezeU('${u.id}')">${u.status==='frozen'?'✅':'❄️'}</button>
+      <button class="btn-sm btn-danger" onclick="delU('${u.id}')">🗑️</button>
+    </div></div>`).join('')||`<p class="empty">لا يوجد مستخدمون</p>`;
+}
+
+function renderAlerts(inst){
+  if(!inst)return;
+  const als=inst.alerts||[];
+  el('al-count').textContent=`${als.length} تنبيه`;
+  el('admin-alert-list').innerHTML=als.length?als.map(a=>`<div class="alert-item">
+    <div class="al-icon">⚠️</div>
+    <div class="al-text"><h4>${a.uname} — ${a.door}</h4><p>${a.reason} | ${a.time}</p>
+    ${a.lat?`<p class="al-loc">📍 ${a.lat.toFixed(5)}, ${a.lng.toFixed(5)} — ${a.dst||'?'} متر</p>
+    <a class="al-map-btn" href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank">🗺️ عرض على الخريطة</a>`:''}
+    </div></div>`).join(''):`<p class="empty">لا توجد تنبيهات 🎉</p>`;
+}
+function renderSch(inst){
+  if(!inst)return;
+  el('sch-grid').innerHTML=DAYS.map(d=>{
+    const s=inst.schedule[d]||{on:false,from:'08:00',to:'17:00'};
+    return `<div class="sch-day"><div class="day-lbl">${d}</div>
+      <label class="tog"><input type="checkbox" id="sc-${d}" ${s.on?'checked':''}><span class="tog-sl"></span></label>
+      <div class="time-wrap"><input type="time" class="time-inp" id="sf-${d}" value="${s.from}"><span style="color:var(--text2);font-size:.8rem">إلى</span><input type="time" class="time-inp" id="st-${d}" value="${s.to}"></div>
+    </div>`;
+  }).join('');
+}
+function saveSch(){const inst=myInst();DAYS.forEach(d=>{inst.schedule[d]={on:el(`sc-${d}`)?.checked||false,from:el(`sf-${d}`)?.value||'08:00',to:el(`st-${d}`)?.value||'17:00'};});saveDB();toast('✅ تم حفظ الجدول','success');}
+function renderHist(inst){
+  if(!inst)return;
+  // Populate filter dropdowns
+  const userSel=el('hist-filter-user'), doorSel=el('hist-filter-door');
+  if(userSel){
+    const users=A.db.users.filter(u=>u.instId===inst.id);
+    userSel.innerHTML='<option value="">👤 جميع المستخدمين</option>';
+    users.forEach(u=>userSel.innerHTML+=`<option value="${u.id}">${u.name}</option>`);
+  }
+  if(doorSel){
+    doorSel.innerHTML='<option value="">🚪 جميع الأبواب</option>';
+    inst.doors.forEach(d=>doorSel.innerHTML+=`<option value="${d.name}">${d.name}</option>`);
+  }
+  renderHistFiltered();
+}
+function renderHistFiltered(){
+  const inst=myInst();if(!inst)return;
+  const filterUid=el('hist-filter-user')?.value||'';
+  const filterDoor=el('hist-filter-door')?.value||'';
+  const filterAction=el('hist-filter-action')?.value||'';
+  let h=inst.history||[];
+  if(filterUid) h=h.filter(x=>x.uid===filterUid);
+  if(filterDoor) h=h.filter(x=>x.door===filterDoor);
+  if(filterAction) h=h.filter(x=>x.action===filterAction);
+  const container=el('admin-hist-list');
+  if(!container)return;
+  container.innerHTML=h.length
+    ?h.map(x=>histItemWithUser(x)).join('')
+    :`<p class="empty">لا توجد نتائج</p>`;
+}
+function histItem(h){
+  const lbl={open:'فتح',close:'غلق',stop:'إيقاف'};
+  const cls=h.action==='open'?'h-open':h.action==='close'?'h-close':'h-stop';
+  const ic=h.action==='open'?'🟢':h.action==='close'?'🔴':'🟡';
+  return `<div class="hist-item"><div class="hist-ic ${cls}">${ic}</div><div class="hist-text"><h4>${h.uname} — ${lbl[h.action]||h.action} ${h.door}</h4><p>${h.time}</p></div></div>`;
+}
+
+// User actions
+function approveU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveDB();renderAdminUsers(myInst());toast('تم قبول المستخدم','success');}}
+function freezeU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status=u.status==='frozen'?'active':'frozen';saveDB();renderAdminUsers(myInst()||null);renderAllUsers();toast(u.status==='frozen'?'تم تجميد المستخدم':'تم تفعيل المستخدم','info');}}
+function delU(id){A.db.users=A.db.users.filter(u=>u.id!==id);saveDB();renderAdminUsers(myInst()||null);renderAllUsers();renderInsts();toast('تم الحذف','success');}
+function delDoor(id){const inst=myInst();inst.doors=inst.doors.filter(d=>d.id!==id);saveDB();renderAdminDoors(inst);toast('تم حذف الباب','success');}
+// Track which inst & user we opened the modal for
+let _histCtx = { uid: null, instId: null };
+
+function showHist(uid) {
+  const u = A.db.users.find(u => u.id === uid);
+  const inst = getInst(u?.instId);
+  _histCtx = { uid, instId: inst?.id };
+
+  el('m-hist-title').textContent = '📋 سجل: ' + (u?.name || '');
+
+  // Populate door selector
+  const sel = el('mh-door-select');
+  sel.innerHTML = '<option value="">اختر الباب</option>';
+  (inst?.doors || []).forEach(d => {
+    sel.innerHTML += `<option value="${d.id}">${d.name}</option>`;
+  });
+
+  // Reset to user tab
+  switchHistTab('user');
+  openModal('m-hist');
+}
+
+function switchHistTab(tab) {
+  // Style tabs
+  const tabUser = el('mh-tab-user'), tabDoor = el('mh-tab-door');
+  const paneUser = el('mh-pane-user'), paneDoor = el('mh-pane-door');
+  if (tab === 'user') {
+    tabUser.style.background = 'var(--accent)'; tabUser.style.color = '#fff';
+    tabDoor.style.background = 'transparent'; tabDoor.style.color = 'var(--text2)';
+    paneUser.style.display = 'block'; paneDoor.style.display = 'none';
+    // Render user history
+    const inst = getInst(_histCtx.instId);
+    const h = (inst?.history || []).filter(h => h.uid === _histCtx.uid);
+    el('m-hist-body').innerHTML = h.length ? h.map(histItem).join('') : `<p class="empty">لا يوجد سجل لهذا المستخدم</p>`;
+  } else {
+    tabDoor.style.background = 'var(--accent)'; tabDoor.style.color = '#fff';
+    tabUser.style.background = 'transparent'; tabUser.style.color = 'var(--text2)';
+    paneDoor.style.display = 'block'; paneUser.style.display = 'none';
+    renderDoorHistModal();
+  }
+}
+
+function renderDoorHistModal() {
+  const doorId = el('mh-door-select')?.value;
+  const inst = getInst(_histCtx.instId);
+  if (!doorId) {
+    el('m-door-hist-body').innerHTML = `<p class="empty">اختر باباً لعرض سجله</p>`;
+    return;
+  }
+  const door = inst?.doors?.find(d => d.id === doorId);
+  const h = (inst?.history || []).filter(h => h.door === door?.name);
+  el('m-door-hist-body').innerHTML = h.length
+    ? h.map(h => histItemWithUser(h)).join('')
+    : `<p class="empty">لا يوجد سجل لهذا الباب</p>`;
+}
+
+function histItemWithUser(h) {
+  const lbl = { open: 'فتح', close: 'غلق', stop: 'إيقاف' };
+  const cls = h.action === 'open' ? 'h-open' : h.action === 'close' ? 'h-close' : 'h-stop';
+  const ic = h.action === 'open' ? '🟢' : h.action === 'close' ? '🔴' : '🟡';
+  return `<div class="hist-item">
+    <div class="hist-ic ${cls}">${ic}</div>
+    <div class="hist-text">
+      <h4>${lbl[h.action] || h.action} — <span style="color:var(--accent)">${h.uname}</span></h4>
+      <p>${h.door} | ${h.time}</p>
+    </div>
+  </div>`;
+}
+function showDoorHist(doorId, instId){
+  const inst=getInst(instId);
+  const door=inst?.doors?.find(d=>d.id===doorId);
+  if(!door)return;
+  _histCtx={uid:null,instId};
+  el('m-hist-title').textContent='📋 سجل الباب: '+door.name;
+  // Setup door selector and select this door
+  const sel=el('mh-door-select');
+  sel.innerHTML='<option value="">اختر الباب</option>';
+  (inst?.doors||[]).forEach(d=>{
+    sel.innerHTML+=`<option value="${d.id}" ${d.id===doorId?'selected':''}>${d.name}</option>`;
+  });
+  // Go straight to door tab
+  switchHistTab('door');
+  openModal('m-hist');
+}
+
+function addUser(){
+  const name=v('nu-name'),email=v('nu-email'),pw=v('nu-pass'),inst=myInst();
+  if(!name||!email||!pw){toast('يرجى ملء جميع الحقول','error');return;}
+  if(A.db.users.find(u=>u.email===email)){toast('البريد مسجل مسبقاً','error');return;}
+  A.db.users.push({id:'u'+Date.now(),name,email,pw,role:'user',status:'active',instId:inst.id});
+  saveDB();renderAdminUsers(inst);closeModal('m-add-user');toast('✅ تم إضافة المستخدم','success');
+}
+function addDoor(){
+  const name=v('nd-name'),devId=v('nd-devid'),inst=myInst();
+  if(!name){toast('يرجى إدخال اسم الباب','error');return;}
+  inst.doors.push({id:'door'+Date.now(),name,devId,active:true});
+  saveDB();renderAdminDoors(inst);closeModal('m-add-door');toast('✅ تم إضافة الباب','success');
+}
+
+// ════════════════════════════════════════════
+// GPS — Per institute
+// ════════════════════════════════════════════
+function adjGps(dir,pfx){
+  const step=A.steps[pfx]||1,numEl=el(`${pfx}-gps-n`);
+  numEl.textContent=Math.max(5,Math.min(1000,parseInt(numEl.textContent)+dir*step));
+}
+function setStep(pfx,val){
+  A.steps[pfx]=val;
+  [1,5,10,50].forEach(s=>el(`${pfx}-s${s}`)?.classList.remove('active'));
+  el(`${pfx}-s${val}`)?.classList.add('active');
+}
+function saveGps(pfx){
+  const r=parseInt(el(`${pfx}-gps-n`).textContent);
+  if(pfx==='ad'){
+    const inst=myInst();inst.gps=r;saveDB();
+    toast(`✅ تم حفظ نطاق "${inst.name}": ${r} متر`,'success');
+  } else {
+    A.db.institutes.forEach(i=>i.gps=r);A.db.globalGps=r;saveDB();
+    toast(`✅ تم تطبيق ${r} متر على جميع المؤسسات`,'success');
+    renderSpInstGps();renderInsts();
+  }
+}
+
+// Super: render per-institute GPS controls
+function renderSpInstGps(){
+  el('sp-inst-gps-list').innerHTML=A.db.institutes.map(inst=>`
+    <div class="gps-card" style="margin-bottom:.75rem">
+      <h3>🏫 ${inst.name}</h3>
+      <div class="gps-row">
+        <div class="gps-display" style="padding:.75rem">
+          <div class="gps-num" style="font-size:2rem" id="spig-n-${inst.id}">${inst.gps||30}</div>
+          <div class="gps-unit">متر</div>
+        </div>
+        <div class="gps-col">
+          <button class="gps-btn gps-plus" onclick="adjInstGps(1,'${inst.id}')">+</button>
+          <button class="gps-btn gps-minus" onclick="adjInstGps(-1,'${inst.id}')">−</button>
+        </div>
+      </div>
+      <div class="step-row">
+        <span class="step-lbl">الخطوة:</span>
+        <button class="step-btn active" id="spig-s1-${inst.id}" onclick="setInstStep('${inst.id}',1)">1م</button>
+        <button class="step-btn" id="spig-s5-${inst.id}" onclick="setInstStep('${inst.id}',5)">5م</button>
+        <button class="step-btn" id="spig-s10-${inst.id}" onclick="setInstStep('${inst.id}',10)">10م</button>
+        <button class="step-btn" id="spig-s50-${inst.id}" onclick="setInstStep('${inst.id}',50)">50م</button>
+      </div>
+      <button class="btn-sm" style="margin-top:1rem;width:100%" onclick="saveInstGps('${inst.id}')">💾 حفظ</button>
+    </div>`).join('');
+  // init step state
+  A.db.institutes.forEach(i=>{ if(!A._instSteps) A._instSteps={}; A._instSteps[i.id]=1; });
+}
+
+function adjInstGps(dir,instId){
+  const step=(A._instSteps&&A._instSteps[instId])||1;
+  const numEl=el(`spig-n-${instId}`);
+  numEl.textContent=Math.max(5,Math.min(1000,parseInt(numEl.textContent)+dir*step));
+}
+function setInstStep(instId,val){
+  if(!A._instSteps)A._instSteps={};A._instSteps[instId]=val;
+  [1,5,10,50].forEach(s=>el(`spig-s${s}-${instId}`)?.classList.remove('active'));
+  el(`spig-s${val}-${instId}`)?.classList.add('active');
+}
+function saveInstGps(instId){
+  const r=parseInt(el(`spig-n-${instId}`).textContent);
+  const inst=getInst(instId);inst.gps=r;saveDB();
+  toast(`✅ "${inst.name}": ${r} متر`,'success');
+  renderInsts();
+}
+
+// ════════════════════════════════════════════
+// SUPER DASHBOARD
+// ════════════════════════════════════════════
+function loadSuper(){
+  renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();
+  el('sp-gps-n').textContent=A.db.globalGps||30;
+  showPage('super-dash');
+}
+
+function renderInsts(){
+  el('inst-list').innerHTML=A.db.institutes.map(inst=>{
+    const users=A.db.users.filter(u=>u.instId===inst.id);
+    const doorsHtml=inst.doors.map(d=>`
+      <button onclick="showDoorHistSuper('${d.id}','${inst.id}')" style="display:flex;align-items:center;gap:.5rem;width:100%;padding:.55rem .75rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:Cairo,sans-serif;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .2s;margin-bottom:.4rem" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
+        🚪 <span>${d.name}</span> <span style="margin-right:auto;font-size:.7rem">📋 سجل الباب</span>
+      </button>`).join('');
+    return `<div class="inst-card">
+      <div class="inst-hdr">
+        <div><div class="inst-name">🏫 ${inst.name}</div><div class="inst-meta">${inst.doors.length} باب | GPS: ${inst.gps||30}م</div></div>
+        <button class="btn-sm btn-danger" onclick="delInst('${inst.id}')">حذف</button>
+      </div>
+      <div class="inst-stats">
+        <div class="stat-box"><div class="stat-num">${users.filter(u=>u.status==='active').length}</div><div class="stat-lbl">نشط</div></div>
+        <div class="stat-box"><div class="stat-num" style="color:var(--warning)">${users.filter(u=>u.status==='pending').length}</div><div class="stat-lbl">انتظار</div></div>
+        <div class="stat-box"><div class="stat-num" style="color:var(--danger)">${inst.alerts?.length||0}</div><div class="stat-lbl">تنبيه</div></div>
+      </div>
+      ${inst.doors.length?`<div style="margin-top:.75rem;border-top:1px solid var(--border);padding-top:.75rem"><p style="font-size:.75rem;color:var(--text2);margin-bottom:.5rem;font-weight:700">سجلات الأبواب:</p>${doorsHtml}</div>`:''}
+    </div>`;
+  }).join('')||`<p class="empty">لا توجد مؤسسات</p>`;
+}
+
+function showDoorHistSuper(doorId, instId){
+  _histCtx={uid:null,instId};
+  const inst=getInst(instId);
+  const door=inst?.doors?.find(d=>d.id===doorId);
+  if(!door)return;
+  el('m-hist-title').textContent='📋 سجل الباب: '+door.name+' — '+inst.name;
+  const sel=el('mh-door-select');
+  sel.innerHTML='<option value="">اختر الباب</option>';
+  (inst?.doors||[]).forEach(d=>{
+    sel.innerHTML+=`<option value="${d.id}" ${d.id===doorId?'selected':''}>${d.name}</option>`;
+  });
+  switchHistTab('door');
+  openModal('m-hist');
+}
+
+function populateSpFilter(){
+  const s=el('sp-inst-filter');
+  s.innerHTML='<option value="">جميع المؤسسات</option>';
+  A.db.institutes.forEach(i=>s.innerHTML+=`<option value="${i.id}">${i.name}</option>`);
+}
+function renderAllUsers(){
+  const filter=el('sp-inst-filter')?.value||'';
+  let users=A.db.users.filter(u=>u.role!=='super');
+  if(filter)users=users.filter(u=>u.instId===filter);
+  el('all-user-list').innerHTML=users.map(u=>{
+    const inst=getInst(u.instId);
+    const stBdg=u.status==='pending'?'bdg-pend':u.status==='frozen'?'bdg-frozen':u.role==='admin'?'bdg-admin':'bdg-active';
+    const stTxt=u.status==='pending'?'انتظار':u.status==='frozen'?'موقوف':u.role==='admin'?'مدير':'نشط';
+    return `<div class="user-item">
+      <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}${inst?' · '+inst.name:''}</div></div></div><span class="bdg ${stBdg}">${stTxt}</span></div>
+      <div class="ui-actions">
+        <button class="btn-sm" onclick="showHist('${u.id}')">📋 سجل</button>
+        ${u.status==='pending'?`<button class="btn-sm" onclick="approveUsp('${u.id}')">✅ قبول</button>`:''}
+        <button class="btn-sm ${u.status==='frozen'?'btn-success':'btn-danger'}" onclick="freezeU('${u.id}')">${u.status==='frozen'?'✅ تفعيل':'❄️ تجميد'}</button>
+        <button class="btn-sm btn-danger" onclick="delU('${u.id}')">🗑️ حذف</button>
+      </div></div>`;
+  }).join('')||`<p class="empty">لا يوجد مستخدمون</p>`;
+}
+function approveUsp(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveDB();renderAllUsers();renderInsts();toast('تم قبول المستخدم','success');}}
+function delInst(id){A.db.institutes=A.db.institutes.filter(i=>i.id!==id);A.db.users=A.db.users.filter(u=>u.instId!==id);saveDB();renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();toast('تم حذف المؤسسة','success');}
+function addInstitute(){
+  const name=v('ni-name'),email=v('ni-email'),pw=v('ni-pass'),dev=v('ni-dev');
+  const gpsVal=parseInt(el('ni-gps').value)||30;
+  if(!name||!email||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
+  const iid='inst'+Date.now();
+  A.db.institutes.push({id:iid,name,gps:gpsVal,doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:dev,active:true}],schedule:defSch(),alerts:[],history:[]});
+  A.db.users.push({id:'u'+Date.now(),name:'مدير '+name,email,pw,role:'admin',status:'active',instId:iid});
+  saveDB();renderInsts();populateSpFilter();renderSpInstGps();closeModal('m-add-inst');toast('✅ تم إضافة المؤسسة','success');
+}
+
+// ════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════
+function el(id){return document.getElementById(id);}
+function v(id){return(el(id)?.value||'').trim();}
+function openModal(id){el(id).classList.add('active');}
+function closeModal(id){el(id).classList.remove('active');}
+function toast(msg,type='info'){const t=el('toast');t.textContent=msg;t.className=`toast ${type} show`;setTimeout(()=>t.classList.remove('show'),3000);}
+
+// ════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════
+initDB();
+el('nu-pass').value=Math.random().toString(36).slice(-6);
+
+// ════════════════════════════════════════════
+// TRANSLATIONS
+// ════════════════════════════════════════════
+const TR = {
+  ar: { appTitle:'نظام التحكم في الدخول', btnAdmin:'🏛️ مدير المؤسسة', btnUser:'👤 مستخدم عادي',
+    open:'فتح', close2:'غلق', stop2:'إيقاف', connected:'متصل', disconnected:'غير متصل',
+    active:'نشط', frozen:'موقوف', pending2:'انتظار', noData:'لا توجد بيانات',
+    totalOpens:'إجمالي الفتح', activeUsers:'مستخدم نشط', totalAlerts:'تنبيه', doors2:'أبواب',
+    weekDays:['أحد','اثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'],
+    topActive:'أكثر المستخدمين نشاطاً', topInsts:'المؤسسات الأكثر نشاطاً',
+    near:'قريب من الباب', far:'بعيد عن الباب', unknown:'موقع غير معروف',
+    lastSeen:'آخر تحديث', distance:'المسافة', institute2:'المؤسسة',
+  },
+  fr: { appTitle:'Contrôle d\'Accès', btnAdmin:'🏛️ Administrateur', btnUser:'👤 Utilisateur',
+    open:'Ouvrir', close2:'Fermer', stop2:'Arrêter', connected:'Connecté', disconnected:'Déconnecté',
+    active:'Actif', frozen:'Suspendu', pending2:'En attente', noData:'Aucune donnée',
+    totalOpens:'Ouvertures totales', activeUsers:'Utilisateur actif', totalAlerts:'Alertes', doors2:'Portes',
+    weekDays:['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'],
+    topActive:'Utilisateurs les plus actifs', topInsts:'Établissements les plus actifs',
+    near:'Proche de la porte', far:'Loin de la porte', unknown:'Position inconnue',
+    lastSeen:'Dernière mise à jour', distance:'Distance', institute2:'Établissement',
+  }
+};
+let LANG = 'ar';
+function tr(key){ return (TR[LANG]||TR.ar)[key] || TR.ar[key] || key; }
+
+function toggleLang(){
+  LANG = LANG==='ar' ? 'fr' : 'ar';
+  document.documentElement.dir = LANG==='ar' ? 'rtl' : 'ltr';
+  el('lang-btn').textContent = LANG==='ar' ? '🇫🇷 Français' : '🇸🇦 عربي';
+  // refresh visible dashboard
+  if(A.user){
+    if(A.user.role==='super') loadSuper();
+    else if(A.user.role==='admin') loadAdmin();
+    else loadUser();
+  }
+}
+
+// ════════════════════════════════════════════
+// THEME
+// ════════════════════════════════════════════
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = cur==='dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  document.querySelectorAll('#theme-btn').forEach(b => b.textContent = next==='dark' ? '☀️ Light Mode' : '🌙 Dark Mode');
+}
+
+// ════════════════════════════════════════════
+// AVATAR
+// ════════════════════════════════════════════
+let _avatarB64 = null;
+
+function previewAv(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _avatarB64 = e.target.result;
+    const prev = el('av-preview');
+    if(prev) prev.innerHTML = `<img src="${_avatarB64}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"><div class="av-overlay">📷 تغيير</div>`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function updateAvLetter(name){
+  const l = el('av-letter'); if(l) l.textContent = name?.[0] || 'م';
+}
+
+function renderAvatarHTML(user, size=40){
+  if(user?.avatar){
+    return `<img src="${user.avatar}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;border:2px solid var(--border);flex-shrink:0">`;
+  }
+  const initials = (user?.name||'?')[0];
+  return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(size*.42)}px;color:#fff;flex-shrink:0;border:2px solid var(--border)">${initials}</div>`;
+}
+
+// ════════════════════════════════════════════
+// SAVE LOCATION SILENTLY (for super admin)
+// ════════════════════════════════════════════
+function saveUserLocationSilent(pos){
+  if(!A.user || A.user.role==='super') return;
+  const inst = myInst();
+  const loc = {
+    lat: pos.coords.latitude, lng: pos.coords.longitude,
+    acc: pos.coords.accuracy,
+    time: new Date().toLocaleString('ar-TN'),
+    timestamp: Date.now(),
+    instId: A.user.instId
+  };
+  if(!A.db.userLocations) A.db.userLocations = {};
+  A.db.userLocations[A.user.id] = loc;
+  const u = A.db.users.find(u=>u.id===A.user.id);
+  if(u) u.lastLoc = loc;
+  saveDB();
+}
+
+// ════════════════════════════════════════════
+// SUPER: LOCATIONS TAB
+// ════════════════════════════════════════════
+function populateLocFilter(){
+  const sel = el('loc-inst-filter'); if(!sel) return;
+  sel.innerHTML = '<option value="">جميع المؤسسات</option>';
+  A.db.institutes.forEach(i => sel.innerHTML += `<option value="${i.id}">${i.name}</option>`);
+}
+
+function refreshLocations(){
+  toast('🔄 جاري تحديث المواقع...','info');
+  renderLocations();
+}
+
+function renderLocations(){
+  const filter = el('loc-inst-filter')?.value || '';
+  let users = A.db.users.filter(u => u.role !== 'super');
+  if(filter) users = users.filter(u => u.instId === filter);
+
+  const container = el('locations-list'); if(!container) return;
+
+  if(!users.length){ container.innerHTML = `<p class="empty">لا يوجد مستخدمون</p>`; return; }
+
+  container.innerHTML = users.map(u => {
+    const inst = getInst(u.instId);
+    const loc = A.db.userLocations?.[u.id] || u.lastLoc;
+    let distM = null, dotClass = 'dot-unknown', statusTxt = 'موقع غير معروف';
+
+    if(loc){
+      distM = Math.round(dist(loc.lat, loc.lng, DOOR_LOC.lat, DOOR_LOC.lng));
+      const radius = inst?.gps || 30;
+      if(distM <= radius){ dotClass='dot-near'; statusTxt=`قريب من الباب ✓`; }
+      else { dotClass='dot-far'; statusTxt=`بعيد — ${distM}م من الباب`; }
+    }
+
+    const minsAgo = loc ? Math.round((Date.now()-loc.timestamp)/60000) : null;
+    const timeLabel = minsAgo===null ? 'لم يسجل دخول بعد' : minsAgo<1 ? 'الآن' : minsAgo<60 ? `منذ ${minsAgo} دقيقة` : `منذ ${Math.round(minsAgo/60)} ساعة`;
+
+    return `<div class="loc-card">
+      <div class="loc-hdr">
+        ${renderAvatarHTML(u, 42)}
+        <div style="margin-right:.5rem;flex:1">
+          <div style="font-weight:700;font-size:.9rem">${u.name}</div>
+          <div style="font-size:.75rem;color:var(--text2)">${inst?.name||'—'} · ${u.role==='admin'?'مدير':'مستخدم'}</div>
+        </div>
+        <span class="loc-dot ${dotClass}"></span>
+      </div>
+      ${loc ? `
+        <div style="background:var(--surface2);border-radius:10px;padding:.75rem;font-size:.8rem;margin-bottom:.75rem">
+          <div style="display:flex;justify-content:space-between;margin-bottom:.35rem">
+            <span style="color:var(--text2)">📍 الإحداثيات</span>
+            <span style="font-family:monospace">${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:.35rem">
+            <span style="color:var(--text2)">📏 المسافة من الباب</span>
+            <span style="color:${distM<=(inst?.gps||30)?'var(--success)':'var(--warning)';};font-weight:700">${distM}م</span>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:var(--text2)">⏰ آخر تحديث</span>
+            <span>${timeLabel}</span>
+          </div>
+        </div>
+        <a href="https://maps.google.com/?q=${loc.lat},${loc.lng}" target="_blank"
+           style="display:flex;align-items:center;justify-content:center;gap:.5rem;padding:.6rem;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:10px;color:var(--accent);font-size:.82rem;font-weight:700;text-decoration:none">
+          🗺️ عرض على خرائط Google
+        </a>
+      ` : `<p style="font-size:.82rem;color:var(--text2);text-align:center;padding:.5rem">لم يفتح التطبيق بعد</p>`}
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════
+// STATS CHARTS
+// ════════════════════════════════════════════
+function renderWeeklyChart(containerId, history){
+  const days = TR[LANG].weekDays;
+  const now = new Date();
+  const counts = days.map((_, i) => {
+    const d = new Date(now); d.setDate(now.getDate() - (6-i));
+    const dateStr = d.toLocaleDateString('ar-TN');
+    return history.filter(h => h.action==='open' && h.time.includes(d.getDate()+'/'+( d.getMonth()+1))).length;
+  });
+  const max = Math.max(...counts, 1);
+  const container = el(containerId); if(!container) return;
+  container.innerHTML = days.map((day,i) => `
+    <div class="bar-col">
+      <div class="bar-val">${counts[i]||''}</div>
+      <div class="bar" style="height:${Math.round((counts[i]/max)*90)+8}px"></div>
+      <div class="bar-lbl">${day}</div>
+    </div>`).join('');
+}
+
+function renderTopUsers(containerId, history, limit=5){
+  const counts = {};
+  history.filter(h=>h.action==='open').forEach(h => counts[h.uname]=(counts[h.uname]||0)+1);
+  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,limit);
+  const max = sorted[0]?.[1]||1;
+  const container = el(containerId); if(!container) return;
+  container.innerHTML = sorted.length ? sorted.map(([name,cnt],i) => `
+    <div class="top-item">
+      <div class="top-rank">${i+1}</div>
+      <div style="flex:1">
+        <div style="font-size:.85rem;font-weight:700;margin-bottom:.35rem">${name}</div>
+        <div class="top-bar-wrap"><div class="top-bar-fill" style="width:${Math.round((cnt/max)*100)}%"></div></div>
+      </div>
+      <div style="font-size:.85rem;font-weight:900;color:var(--accent);margin-right:.5rem">${cnt}</div>
+    </div>`).join('') : `<p class="empty">${tr('noData')}</p>`;
+}
+
+function renderAdminStats(){
+  const inst = myInst(); if(!inst) return;
+  const h = inst.history||[];
+  const users = A.db.users.filter(u=>u.instId===inst.id && u.role==='user');
+  const opens = h.filter(x=>x.action==='open').length;
+  el('a-stats-grid').innerHTML = `
+    <div class="stat-card"><div class="big">${users.filter(u=>u.status==='active').length}</div><div class="lbl">👥 ${tr('activeUsers')}</div></div>
+    <div class="stat-card"><div class="big">${opens}</div><div class="lbl">🚪 ${tr('totalOpens')}</div></div>
+    <div class="stat-card"><div class="big" style="color:var(--danger)">${inst.alerts?.length||0}</div><div class="lbl">🚨 ${tr('totalAlerts')}</div></div>
+    <div class="stat-card"><div class="big" style="color:var(--success)">${inst.doors.length}</div><div class="lbl">🚪 ${tr('doors2')}</div></div>`;
+  renderWeeklyChart('a-weekly-chart', h);
+  renderTopUsers('a-top-users', h);
+}
+
+function renderSuperStats(){
+  let allH=[], allUsers=[], allAlerts=[];
+  A.db.institutes.forEach(i=>{ allH=[...allH,...(i.history||[])]; allAlerts=[...allAlerts,...(i.alerts||[])]; });
+  allUsers = A.db.users.filter(u=>u.role!=='super');
+  const opens = allH.filter(x=>x.action==='open').length;
+  el('sp-stats-grid').innerHTML = `
+    <div class="stat-card"><div class="big">${A.db.institutes.length}</div><div class="lbl">🏫 مؤسسات</div></div>
+    <div class="stat-card"><div class="big">${allUsers.filter(u=>u.status==='active').length}</div><div class="lbl">👥 ${tr('activeUsers')}</div></div>
+    <div class="stat-card"><div class="big">${opens}</div><div class="lbl">🚪 ${tr('totalOpens')}</div></div>
+    <div class="stat-card"><div class="big" style="color:var(--danger)">${allAlerts.length}</div><div class="lbl">🚨 ${tr('totalAlerts')}</div></div>`;
+  renderWeeklyChart('sp-weekly-chart', allH);
+  // Top institutes
+  const instCounts = {};
+  allH.filter(h=>h.action==='open').forEach(h=>{
+    const u = A.db.users.find(u=>u.id===h.uid);
+    if(u){ const inst=getInst(u.instId); if(inst) instCounts[inst.name]=(instCounts[inst.name]||0)+1; }
+  });
+  const sorted = Object.entries(instCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const max = sorted[0]?.[1]||1;
+  const container = el('sp-top-insts'); if(!container) return;
+  container.innerHTML = sorted.length ? sorted.map(([name,cnt],i)=>`
+    <div class="top-item">
+      <div class="top-rank">${i+1}</div>
+      <div style="flex:1"><div style="font-size:.85rem;font-weight:700;margin-bottom:.35rem">${name}</div>
+      <div class="top-bar-wrap"><div class="top-bar-fill" style="width:${Math.round((cnt/max)*100)}%"></div></div></div>
+      <div style="font-size:.85rem;font-weight:900;color:var(--accent);margin-right:.5rem">${cnt}</div>
+    </div>`).join('') : `<p class="empty">${tr('noData')}</p>`;
+}
+
+// ════════════════════════════════════════════
+// EXPORT CSV / PDF
+// ════════════════════════════════════════════
+function exportCSV(){
+  const inst = myInst(); if(!inst){toast('خطأ','error');return;}
+  const fu=el('hist-filter-user')?.value||'', fd=el('hist-filter-door')?.value||'', fa=el('hist-filter-action')?.value||'';
+  let h = inst.history||[];
+  if(fu) h=h.filter(x=>x.uid===fu); if(fd) h=h.filter(x=>x.door===fd); if(fa) h=h.filter(x=>x.action===fa);
+  const lbl={open:'فتح',close:'غلق',stop:'إيقاف'};
+  const rows = [['الاسم','الباب','العملية','التاريخ'],...h.map(x=>[x.uname,x.door,lbl[x.action]||x.action,x.time])];
+  const csv = rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`history_${inst.name}_${Date.now()}.csv`; a.click();
+  toast('✅ تم تصدير CSV','success');
+}
+
+function exportPDF(){
+  const inst = myInst(); if(!inst){toast('خطأ','error');return;}
+  const fu=el('hist-filter-user')?.value||'', fd=el('hist-filter-door')?.value||'', fa=el('hist-filter-action')?.value||'';
+  let h = inst.history||[];
+  if(fu) h=h.filter(x=>x.uid===fu); if(fd) h=h.filter(x=>x.door===fd); if(fa) h=h.filter(x=>x.action===fa);
+  const lbl={open:'فتح',close:'غلق',stop:'إيقاف'};
+  const rows = h.map(x=>`<tr><td>${x.uname}</td><td>${x.door}</td><td>${lbl[x.action]||x.action}</td><td>${x.time}</td></tr>`).join('');
+  const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+  <style>body{font-family:Arial;direction:rtl;padding:2rem;}h1{color:#1e3a5f;font-size:1.3rem;margin-bottom:1rem;}
+  table{width:100%;border-collapse:collapse;font-size:.9rem;}th{background:#1e3a5f;color:#fff;padding:.6rem;text-align:right;}
+  td{padding:.5rem;border-bottom:1px solid #e2e8f0;}tr:nth-child(even){background:#f8fafc;}</style></head>
+  <body><h1>سجل النشاطات — ${inst.name}</h1>
+  <p style="color:#64748b;font-size:.85rem;margin-bottom:1rem">تاريخ التصدير: ${new Date().toLocaleString('ar-TN')} | عدد السجلات: ${h.length}</p>
+  <table><thead><tr><th>المستخدم</th><th>الباب</th><th>العملية</th><th>التاريخ</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+  const w = window.open('','_blank'); w.document.write(html); w.document.close();
+  setTimeout(()=>{ w.print(); }, 500);
+  toast('✅ جاهز للطباعة / PDF','success');
+}
+
+// ════════════════════════════════════════════
+// PATCH: swTab to trigger stats/locations
+// ════════════════════════════════════════════
+const _origSwTab = swTab;
+function swTab(dash, tab, btn){
+  _origSwTab(dash, tab, btn);
+  if(tab==='stats') setTimeout(renderAdminStats, 100);
+  if(tab==='sp-stats') setTimeout(renderSuperStats, 100);
+  if(tab==='locations'){ populateLocFilter(); setTimeout(renderLocations, 100); }
+}
+
+// ════════════════════════════════════════════
+// PATCH: Register form - show av-wrap & save avatar
+// ════════════════════════════════════════════
+const _origRenderAuth = renderAuth;
+function renderAuth(){
+  _origRenderAuth();
+  const avWrap = el('av-wrap');
+  if(avWrap) avWrap.style.display = (A.mode==='register') ? 'flex' : 'none';
+  _avatarB64 = null;
+  const prev = el('av-preview');
+  if(prev) prev.innerHTML = '<span id="av-letter">م</span><div class="av-overlay">📷</div>';
+}
+
+// PATCH doRegister to save avatar
+const _origDoRegister = doRegister;
+function doRegister(email, pass){
+  // store avatar before calling original (it will push the user)
+  const origPush = A.db.users.push.bind(A.db.users);
+  A.db.users.push = function(user){
+    user.avatar = _avatarB64 || null;
+    user.lastLoc = null;
+    origPush(user);
+    A.db.users.push = origPush; // restore
+  };
+  _origDoRegister(email, pass);
+}
+
+// PATCH loadSuper to init locations
+const _origLoadSuper = loadSuper;
+function loadSuper(){
+  _origLoadSuper();
+  if(!A.db.userLocations) A.db.userLocations = {};
+}
+
+// PATCH: saveUserLocationSilent is called inside checkGeo's success callback
+// (already handled inline — no double-call needed)
+
+// Initialize html element with dark theme
+document.documentElement.setAttribute('data-theme','dark');
+
+
+// ════════════════════════════════════════════
+// INSTITUTE HERO BANNER
+// ════════════════════════════════════════════
+function renderInstHero(inst, ctx) {
+  if (!inst) return;
+  const users = A.db.users.filter(u => u.instId === inst.id && u.role === 'user');
+  const active = users.filter(u => u.status === 'active').length;
+
+  if (ctx === 'user') {
+    const nameEl = el('u-inst-hero-name');
+    const subEl  = el('u-inst-hero-sub');
+    if (nameEl) nameEl.textContent = inst.name;
+    const hour = new Date().getHours();
+    const greet = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء النور' : 'مساء الخير';
+    if (subEl)  subEl.innerHTML = `<span>${greet}، <strong style="color:var(--text)">${A.user.name.split(' ')[0]}</strong> 👋</span>`;
+    const tb = el('u-inst-name');
+    if (tb) tb.textContent = inst.name;
+  }
+  if (ctx === 'admin') {
+    const nameEl = el('ad-inst-hero-name');
+    const subEl  = el('ad-inst-hero-sub');
+    if (nameEl) nameEl.textContent = inst.name;
+    const pend = A.db.users.filter(u=>u.instId===inst.id&&u.status==='pending').length;
+    if (subEl)  subEl.innerHTML = `
+      <span>👥 ${active} نشط</span>
+      <span style="color:var(--border);margin:0 .25rem">·</span>
+      <span>🚪 ${inst.doors.length} باب</span>
+      ${pend ? `<span style="color:var(--border);margin:0 .25rem">·</span><span style="color:var(--warning)">⏳ ${pend} انتظار</span>` : ''}
+    `;
+    const tb = el('ad-inst-name');
+    if (tb) tb.textContent = inst.name;
+  }
+}
+
+// ════════════════════════════════════════════
+// NOTES (feature 6)
+// ════════════════════════════════════════════
+let _noteUid = null;
+
+function openNote(uid) {
+  const u = A.db.users.find(u => u.id === uid);
+  if (!u) return;
+  _noteUid = uid;
+  el('note-user-name').textContent = u.name;
+  el('note-text').value = u.note || '';
+  openModal('m-note');
+}
+
+function saveNote() {
+  const u = A.db.users.find(u => u.id === _noteUid);
+  if (!u) return;
+  u.note = el('note-text').value.trim();
+  saveDB();
+  closeModal('m-note');
+  // refresh whichever list is visible
+  const inst = myInst() || getInst(u.instId);
+  if (A.user?.role === 'admin') renderAdminUsers(inst);
+  else renderAllUsers();
+  toast('✅ تم حفظ الملاحظة', 'success');
+}
+
+// ════════════════════════════════════════════
+// BACKUP (feature 9)
+// ════════════════════════════════════════════
+function backupExport() {
+  const data = {
+    version: 'dac_v4',
+    exportDate: new Date().toLocaleString('ar-TN'),
+    db: A.db
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `backup_${Date.now()}.json`;
+  a.click();
+  toast('✅ تم تصدير النسخة الاحتياطية', 'success');
+  const info = el('backup-info');
+  if (info) {
+    info.style.display = 'block';
+    info.textContent = `✅ تم التصدير: ${A.db.institutes.length} مؤسسة · ${A.db.users.length} مستخدم · ${new Date().toLocaleTimeString('ar-TN')}`;
+  }
+}
+
+function backupImport(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.db || !data.db.institutes) { toast('❌ ملف غير صالح', 'error'); return; }
+      if (!confirm(`استعادة النسخة من ${data.exportDate}؟
+سيتم استبدال جميع البيانات الحالية.`)) return;
+      A.db = data.db;
+      saveDB();
+      toast('✅ تم استعادة النسخة الاحتياطية', 'success');
+      // reload current dashboard
+      setTimeout(() => {
+        if (A.user?.role === 'super') loadSuper();
+        else if (A.user?.role === 'admin') loadAdmin();
+      }, 800);
+    } catch {
+      toast('❌ خطأ في قراءة الملف', 'error');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function backupReset() {
+  if (!confirm('⚠️ هل أنت متأكد؟ سيتم مسح جميع البيانات نهائياً!')) return;
+  if (!confirm('⚠️ تأكيد أخير — هذا الإجراء لا يمكن التراجع عنه!')) return;
+  localStorage.removeItem('dac_db_v5');
+  toast('تم المسح — سيتم إعادة التشغيل', 'info');
+  setTimeout(() => location.reload(), 1500);
+}
+
+// ════════════════════════════════════════════
+// PATCH loadUser + loadAdmin to render hero
+// ════════════════════════════════════════════
+const __origLoadUser = loadUser;
+function loadUser() {
+  __origLoadUser();
+  const inst = myInst();
+  renderInstHero(inst, 'user');
+  // update topbar avatar
+  const sm = el('u-av-sm');
+  if (sm && A.user?.avatar) {
+    sm.innerHTML = `<img src="${A.user.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+  } else if (sm) {
+    const l = el('u-av-letter');
+    if (l) l.textContent = A.user?.name?.[0] || 'م';
+  }
+  // topbar greeting
+  const greet = el('u-greeting');
+  if (greet) greet.textContent = new Date().getHours() < 12 ? 'صباح الخير ☀️' : new Date().getHours() < 18 ? 'مساء الخير 🌤️' : 'مساء النور 🌙';
+}
+
+const __origLoadAdmin = loadAdmin;
+function loadAdmin() {
+  __origLoadAdmin();
+  renderInstHero(myInst(), 'admin');
+}
+
+
+// ════════════════════════════════════════════
+// UNIFIED SMART LOGIN / REGISTER
+// ════════════════════════════════════════════
+let _regType = 'user'; // 'user' or 'admin'
+
+function showLandLogin(){
+  el('land-login').style.display = 'block';
+  el('land-register').style.display = 'none';
+  el('l-email').focus();
+}
+
+function showLandRegister(){
+  el('land-login').style.display = 'none';
+  el('land-register').style.display = 'block';
+  el('pend-msg').style.display = 'none';
+  _avatarB64 = null;
+  const prev = el('av-preview');
+  if(prev) prev.innerHTML = '<span id="av-letter">م</span><div class="av-overlay">📷 تغيير</div>';
+  setRegType('user');
+}
+
+function setRegType(type){
+  _regType = type;
+  const btnUser  = el('rtype-user');
+  const btnAdmin = el('rtype-admin');
+  if(btnUser)  { btnUser.style.background  = type==='user'  ? 'var(--accent)' : 'transparent'; btnUser.style.color  = type==='user'  ? '#fff' : 'var(--text2)'; }
+  if(btnAdmin) { btnAdmin.style.background = type==='admin' ? 'var(--accent)' : 'transparent'; btnAdmin.style.color = type==='admin' ? '#fff' : 'var(--text2)'; }
+  el('inst-sel-grp').style.display  = type==='user'  ? 'block' : 'none';
+  el('inst-name-grp').style.display = type==='admin' ? 'block' : 'none';
+  if(type==='user'){
+    const s = el('r-inst');
+    s.innerHTML = '<option value="">اختر المؤسسة</option>';
+    A.db.institutes.forEach(i => s.innerHTML += `<option value="${i.id}">${i.name}</option>`);
+  }
+}
+
+function smartLogin(){
+  const email = (el('l-email')?.value||'').trim().toLowerCase();
+  const pass  = el('l-pass')?.value||'';
+  if(!email||!pass){ toast('يرجى ملء البريد وكلمة المرور','error'); return; }
+
+  const btn = el('l-btn');
+  btn.textContent = '⏳ جاري التحقق...';
+  btn.disabled = true;
+
+  setTimeout(()=>{
+    btn.textContent = '🔐 دخول';
+    btn.disabled = false;
+
+    const u = A.db.users.find(u => u.email.toLowerCase()===email && u.pw===pass);
+    if(!u){ toast('البريد أو كلمة المرور غير صحيحة ❌','error'); return; }
+    if(u.status==='pending'){ toast('حسابك في انتظار موافقة المدير ⏳','info'); return; }
+    if(u.status==='frozen'){  toast('حسابك موقوف — تواصل مع المدير ❄️','error'); return; }
+
+    A.user = u;
+    // Route by role — no need to know type in advance
+    if(u.role==='super') loadSuper();
+    else if(u.role==='admin') loadAdmin();
+    else loadUser();
+  }, 400);
+}
+
+function smartRegister(){
+  const name   = (el('r-name')?.value||'').trim();
+  const email  = (el('r-email')?.value||'').trim().toLowerCase();
+  const pass   = el('r-pass')?.value||'';
+
+  if(!name)  { toast('يرجى إدخال الاسم','error'); return; }
+  if(!email) { toast('يرجى إدخال البريد الإلكتروني','error'); return; }
+  if(!pass)  { toast('يرجى إدخال كلمة المرور','error'); return; }
+  if(A.db.users.find(u=>u.email.toLowerCase()===email)){ toast('هذا البريد مسجل مسبقاً','error'); return; }
+
+  if(_regType==='admin'){
+    const instName = (el('r-inst-name')?.value||'').trim();
+    if(!instName){ toast('يرجى إدخال اسم المؤسسة','error'); return; }
+    const iid = 'inst_'+Date.now();
+    A.db.institutes.push({
+      id:iid, name:instName, gps:30,
+      doors:[{id:'door_'+Date.now(), name:'الباب الرئيسي', devId:'', active:true}],
+      schedule:defSch(), alerts:[], history:[]
+    });
+    const u = {id:'u'+Date.now(),name,email,pw:pass,role:'admin',status:'active',instId:iid,avatar:_avatarB64,lastLoc:null};
+    A.db.users.push(u); saveDB();
+    toast('✅ تم إنشاء حسابك ومؤسستك','success');
+    A.user = u; loadAdmin(); return;
+  }
+
+  // user
+  const instId = el('r-inst')?.value;
+  if(!instId){ toast('يرجى اختيار المؤسسة','error'); return; }
+  A.db.users.push({id:'u'+Date.now(),name,email,pw:pass,role:'user',status:'pending',instId,avatar:_avatarB64,lastLoc:null});
+  saveDB();
+  el('pend-msg').style.display = 'block';
+  toast('✅ تم إرسال طلب التسجيل','success');
+}
+
+</script>
+</body>
+</html>
