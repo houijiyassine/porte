@@ -857,7 +857,27 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 // ════════════════════════════════════════════
 // CONFIG
 // ════════════════════════════════════════════
-const TUYA={clientId:'59gmr8xdf3m5vdt55c89',secret:'f551321a6229419098b3c40728460bdd',base:'https://openapi.tuyaeu.com'};
+const TUYA={
+  clientId:'59gmr8xdf3m5vdt55c89',
+  secret:'f551321a6229419098b3c40728460bdd',
+  base:'https://openapi.tuyaeu.com',
+  proxy:'/api/tuya'  // Vercel proxy — solves CORS
+};
+
+// Helper: call Tuya through proxy
+async function tuyaFetch(url, options={}){
+  const r = await fetch(TUYA.proxy, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      url,
+      method: options.method||'GET',
+      headers: options.headers||{},
+      body: options.body ? JSON.parse(options.body) : undefined
+    })
+  });
+  return r.json();
+}
 const DOOR_LOC={lat:36.837534,lng:10.106981};
 const DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 
@@ -1396,16 +1416,29 @@ function resetAutoBtn(doorId,pfx){
 // ════════════════════════════════════════════
 // TUYA API
 // ════════════════════════════════════════════
+async function getTok(){
+  try{
+    const ts=Date.now().toString();
+    const sign=await hmac256(TUYA.clientId+ts,TUYA.secret);
+    const d=await tuyaFetch(`${TUYA.base}/v1.0/token?grant_type=1`,{
+      headers:{'client_id':TUYA.clientId,'sign':sign,'t':ts,'sign_method':'HMAC-SHA256'}
+    });
+    return d.result?.access_token;
+  }catch{return null;}
+}
 async function tuyaCmd(devId,action){
   if(!devId){await new Promise(r=>setTimeout(r,700));return;}
-  const tok=await getTok();if(!tok)throw new Error('no token');
-  const ts=Date.now().toString(),sign=await hmac256(TUYA.clientId+tok+ts,TUYA.secret);
+  const tok=await getTok();
+  if(!tok)throw new Error('no token');
+  const ts=Date.now().toString();
+  const sign=await hmac256(TUYA.clientId+tok+ts,TUYA.secret);
   const cmds={open:[{code:'switch_1',value:true}],close:[{code:'switch_1',value:false}],stop:[{code:'switch_1',value:false}]};
-  const r=await fetch(`${TUYA.base}/v1.0/devices/${devId}/commands`,{method:'POST',headers:{'client_id':TUYA.clientId,'access_token':tok,'sign':sign,'t':ts,'sign_method':'HMAC-SHA256','Content-Type':'application/json'},body:JSON.stringify({commands:cmds[action]})});
-  const d=await r.json();if(!d.success)throw new Error(d.msg);
-}
-async function getTok(){
-  try{const ts=Date.now().toString(),sign=await hmac256(TUYA.clientId+ts,TUYA.secret);const r=await fetch(`${TUYA.base}/v1.0/token?grant_type=1`,{headers:{'client_id':TUYA.clientId,'sign':sign,'t':ts,'sign_method':'HMAC-SHA256'}});return(await r.json()).result?.access_token;}catch{return null;}
+  const d=await tuyaFetch(`${TUYA.base}/v1.0/devices/${devId}/commands`,{
+    method:'POST',
+    headers:{'client_id':TUYA.clientId,'access_token':tok,'sign':sign,'t':ts,'sign_method':'HMAC-SHA256','Content-Type':'application/json'},
+    body:JSON.stringify({commands:cmds[action]})
+  });
+  if(!d.success)throw new Error(d.msg||'Tuya error');
 }
 async function hmac256(str,secret){const e=new TextEncoder(),k=await crypto.subtle.importKey('raw',e.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',k,e.encode(str)))).map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();}
 
