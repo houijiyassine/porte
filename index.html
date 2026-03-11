@@ -1586,9 +1586,24 @@ async function hmac256(str,secret){const e=new TextEncoder(),k=await crypto.subt
 // LOG
 // ════════════════════════════════════════════
 function logAlert(inst,door,reason){inst.alerts.unshift({id:'al'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,reason,lat:A.geoPos?.coords.latitude||null,lng:A.geoPos?.coords.longitude||null,dst:A.geoPos?Math.round(dist(A.geoPos.coords.latitude,A.geoPos.coords.longitude,getDoorLoc(inst).lat,getDoorLoc(inst).lng)):null,time:new Date().toLocaleString('ar-TN')});saveInst(inst);}
-function logHist(inst,door,action){
-  inst.history.unshift({id:'h'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,action,time:new Date().toLocaleString('ar-TN')});
+function logHist(inst,door,action,via='app'){
+  inst.history.unshift({
+    id:'h'+Date.now(),
+    uid: via==='rc' ? 'rc' : A.user?.id,
+    uname: via==='rc' ? 'RC' : A.user?.name||'—',
+    door:door.name,
+    action,
+    via,
+    time:new Date().toLocaleString('ar-TN')
+  });
   saveInst(inst);
+}
+
+// Call this when RC (remote controller) triggers a door event
+function logRcEvent(inst, door, action){
+  logHist(inst, door, action, 'rc');
+  renderHist(inst);
+  renderAdminDoors(inst);
 }
 
 // ════════════════════════════════════════════
@@ -1701,12 +1716,7 @@ function renderHistFiltered(){
     ?h.map(x=>histItemWithUser(x)).join('')
     :`<p class="empty">لا توجد نتائج</p>`;
 }
-function histItem(h){
-  const lbl={open:'فتح',close:'غلق',stop:'إيقاف'};
-  const cls=h.action==='open'?'h-open':h.action==='close'?'h-close':'h-stop';
-  const ic=h.action==='open'?'🟢':h.action==='close'?'🔴':'🟡';
-  return `<div class="hist-item"><div class="hist-ic ${cls}">${ic}</div><div class="hist-text"><h4>${h.uname} — ${lbl[h.action]||h.action} ${h.door}</h4><p>${h.time}</p></div></div>`;
-}
+function histItem(h){ return histItemWithUser(h); }
 
 // User actions
 async function approveU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAdminUsers(myInst());toast('تم قبول المستخدم','success');}}
@@ -1773,11 +1783,19 @@ function histItemWithUser(h) {
   const lbl = { open: 'فتح', close: 'غلق', stop: 'إيقاف' };
   const cls = h.action === 'open' ? 'h-open' : h.action === 'close' ? 'h-close' : 'h-stop';
   const ic = h.action === 'open' ? '🟢' : h.action === 'close' ? '🔴' : '🟡';
+  const isRC = h.via === 'rc';
+  const byLabel = isRC
+    ? `<span style="background:rgba(139,92,246,.15);color:#a78bfa;border-radius:5px;padding:.1rem .4rem;font-size:.7rem;font-weight:700">📡 RC</span>`
+    : `<span style="color:var(--accent);font-weight:700">${h.uname||'—'}</span>`;
   return `<div class="hist-item">
     <div class="hist-ic ${cls}">${ic}</div>
-    <div class="hist-text">
-      <h4>${lbl[h.action] || h.action} — <span style="color:var(--accent)">${h.uname}</span></h4>
-      <p>${h.door} | ${h.time}</p>
+    <div class="hist-text" style="flex:1">
+      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <span style="font-weight:700">${lbl[h.action]||h.action}</span>
+        ${byLabel}
+        <span style="margin-right:auto;font-size:.72rem;color:var(--text2)">🚪 ${h.door||'—'}</span>
+      </div>
+      <div style="font-size:.75rem;color:var(--text2);margin-top:.2rem">🕐 ${h.time}</div>
     </div>
   </div>`;
 }
@@ -1931,9 +1949,22 @@ function renderInsts(){
   el('inst-list').innerHTML=A.db.institutes.map(inst=>{
     const users=A.db.users.filter(u=>u.instId===inst.id);
     const doorsHtml=inst.doors.map(d=>`
-      <button onclick="showDoorHistSuper('${d.id}','${inst.id}')" style="display:flex;align-items:center;gap:.5rem;width:100%;padding:.55rem .75rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:Cairo,sans-serif;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .2s;margin-bottom:.4rem" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
-        🚪 <span>${d.name}</span> <span style="margin-right:auto;font-size:.7rem">📋 سجل الباب</span>
-      </button>`).join('');
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.6rem .75rem;margin-bottom:.5rem">
+        <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.82rem;font-weight:700;color:var(--text)">🚪 ${d.name}</div>
+            <div style="font-size:.68rem;color:var(--text2);margin-top:.1rem">${d.devId?'ID: '+d.devId.slice(0,14)+'…':'⚠️ لم يُضَف Device ID'}</div>
+          </div>
+          <button onclick="showDoorHistSuper('${d.id}','${inst.id}')" style="padding:.3rem .5rem;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-family:Cairo,sans-serif;font-size:.72rem;cursor:pointer" title="سجل الباب">📋</button>
+          <button onclick="editDoorModal('${d.id}','${inst.id}')" style="padding:.3rem .5rem;background:var(--accent);border:none;border-radius:6px;color:#fff;font-family:Cairo,sans-serif;font-size:.72rem;font-weight:700;cursor:pointer" title="تعديل">✏️</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.35rem">
+          <button onclick="spDoorCmd('${d.devId}','open','${inst.id}','${d.id}')" ${!d.devId?"disabled title='أضف Device ID أولاً'":''} style="padding:.45rem .2rem;border:none;border-radius:7px;font-family:Cairo,sans-serif;font-size:.72rem;font-weight:700;cursor:pointer;background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);${!d.devId?'opacity:.4;cursor:not-allowed':''}">🟢 فتح</button>
+          <button onclick="spDoorCmd('${d.devId}','close','${inst.id}','${d.id}')" ${!d.devId?"disabled":''} style="padding:.45rem .2rem;border:none;border-radius:7px;font-family:Cairo,sans-serif;font-size:.72rem;font-weight:700;cursor:pointer;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);${!d.devId?'opacity:.4;cursor:not-allowed':''}">🔴 غلق</button>
+          <button onclick="spDoorCmd('${d.devId}','stop','${inst.id}','${d.id}')" ${!d.devId?"disabled":''} style="padding:.45rem .2rem;border:none;border-radius:7px;font-family:Cairo,sans-serif;font-size:.72rem;font-weight:700;cursor:pointer;background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3);${!d.devId?'opacity:.4;cursor:not-allowed':''}">🟡 إيقاف</button>
+          <button onclick="spDoorCmd30('${d.devId}','${inst.id}','${d.id}')" ${!d.devId?"disabled":''} style="padding:.45rem .2rem;border:none;border-radius:7px;font-family:Cairo,sans-serif;font-size:.72rem;font-weight:700;cursor:pointer;background:rgba(59,130,246,.15);color:#3b82f6;border:1px solid rgba(59,130,246,.3);${!d.devId?'opacity:.4;cursor:not-allowed':''}">⏱️ 30ث</button>
+        </div>
+      </div>`).join('');
     return `<div class="inst-card">
       <div class="inst-hdr">
         <div><div class="inst-name">🏫 ${inst.name}</div><div class="inst-meta">${inst.doors.length} باب | GPS: ${inst.gps||30}م</div></div>
@@ -1985,11 +2016,69 @@ function renderAllUsers(){
       <div class="ui-actions">
         <button class="btn-sm" onclick="showHist('${u.id}')">📋 سجل</button>
         ${u.status==='pending'?`<button class="btn-sm" onclick="approveUsp('${u.id}')">✅ قبول</button>`:''}
+        ${u.lastLoc?`<a class="btn-sm" href="https://maps.google.com/?q=${u.lastLoc.lat},${u.lastLoc.lng}" target="_blank" style="text-decoration:none">📍 موقع</a>`:''}
         <button class="btn-sm ${u.status==='frozen'?'btn-success':'btn-danger'}" onclick="freezeU('${u.id}')">${u.status==='frozen'?'✅ تفعيل':'❄️ تجميد'}</button>
         <button class="btn-sm btn-danger" onclick="delU('${u.id}')">🗑️ حذف</button>
       </div></div>`;
   }).join('')||`<p class="empty">لا يوجد مستخدمون</p>`;
 }
+async function spDoorCmd(devId, action, instId, doorId){
+  if(!devId){ toast('أضف Device ID للباب أولاً','error'); return; }
+  const inst = getInst(instId);
+  const door = inst?.doors?.find(d=>d.id===doorId);
+  if(!door) return;
+  const lbl = {open:'فتح',close:'غلق',stop:'إيقاف'};
+  try {
+    await tuyaCmd(devId, action);
+    logHist(inst, door, action);
+    toast(`✅ ${lbl[action]} — ${door.name}`,'success');
+    renderInsts();
+  } catch(e) {
+    toast(`❌ فشل ${lbl[action]}: ${e.message||e}`,'error');
+  }
+}
+
+async function spDoorCmd30(devId, instId, doorId){
+  if(!devId){ toast('أضف Device ID للباب أولاً','error'); return; }
+  const inst = getInst(instId);
+  const door = inst?.doors?.find(d=>d.id===doorId);
+  if(!door) return;
+  try {
+    await tuyaCmd(devId,'open');
+    logHist(inst, door, 'open');
+    toast(`✅ فتح لـ 30 ثانية — ${door.name}`,'success');
+    setTimeout(async()=>{
+      await tuyaCmd(devId,'close').catch(()=>{});
+      logHist(inst, door, 'close');
+    }, 30000);
+    renderInsts();
+  } catch(e) {
+    toast(`❌ فشل الفتح: ${e.message||e}`,'error');
+  }
+}
+
+function goToAdminAlerts(){
+  // Find the alerts tab button and click it
+  const tabs = document.querySelectorAll('#admin-dash .nav-tab');
+  tabs.forEach(t => { if(t.textContent.includes('التنبيه')) { swTab('admin','alerts',t); } });
+}
+
+function openAlertsModal(){
+  const allAlerts = A._allAlerts || [];
+  el('m-all-alerts-body').innerHTML = allAlerts.length
+    ? allAlerts.map(a=>`<div class="alert-item">
+        <div class="al-icon">⚠️</div>
+        <div class="al-text">
+          <h4>${a.uname||'—'} — ${a.door||'—'}</h4>
+          <p>${a.reason||'—'} | ${a.time||'—'}</p>
+          ${a.lat?`<p class="al-loc">📍 ${Number(a.lat).toFixed(5)}, ${Number(a.lng).toFixed(5)} — ${a.dst||'?'} متر</p>
+          <a class="al-map-btn" href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank">🗺️ عرض على الخريطة</a>`:''}
+        </div>
+      </div>`).join('')
+    : `<p class="empty">لا توجد تنبيهات 🎉</p>`;
+  openModal('m-all-alerts');
+}
+
 function approveUsp(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAllUsers();renderInsts();toast('تم قبول المستخدم','success');}}
 async function delInst(id){A.db.institutes=A.db.institutes.filter(i=>i.id!==id);A.db.users=A.db.users.filter(u=>u.instId!==id);sbDelete('institutes','id=eq.'+id);sbDelete('users','inst_id=eq.'+id);renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();toast('تم حذف المؤسسة','success');}
 async function addInstitute(){
@@ -2015,6 +2104,44 @@ async function addInstitute(){
 // ════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════
+function editDoorModal(doorId, instId){
+  const inst = getInst(instId);
+  const door = inst?.doors?.find(d=>d.id===doorId);
+  if(!door) return;
+  el('ed-door-id').value = doorId;
+  el('ed-inst-id').value = instId;
+  el('ed-name').value = door.name || '';
+  el('ed-dev').value = door.devId || '';
+  el('ed-lat').value = door.lat || '';
+  el('ed-lng').value = door.lng || '';
+  openModal('m-edit-door');
+}
+
+async function saveEditDoor(){
+  const doorId = el('ed-door-id').value;
+  const instId = el('ed-inst-id').value;
+  const inst = getInst(instId);
+  const door = inst?.doors?.find(d=>d.id===doorId);
+  if(!door) return;
+  door.name  = el('ed-name').value.trim() || door.name;
+  door.devId = el('ed-dev').value.trim();
+  door.lat   = parseFloat(el('ed-lat').value) || null;
+  door.lng   = parseFloat(el('ed-lng').value) || null;
+  await saveInst(inst);
+  renderInsts();
+  closeModal('m-edit-door');
+  toast('✅ تم تعديل الباب','success');
+}
+
+function useMyLocForDoorEdit(){
+  if(!navigator.geolocation){ toast('GPS غير متاح','error'); return; }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    el('ed-lat').value = pos.coords.latitude.toFixed(6);
+    el('ed-lng').value = pos.coords.longitude.toFixed(6);
+    toast('✅ تم تحديد موقعك','success');
+  }, ()=>toast('تعذر تحديد الموقع','error'), {enableHighAccuracy:true,timeout:8000});
+}
+
 function editInstModal(instId){
   const inst = getInst(instId);
   if(!inst) return;
@@ -2305,7 +2432,7 @@ function renderAdminStats(){
   el('a-stats-grid').innerHTML = `
     <div class="stat-card"><div class="big">${users.filter(u=>u.status==='active').length}</div><div class="lbl">👥 ${tr('activeUsers')}</div></div>
     <div class="stat-card"><div class="big">${opens}</div><div class="lbl">🚪 ${tr('totalOpens')}</div></div>
-    <div class="stat-card"><div class="big" style="color:var(--danger)">${inst.alerts?.length||0}</div><div class="lbl">🚨 ${tr('totalAlerts')}</div></div>
+    <div class="stat-card" onclick="goToAdminAlerts()" style="cursor:pointer;transition:transform .2s" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'"><div class="big" style="color:var(--danger)">${inst.alerts?.length||0}</div><div class="lbl">🚨 ${tr('totalAlerts')}</div><div style="font-size:.65rem;color:var(--text2);margin-top:.25rem">اضغط للعرض</div></div>
     <div class="stat-card"><div class="big" style="color:var(--success)">${inst.doors.length}</div><div class="lbl">🚪 ${tr('doors2')}</div></div>`;
   renderWeeklyChart('a-weekly-chart', h);
   renderTopUsers('a-top-users', h);
@@ -2320,8 +2447,10 @@ function renderSuperStats(){
     <div class="stat-card"><div class="big">${A.db.institutes.length}</div><div class="lbl">🏫 مؤسسات</div></div>
     <div class="stat-card"><div class="big">${allUsers.filter(u=>u.status==='active').length}</div><div class="lbl">👥 ${tr('activeUsers')}</div></div>
     <div class="stat-card"><div class="big">${opens}</div><div class="lbl">🚪 ${tr('totalOpens')}</div></div>
-    <div class="stat-card"><div class="big" style="color:var(--danger)">${allAlerts.length}</div><div class="lbl">🚨 ${tr('totalAlerts')}</div></div>`;
+    <div class="stat-card" onclick="openAlertsModal()" style="cursor:pointer;transition:transform .2s" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'"><div class="big" style="color:var(--danger)">${allAlerts.length}</div><div class="lbl">🚨 ${tr('totalAlerts')}</div><div style="font-size:.65rem;color:var(--text2);margin-top:.25rem">اضغط للعرض</div></div>`;
   renderWeeklyChart('sp-weekly-chart', allH);
+  // Store for modal
+  A._allAlerts = allAlerts;
   // Top institutes
   const instCounts = {};
   allH.filter(h=>h.action==='open').forEach(h=>{
@@ -2648,6 +2777,38 @@ async function smartRegister(){
 }
 
 </script>
+
+<div class="modal-ov" id="m-all-alerts">
+  <div class="modal" style="max-height:85vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3 class="modal-title" style="margin:0">🚨 جميع التنبيهات</h3>
+      <button onclick="closeModal('m-all-alerts')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.3rem .7rem;cursor:pointer;color:var(--text);font-family:Cairo,sans-serif">✕</button>
+    </div>
+    <div id="m-all-alerts-body"></div>
+  </div>
+</div>
+
+<div class="modal-ov" id="m-edit-door">
+  <div class="modal">
+    <h3 class="modal-title">✏️ تعديل الباب</h3>
+    <input type="hidden" id="ed-door-id">
+    <input type="hidden" id="ed-inst-id">
+    <div class="fg"><label>اسم الباب</label><input id="ed-name" placeholder="الباب الرئيسي"></div>
+    <div class="fg"><label>Device ID</label><input id="ed-dev" placeholder="bf7c670914391fc80cwayk"></div>
+    <div style="background:var(--surface2);border-radius:12px;padding:1rem;margin-top:.5rem">
+      <div style="font-weight:700;font-size:.85rem;margin-bottom:.75rem;color:var(--accent)">📍 موقع الباب</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        <div class="fg" style="margin:0"><label style="font-size:.78rem">Lat</label><input id="ed-lat" placeholder="36.837534" type="number" step="any"></div>
+        <div class="fg" style="margin:0"><label style="font-size:.78rem">Lng</label><input id="ed-lng" placeholder="10.106981" type="number" step="any"></div>
+      </div>
+      <button onclick="useMyLocForDoorEdit()" style="margin-top:.6rem;width:100%;padding:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-family:Cairo,sans-serif;font-size:.82rem;cursor:pointer;color:var(--text)">📡 استخدم موقعي الحالي</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('m-edit-door')">إلغاء</button>
+      <button class="btn-pri" style="flex:2;margin-top:0" onclick="saveEditDoor()">💾 حفظ</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-ov" id="m-edit-inst">
   <div class="modal">
