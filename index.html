@@ -1921,9 +1921,19 @@ async function addInstitute(){
   const gpsVal=parseInt(el('ni-gps').value)||30;
   if(!name||!email||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
   const iid='inst'+Date.now();
-  A.db.institutes.push({id:iid,name,gps:gpsVal,doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:dev,active:true}],schedule:defSch(),alerts:[],history:[]});
-  A.db.users.push({id:'u'+Date.now(),name:'مدير '+name,email,pw,role:'admin',status:'active',instId:iid});
-  saveInst(A.db.institutes[A.db.institutes.length-1]);renderInsts();populateSpFilter();renderSpInstGps();closeModal('m-add-inst');toast('✅ تم إضافة المؤسسة','success');
+  const newInst = {id:iid,name,gps:gpsVal,doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:dev,active:true}],schedule:defSch(),alerts:[],history:[]};
+  const newAdmin = {id:'u'+Date.now(),name:'مدير '+name,email,pw,role:'admin',status:'active',instId:iid,avatar:null,note:null,lastLoc:null};
+  A.db.institutes.push(newInst);
+  A.db.users.push(newAdmin);
+  try {
+    await saveInst(newInst);
+    await saveUser(newAdmin);
+    toast('✅ تم إضافة المؤسسة','success');
+  } catch(e) {
+    toast('خطأ في الحفظ: '+e.message,'error');
+    console.error(e);
+  }
+  renderInsts();populateSpFilter();renderSpInstGps();closeModal('m-add-inst');
 }
 
 // ════════════════════════════════════════════
