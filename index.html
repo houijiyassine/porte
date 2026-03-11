@@ -855,6 +855,64 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 <script>
 // ════════════════════════════════════════════
+// SUPABASE CONFIG
+// ════════════════════════════════════════════
+const SB_URL = 'https://sjfaootvlxesdytdsknc.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZmFvb3R2bHhlc2R5dGRza25jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxODAyNTcsImV4cCI6MjA4ODc1NjI1N30.pEhpszTGygiR6brpWHglnpcASAPw7kyWl0qd5mFwwMQ';
+
+async function sbFetch(path, options={}) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      'apikey': SB_KEY,
+      'Authorization': `Bearer ${SB_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': options.prefer || '',
+      ...options.headers
+    }
+  });
+  if (r.status === 204) return null;
+  return r.json();
+}
+
+// GET rows
+async function sbGet(table, query='') {
+  return sbFetch(`${table}?${query}`);
+}
+
+// INSERT row
+async function sbInsert(table, data) {
+  return sbFetch(table, {
+    method: 'POST',
+    prefer: 'return=representation',
+    body: JSON.stringify(data)
+  });
+}
+
+// UPDATE row
+async function sbUpdate(table, query, data) {
+  return sbFetch(`${table}?${query}`, {
+    method: 'PATCH',
+    prefer: 'return=representation',
+    body: JSON.stringify(data)
+  });
+}
+
+// DELETE row
+async function sbDelete(table, query) {
+  return sbFetch(`${table}?${query}`, { method: 'DELETE' });
+}
+
+// UPSERT row
+async function sbUpsert(table, data) {
+  return sbFetch(table, {
+    method: 'POST',
+    prefer: 'return=representation,resolution=merge-duplicates',
+    headers: { 'Prefer': 'return=representation,resolution=merge-duplicates' },
+    body: JSON.stringify(data)
+  });
+}
+// ════════════════════════════════════════════
 // CONFIG
 // ════════════════════════════════════════════
 const TUYA={
@@ -1022,26 +1080,72 @@ function animateDoor(doorId, pfx, toState) {
 }
 
 // ════════════════════════════════════════════
-// DB
+// DB — Supabase
 // ════════════════════════════════════════════
-function initDB(){
-  const KEY='dac_db_v4';
-  if(!localStorage.getItem(KEY)){
-    localStorage.setItem(KEY,JSON.stringify({
-      globalGps:30,
-      institutes:[{
-        id:'inst_1',name:'معهد حميدة بكير',gps:30,
-        doors:[{id:'door_1',name:'الباب الرئيسي',devId:'bf7c670914391fc80cwayk',active:true}],
-        schedule:defSch(),alerts:[],history:[]
-      }],
-      users:[
-        {id:'su1',name:'Super Admin',email:'super@admin.com',pw:'super123',role:'super',status:'active',instId:null}
-      ]
-    }));
-  }
-  A.db=JSON.parse(localStorage.getItem(KEY));
+async function initDB(){
+  // Load from Supabase
+  const [users, institutes] = await Promise.all([
+    sbGet('users', 'select=*'),
+    sbGet('institutes', 'select=*')
+  ]);
+
+  // Map Supabase columns to app format
+  const mappedInsts = (institutes||[]).map(i => ({
+    id: i.id, name: i.name, gps: i.gps||30,
+    doors: i.doors||[], schedule: i.schedule||defSch(),
+    alerts: i.alerts||[], history: i.history||[]
+  }));
+
+  const mappedUsers = (users||[]).map(u => ({
+    id: u.id, name: u.name, email: u.email, pw: u.pw,
+    role: u.role, status: u.status, instId: u.inst_id,
+    avatar: u.avatar, note: u.note, lastLoc: u.last_loc
+  }));
+
+  A.db = {
+    globalGps: 30,
+    institutes: mappedInsts,
+    users: mappedUsers,
+    userLocations: {}
+  };
 }
-function saveDB(){localStorage.setItem('dac_db_v4',JSON.stringify(A.db));}
+
+async function saveDB(){
+  // Save institutes (doors, schedule, alerts, history as jsonb)
+  for(const inst of A.db.institutes){
+    await sbUpsert('institutes', {
+      id: inst.id, name: inst.name, gps: inst.gps,
+      doors: inst.doors, schedule: inst.schedule,
+      alerts: inst.alerts, history: inst.history
+    });
+  }
+  // Save users
+  for(const u of A.db.users){
+    await sbUpsert('users', {
+      id: u.id, name: u.name, email: u.email, pw: u.pw,
+      role: u.role, status: u.status, inst_id: u.instId||null,
+      avatar: u.avatar||null, note: u.note||null, last_loc: u.lastLoc||null
+    });
+  }
+}
+
+// Quick save single user
+async function saveUser(u){
+  await sbUpsert('users', {
+    id: u.id, name: u.name, email: u.email, pw: u.pw,
+    role: u.role, status: u.status, inst_id: u.instId||null,
+    avatar: u.avatar||null, note: u.note||null, last_loc: u.lastLoc||null
+  });
+}
+
+// Quick save single institute
+async function saveInst(inst){
+  await sbUpsert('institutes', {
+    id: inst.id, name: inst.name, gps: inst.gps,
+    doors: inst.doors, schedule: inst.schedule,
+    alerts: inst.alerts, history: inst.history
+  });
+}
 function defSch(){
   const o={};DAYS.forEach((d,i)=>o[d]={on:i<5,from:'08:00',to:'17:00'});return o;
 }
@@ -1105,11 +1209,11 @@ function doRegister(email,pass){
     const iid='inst_'+Date.now();
     A.db.institutes.push({id:iid,name:instName,gps:30,doors:[{id:'door_'+Date.now(),name:'الباب الرئيسي',devId:'',active:true}],schedule:defSch(),alerts:[],history:[]});
     const u={id:'u'+Date.now(),name,email,pw:pass,role:'admin',status:'active',instId:iid};
-    A.db.users.push(u);saveDB();A.user=u;loadAdmin();return;
+    A.db.users.push(u);saveUser(u);A.user=u;loadAdmin();return;
   }
   const instId=el('r-inst').value;if(!instId){toast('يرجى اختيار المؤسسة','error');return;}
   A.db.users.push({id:'u'+Date.now(),name,email,pw:pass,role:'user',status:'pending',instId});
-  saveDB();el('pend-msg').style.display='block';toast('تم إرسال طلبك بنجاح','success');
+  el('pend-msg').style.display='block';toast('تم إرسال طلبك بنجاح','success');
 }
 function logout(){
   Object.values(A.timers).forEach(t=>clearInterval(t.iv));
@@ -1445,8 +1549,8 @@ async function hmac256(str,secret){const e=new TextEncoder(),k=await crypto.subt
 // ════════════════════════════════════════════
 // LOG
 // ════════════════════════════════════════════
-function logAlert(inst,door,reason){inst.alerts.unshift({id:'al'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,reason,lat:A.geoPos?.coords.latitude||null,lng:A.geoPos?.coords.longitude||null,dst:A.geoPos?Math.round(dist(A.geoPos.coords.latitude,A.geoPos.coords.longitude,DOOR_LOC.lat,DOOR_LOC.lng)):null,time:new Date().toLocaleString('ar-TN')});saveDB();}
-function logHist(inst,door,action){inst.history.unshift({id:'h'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,action,time:new Date().toLocaleString('ar-TN')});saveDB();}
+function logAlert(inst,door,reason){inst.alerts.unshift({id:'al'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,reason,lat:A.geoPos?.coords.latitude||null,lng:A.geoPos?.coords.longitude||null,dst:A.geoPos?Math.round(dist(A.geoPos.coords.latitude,A.geoPos.coords.longitude,DOOR_LOC.lat,DOOR_LOC.lng)):null,time:new Date().toLocaleString('ar-TN')});saveInst(inst);}
+function logHist(inst,door,action){// hist: inst.history.unshift({id:'h'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,action,time:new Date().toLocaleString('ar-TN')});saveInst(inst);}
 
 // ════════════════════════════════════════════
 // ADMIN DASHBOARD
@@ -1526,7 +1630,7 @@ function renderSch(inst){
     </div>`;
   }).join('');
 }
-function saveSch(){const inst=myInst();DAYS.forEach(d=>{inst.schedule[d]={on:el(`sc-${d}`)?.checked||false,from:el(`sf-${d}`)?.value||'08:00',to:el(`st-${d}`)?.value||'17:00'};});saveDB();toast('✅ تم حفظ الجدول','success');}
+function saveSch(){const inst=myInst();DAYS.forEach(d=>{inst.schedule[d]={on:el(`sc-${d}`)?.checked||false,from:el(`sf-${d}`)?.value||'08:00',to:el(`st-${d}`)?.value||'17:00'};});saveInst(myInst());toast('✅ تم حفظ الجدول','success');}
 function renderHist(inst){
   if(!inst)return;
   // Populate filter dropdowns
@@ -1565,10 +1669,10 @@ function histItem(h){
 }
 
 // User actions
-function approveU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveDB();renderAdminUsers(myInst());toast('تم قبول المستخدم','success');}}
-function freezeU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status=u.status==='frozen'?'active':'frozen';saveDB();renderAdminUsers(myInst()||null);renderAllUsers();toast(u.status==='frozen'?'تم تجميد المستخدم':'تم تفعيل المستخدم','info');}}
-function delU(id){A.db.users=A.db.users.filter(u=>u.id!==id);saveDB();renderAdminUsers(myInst()||null);renderAllUsers();renderInsts();toast('تم الحذف','success');}
-function delDoor(id){const inst=myInst();inst.doors=inst.doors.filter(d=>d.id!==id);saveDB();renderAdminDoors(inst);toast('تم حذف الباب','success');}
+function approveU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAdminUsers(myInst());toast('تم قبول المستخدم','success');}}
+function freezeU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status=u.status==='frozen'?'active':'frozen';saveUser(u);renderAdminUsers(myInst()||null);renderAllUsers();toast(u.status==='frozen'?'تم تجميد المستخدم':'تم تفعيل المستخدم','info');}}
+function delU(id){A.db.users=A.db.users.filter(u=>u.id!==id);sbDelete('users','id=eq.'+id);renderAdminUsers(myInst()||null);renderAllUsers();renderInsts();toast('تم الحذف','success');}
+function delDoor(id){const inst=myInst();inst.doors=inst.doors.filter(d=>d.id!==id);saveInst(inst);renderAdminDoors(inst);toast('تم حذف الباب','success');}
 // Track which inst & user we opened the modal for
 let _histCtx = { uid: null, instId: null };
 
@@ -1659,13 +1763,13 @@ function addUser(){
   if(!name||!email||!pw){toast('يرجى ملء جميع الحقول','error');return;}
   if(A.db.users.find(u=>u.email===email)){toast('البريد مسجل مسبقاً','error');return;}
   A.db.users.push({id:'u'+Date.now(),name,email,pw,role:'user',status:'active',instId:inst.id});
-  saveDB();renderAdminUsers(inst);closeModal('m-add-user');toast('✅ تم إضافة المستخدم','success');
+  saveUser(A.db.users[A.db.users.length-1]);renderAdminUsers(inst);closeModal('m-add-user');toast('✅ تم إضافة المستخدم','success');
 }
 function addDoor(){
   const name=v('nd-name'),devId=v('nd-devid'),inst=myInst();
   if(!name){toast('يرجى إدخال اسم الباب','error');return;}
   inst.doors.push({id:'door'+Date.now(),name,devId,active:true});
-  saveDB();renderAdminDoors(inst);closeModal('m-add-door');toast('✅ تم إضافة الباب','success');
+  saveInst(inst);renderAdminDoors(inst);closeModal('m-add-door');toast('✅ تم إضافة الباب','success');
 }
 
 // ════════════════════════════════════════════
@@ -1683,10 +1787,10 @@ function setStep(pfx,val){
 function saveGps(pfx){
   const r=parseInt(el(`${pfx}-gps-n`).textContent);
   if(pfx==='ad'){
-    const inst=myInst();inst.gps=r;saveDB();
+    const inst=myInst();inst.gps=r;saveInst(inst);
     toast(`✅ تم حفظ نطاق "${inst.name}": ${r} متر`,'success');
   } else {
-    A.db.institutes.forEach(i=>i.gps=r);A.db.globalGps=r;saveDB();
+    A.db.institutes.forEach(i=>{i.gps=r;saveInst(i);});A.db.globalGps=r;
     toast(`✅ تم تطبيق ${r} متر على جميع المؤسسات`,'success');
     renderSpInstGps();renderInsts();
   }
@@ -1732,7 +1836,7 @@ function setInstStep(instId,val){
 }
 function saveInstGps(instId){
   const r=parseInt(el(`spig-n-${instId}`).textContent);
-  const inst=getInst(instId);inst.gps=r;saveDB();
+  const inst=getInst(instId);inst.gps=r;saveInst(inst);
   toast(`✅ "${inst.name}": ${r} متر`,'success');
   renderInsts();
 }
@@ -1806,8 +1910,8 @@ function renderAllUsers(){
       </div></div>`;
   }).join('')||`<p class="empty">لا يوجد مستخدمون</p>`;
 }
-function approveUsp(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveDB();renderAllUsers();renderInsts();toast('تم قبول المستخدم','success');}}
-function delInst(id){A.db.institutes=A.db.institutes.filter(i=>i.id!==id);A.db.users=A.db.users.filter(u=>u.instId!==id);saveDB();renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();toast('تم حذف المؤسسة','success');}
+function approveUsp(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAllUsers();renderInsts();toast('تم قبول المستخدم','success');}}
+function delInst(id){A.db.institutes=A.db.institutes.filter(i=>i.id!==id);A.db.users=A.db.users.filter(u=>u.instId!==id);sbDelete('institutes','id=eq.'+id);sbDelete('users','inst_id=eq.'+id);renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();toast('تم حذف المؤسسة','success');}
 function addInstitute(){
   const name=v('ni-name'),email=v('ni-email'),pw=v('ni-pass'),dev=v('ni-dev');
   const gpsVal=parseInt(el('ni-gps').value)||30;
@@ -1815,7 +1919,7 @@ function addInstitute(){
   const iid='inst'+Date.now();
   A.db.institutes.push({id:iid,name,gps:gpsVal,doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:dev,active:true}],schedule:defSch(),alerts:[],history:[]});
   A.db.users.push({id:'u'+Date.now(),name:'مدير '+name,email,pw,role:'admin',status:'active',instId:iid});
-  saveDB();renderInsts();populateSpFilter();renderSpInstGps();closeModal('m-add-inst');toast('✅ تم إضافة المؤسسة','success');
+  saveInst(A.db.institutes[A.db.institutes.length-1]);renderInsts();populateSpFilter();renderSpInstGps();closeModal('m-add-inst');toast('✅ تم إضافة المؤسسة','success');
 }
 
 // ════════════════════════════════════════════
@@ -1830,7 +1934,35 @@ function toast(msg,type='info'){const t=el('toast');t.textContent=msg;t.classNam
 // ════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════
-initDB();
+(async () => {
+  // Show loading spinner
+  const landing = document.getElementById('landing');
+  const landingContent = landing.innerHTML;
+  landing.innerHTML = `
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,var(--bg) 70%)">
+      <div style="font-size:3rem;margin-bottom:1.5rem">🔐</div>
+      <div style="font-size:1.1rem;font-weight:700;color:var(--text)">نظام التحكم في الدخول</div>
+      <div style="margin-top:.75rem;font-size:.85rem;color:var(--text2)">جاري الاتصال...</div>
+      <div style="margin-top:1.5rem;width:120px;height:3px;background:var(--border);border-radius:99px;overflow:hidden">
+        <div id="load-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px;transition:width .3s"></div>
+      </div>
+    </div>`;
+  // animate bar
+  let pct = 0;
+  const barTimer = setInterval(()=>{ pct=Math.min(pct+8,85); const b=document.getElementById('load-bar'); if(b) b.style.width=pct+'%'; }, 100);
+  try {
+    await initDB();
+  } catch(e) {
+    console.error('DB init error:', e);
+    A.db = { globalGps:30, institutes:[], users:[{id:'su1',name:'Super Admin',email:'super@admin.com',pw:'super123',role:'super',status:'active',instId:null}], userLocations:{} };
+  }
+  clearInterval(barTimer);
+  const b = document.getElementById('load-bar'); if(b) b.style.width='100%';
+  await new Promise(r=>setTimeout(r,300));
+  landing.innerHTML = landingContent;
+  document.documentElement.setAttribute('data-theme','dark');
+  showLandLogin();
+})();
 el('nu-pass').value=Math.random().toString(36).slice(-6);
 
 // ════════════════════════════════════════════
@@ -1926,7 +2058,7 @@ function saveUserLocationSilent(pos){
   A.db.userLocations[A.user.id] = loc;
   const u = A.db.users.find(u=>u.id===A.user.id);
   if(u) u.lastLoc = loc;
-  saveDB();
+  if(u) saveUser(u);
 }
 
 // ════════════════════════════════════════════
@@ -2220,7 +2352,7 @@ function saveNote() {
   const u = A.db.users.find(u => u.id === _noteUid);
   if (!u) return;
   u.note = el('note-text').value.trim();
-  saveDB();
+  saveUser(u);
   closeModal('m-note');
   // refresh whichever list is visible
   const inst = myInst() || getInst(u.instId);
@@ -2262,7 +2394,7 @@ function backupImport(input) {
       if (!confirm(`استعادة النسخة من ${data.exportDate}؟
 سيتم استبدال جميع البيانات الحالية.`)) return;
       A.db = data.db;
-      saveDB();
+      saveDB(); // full restore
       toast('✅ تم استعادة النسخة الاحتياطية', 'success');
       // reload current dashboard
       setTimeout(() => {
@@ -2385,28 +2517,42 @@ function smartRegister(){
   if(!pass)  { toast('يرجى إدخال كلمة المرور','error'); return; }
   if(A.db.users.find(u=>u.email.toLowerCase()===email)){ toast('هذا البريد مسجل مسبقاً','error'); return; }
 
-  if(_regType==='admin'){
-    const instName = (el('r-inst-name')?.value||'').trim();
-    if(!instName){ toast('يرجى إدخال اسم المؤسسة','error'); return; }
-    const iid = 'inst_'+Date.now();
-    A.db.institutes.push({
-      id:iid, name:instName, gps:30,
-      doors:[{id:'door_'+Date.now(), name:'الباب الرئيسي', devId:'', active:true}],
-      schedule:defSch(), alerts:[], history:[]
-    });
-    const u = {id:'u'+Date.now(),name,email,pw:pass,role:'admin',status:'active',instId:iid,avatar:_avatarB64,lastLoc:null};
-    A.db.users.push(u); saveDB();
-    toast('✅ تم إنشاء حسابك ومؤسستك','success');
-    A.user = u; loadAdmin(); return;
-  }
+  const btn2 = document.querySelector('#land-register .btn-pri');
+  if(btn2){ btn2.textContent='⏳ جاري الحفظ...'; btn2.disabled=true; }
 
-  // user
-  const instId = el('r-inst')?.value;
-  if(!instId){ toast('يرجى اختيار المؤسسة','error'); return; }
-  A.db.users.push({id:'u'+Date.now(),name,email,pw:pass,role:'user',status:'pending',instId,avatar:_avatarB64,lastLoc:null});
-  saveDB();
-  el('pend-msg').style.display = 'block';
-  toast('✅ تم إرسال طلب التسجيل','success');
+  try {
+    if(_regType==='admin'){
+      const instName = (el('r-inst-name')?.value||'').trim();
+      if(!instName){ toast('يرجى إدخال اسم المؤسسة','error'); return; }
+      const iid = 'inst_'+Date.now();
+      const newInst = {
+        id:iid, name:instName, gps:30,
+        doors:[{id:'door_'+Date.now(), name:'الباب الرئيسي', devId:'', active:true}],
+        schedule:defSch(), alerts:[], history:[]
+      };
+      const u = {id:'u'+Date.now(),name,email,pw:pass,role:'admin',status:'active',instId:iid,avatar:_avatarB64||null,lastLoc:null,note:null};
+      await saveInst(newInst);
+      await saveUser(u);
+      A.db.institutes.push(newInst);
+      A.db.users.push(u);
+      toast('✅ تم إنشاء حسابك ومؤسستك','success');
+      A.user = u; loadAdmin(); return;
+    }
+
+    // user
+    const instId = el('r-inst')?.value;
+    if(!instId){ toast('يرجى اختيار المؤسسة','error'); return; }
+    const newUser = {id:'u'+Date.now(),name,email,pw:pass,role:'user',status:'pending',instId,avatar:_avatarB64||null,lastLoc:null,note:null};
+    await saveUser(newUser);
+    A.db.users.push(newUser);
+    el('pend-msg').style.display = 'block';
+    toast('✅ تم إرسال طلب التسجيل','success');
+  } catch(e) {
+    toast('خطأ في الحفظ — تحقق من الاتصال','error');
+    console.error(e);
+  } finally {
+    if(btn2){ btn2.textContent='✅ إنشاء الحساب'; btn2.disabled=false; }
+  }
 }
 
 </script>
