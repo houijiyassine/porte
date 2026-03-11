@@ -2472,21 +2472,34 @@ async function smartLogin(){
   btn.textContent = '⏳ جاري التحقق...';
   btn.disabled = true;
 
-  setTimeout(()=>{
+  // Try local first, then reload from Supabase
+  btn.textContent = '⏳ جاري التحقق...';
+  
+  const tryLogin = async () => {
+    let u = A.db.users.find(u => u.email.toLowerCase()===email && u.pw===pass);
+    
+    if(!u) {
+      // Reload from Supabase in case new user was added
+      try {
+        await initDB();
+        u = A.db.users.find(u => u.email.toLowerCase()===email && u.pw===pass);
+      } catch(e) { console.error(e); }
+    }
+    
     btn.textContent = '🔐 دخول';
     btn.disabled = false;
-
-    const u = A.db.users.find(u => u.email.toLowerCase()===email && u.pw===pass);
+    
     if(!u){ toast('البريد أو كلمة المرور غير صحيحة ❌','error'); return; }
     if(u.status==='pending'){ toast('حسابك في انتظار موافقة المدير ⏳','info'); return; }
     if(u.status==='frozen'){  toast('حسابك موقوف — تواصل مع المدير ❄️','error'); return; }
 
     A.user = u;
-    // Route by role — no need to know type in advance
     if(u.role==='super') loadSuper();
     else if(u.role==='admin') loadAdmin();
     else loadUser();
-  }, 400);
+  };
+  
+  setTimeout(() => tryLogin(), 200);
 }
 
 async function smartRegister(){
