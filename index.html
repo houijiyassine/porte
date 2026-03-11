@@ -1630,7 +1630,7 @@ function renderSch(inst){
     </div>`;
   }).join('');
 }
-function saveSch(){const inst=myInst();DAYS.forEach(d=>{inst.schedule[d]={on:el(`sc-${d}`)?.checked||false,from:el(`sf-${d}`)?.value||'08:00',to:el(`st-${d}`)?.value||'17:00'};});saveInst(myInst());toast('✅ تم حفظ الجدول','success');}
+async function saveSch(){const inst=myInst();DAYS.forEach(d=>{inst.schedule[d]={on:el(`sc-${d}`)?.checked||false,from:el(`sf-${d}`)?.value||'08:00',to:el(`st-${d}`)?.value||'17:00'};});saveInst(myInst());toast('✅ تم حفظ الجدول','success');}
 function renderHist(inst){
   if(!inst)return;
   // Populate filter dropdowns
@@ -1669,10 +1669,10 @@ function histItem(h){
 }
 
 // User actions
-function approveU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAdminUsers(myInst());toast('تم قبول المستخدم','success');}}
-function freezeU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status=u.status==='frozen'?'active':'frozen';saveUser(u);renderAdminUsers(myInst()||null);renderAllUsers();toast(u.status==='frozen'?'تم تجميد المستخدم':'تم تفعيل المستخدم','info');}}
-function delU(id){A.db.users=A.db.users.filter(u=>u.id!==id);sbDelete('users','id=eq.'+id);renderAdminUsers(myInst()||null);renderAllUsers();renderInsts();toast('تم الحذف','success');}
-function delDoor(id){const inst=myInst();inst.doors=inst.doors.filter(d=>d.id!==id);saveInst(inst);renderAdminDoors(inst);toast('تم حذف الباب','success');}
+async function approveU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAdminUsers(myInst());toast('تم قبول المستخدم','success');}}
+async function freezeU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status=u.status==='frozen'?'active':'frozen';saveUser(u);renderAdminUsers(myInst()||null);renderAllUsers();toast(u.status==='frozen'?'تم تجميد المستخدم':'تم تفعيل المستخدم','info');}}
+async function delU(id){A.db.users=A.db.users.filter(u=>u.id!==id);sbDelete('users','id=eq.'+id);renderAdminUsers(myInst()||null);renderAllUsers();renderInsts();toast('تم الحذف','success');}
+async function delDoor(id){const inst=myInst();inst.doors=inst.doors.filter(d=>d.id!==id);saveInst(inst);renderAdminDoors(inst);toast('تم حذف الباب','success');}
 // Track which inst & user we opened the modal for
 let _histCtx = { uid: null, instId: null };
 
@@ -1758,14 +1758,14 @@ function showDoorHist(doorId, instId){
   openModal('m-hist');
 }
 
-function addUser(){
+async function addUser(){
   const name=v('nu-name'),email=v('nu-email'),pw=v('nu-pass'),inst=myInst();
   if(!name||!email||!pw){toast('يرجى ملء جميع الحقول','error');return;}
   if(A.db.users.find(u=>u.email===email)){toast('البريد مسجل مسبقاً','error');return;}
   A.db.users.push({id:'u'+Date.now(),name,email,pw,role:'user',status:'active',instId:inst.id});
   saveUser(A.db.users[A.db.users.length-1]);renderAdminUsers(inst);closeModal('m-add-user');toast('✅ تم إضافة المستخدم','success');
 }
-function addDoor(){
+async function addDoor(){
   const name=v('nd-name'),devId=v('nd-devid'),inst=myInst();
   if(!name){toast('يرجى إدخال اسم الباب','error');return;}
   inst.doors.push({id:'door'+Date.now(),name,devId,active:true});
@@ -1775,16 +1775,16 @@ function addDoor(){
 // ════════════════════════════════════════════
 // GPS — Per institute
 // ════════════════════════════════════════════
-function adjGps(dir,pfx){
+async function adjGps(dir,pfx){
   const step=A.steps[pfx]||1,numEl=el(`${pfx}-gps-n`);
   numEl.textContent=Math.max(5,Math.min(1000,parseInt(numEl.textContent)+dir*step));
 }
-function setStep(pfx,val){
+async function setStep(pfx,val){
   A.steps[pfx]=val;
   [1,5,10,50].forEach(s=>el(`${pfx}-s${s}`)?.classList.remove('active'));
   el(`${pfx}-s${val}`)?.classList.add('active');
 }
-function saveGps(pfx){
+async function saveGps(pfx){
   const r=parseInt(el(`${pfx}-gps-n`).textContent);
   if(pfx==='ad'){
     const inst=myInst();inst.gps=r;saveInst(inst);
@@ -1797,7 +1797,7 @@ function saveGps(pfx){
 }
 
 // Super: render per-institute GPS controls
-function renderSpInstGps(){
+async function renderSpInstGps(){
   el('sp-inst-gps-list').innerHTML=A.db.institutes.map(inst=>`
     <div class="gps-card" style="margin-bottom:.75rem">
       <h3>🏫 ${inst.name}</h3>
@@ -1911,8 +1911,8 @@ function renderAllUsers(){
   }).join('')||`<p class="empty">لا يوجد مستخدمون</p>`;
 }
 function approveUsp(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAllUsers();renderInsts();toast('تم قبول المستخدم','success');}}
-function delInst(id){A.db.institutes=A.db.institutes.filter(i=>i.id!==id);A.db.users=A.db.users.filter(u=>u.instId!==id);sbDelete('institutes','id=eq.'+id);sbDelete('users','inst_id=eq.'+id);renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();toast('تم حذف المؤسسة','success');}
-function addInstitute(){
+async function delInst(id){A.db.institutes=A.db.institutes.filter(i=>i.id!==id);A.db.users=A.db.users.filter(u=>u.instId!==id);sbDelete('institutes','id=eq.'+id);sbDelete('users','inst_id=eq.'+id);renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();toast('تم حذف المؤسسة','success');}
+async function addInstitute(){
   const name=v('ni-name'),email=v('ni-email'),pw=v('ni-pass'),dev=v('ni-dev');
   const gpsVal=parseInt(el('ni-gps').value)||30;
   if(!name||!email||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
@@ -2348,7 +2348,7 @@ function openNote(uid) {
   openModal('m-note');
 }
 
-function saveNote() {
+async function saveNote() {
   const u = A.db.users.find(u => u.id === _noteUid);
   if (!u) return;
   u.note = el('note-text').value.trim();
@@ -2481,7 +2481,7 @@ function setRegType(type){
   }
 }
 
-function smartLogin(){
+async function smartLogin(){
   const email = (el('l-email')?.value||'').trim().toLowerCase();
   const pass  = el('l-pass')?.value||'';
   if(!email||!pass){ toast('يرجى ملء البريد وكلمة المرور','error'); return; }
@@ -2507,7 +2507,7 @@ function smartLogin(){
   }, 400);
 }
 
-function smartRegister(){
+async function smartRegister(){
   const name   = (el('r-name')?.value||'').trim();
   const email  = (el('r-email')?.value||'').trim().toLowerCase();
   const pass   = el('r-pass')?.value||'';
