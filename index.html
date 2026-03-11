@@ -1167,6 +1167,9 @@ function swTab(dash,tab,btn){
   document.querySelectorAll(`#${dash}-dash .nav-tab`).forEach(t=>t.classList.remove('active'));
   document.getElementById(`${prefix}-${tab}`).classList.add('active');
   btn.classList.add('active');
+  if(tab==='stats') setTimeout(renderAdminStats, 100);
+  if(tab==='sp-stats') setTimeout(renderSuperStats, 100);
+  if(tab==='locations'){ populateLocFilter(); setTimeout(renderLocations, 100); }
 }
 
 // ════════════════════════════════════════════
@@ -1230,9 +1233,15 @@ function logout(){
 function loadUser(){
   const inst=myInst();
   el('u-inst-name').textContent=inst?.name||'المؤسسة';
-  el('u-greeting').textContent='مرحباً، '+(A.user.name.split(' ')[0]);
+  const h = new Date().getHours();
+  const greetTxt = h < 12 ? 'صباح الخير ☀️' : h < 18 ? 'مساء الخير 🌤️' : 'مساء النور 🌙';
+  el('u-greeting').textContent = greetTxt + ' ' + (A.user.name.split(' ')[0]);
   el('u-av').textContent=A.user.name[0];
+  const sm = el('u-av-sm');
+  if(sm && A.user?.avatar) sm.innerHTML=`<img src="${A.user.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+  else if(sm){ const l=el('u-av-letter'); if(l) l.textContent=A.user?.name?.[0]||'م'; }
   el('u-doors').innerHTML=(inst?.doors||[]).map(d=>userDoorCard(d,inst)).join('');
+  renderInstHero(inst,'user');
   checkGeo(inst,'user');checkTime(inst,'user');
   showPage('user-dash');
 }
@@ -1563,6 +1572,7 @@ function loadAdmin(){
   el('ad-inst-name').textContent=inst?.name||'لوحة التحكم';
   el('ad-gps-n').textContent=inst?.gps||30;
   renderAdminUsers(inst);renderAdminDoors(inst);renderAlerts(inst);renderSch(inst);renderHist(inst);
+  renderInstHero(inst, 'admin');
   showPage('admin-dash');
 }
 
@@ -2249,40 +2259,14 @@ function exportPDF(){
 // ════════════════════════════════════════════
 // PATCH: swTab to trigger stats/locations
 // ════════════════════════════════════════════
-const _origSwTab = swTab;
-function swTab(dash, tab, btn){
-  _origSwTab(dash, tab, btn);
-  if(tab==='stats') setTimeout(renderAdminStats, 100);
-  if(tab==='sp-stats') setTimeout(renderSuperStats, 100);
-  if(tab==='locations'){ populateLocFilter(); setTimeout(renderLocations, 100); }
-}
+// swTab stats integrated above
 
 // ════════════════════════════════════════════
 // PATCH: Register form - show av-wrap & save avatar
 // ════════════════════════════════════════════
-const _origRenderAuth = renderAuth;
-function renderAuth(){
-  _origRenderAuth();
-  const avWrap = el('av-wrap');
-  if(avWrap) avWrap.style.display = (A.mode==='register') ? 'flex' : 'none';
-  _avatarB64 = null;
-  const prev = el('av-preview');
-  if(prev) prev.innerHTML = '<span id="av-letter">م</span><div class="av-overlay">📷</div>';
-}
+// renderAuth avatar integrated
 
-// PATCH doRegister to save avatar
-const _origDoRegister = doRegister;
-function doRegister(email, pass){
-  // store avatar before calling original (it will push the user)
-  const origPush = A.db.users.push.bind(A.db.users);
-  A.db.users.push = function(user){
-    user.avatar = _avatarB64 || null;
-    user.lastLoc = null;
-    origPush(user);
-    A.db.users.push = origPush; // restore
-  };
-  _origDoRegister(email, pass);
-}
+// doRegister avatar integrated
 
 // userLocations initialized in initDB
 
@@ -2412,29 +2396,9 @@ function backupReset() {
 // ════════════════════════════════════════════
 // PATCH loadUser + loadAdmin to render hero
 // ════════════════════════════════════════════
-const __origLoadUser = loadUser;
-function loadUser() {
-  __origLoadUser();
-  const inst = myInst();
-  renderInstHero(inst, 'user');
-  // update topbar avatar
-  const sm = el('u-av-sm');
-  if (sm && A.user?.avatar) {
-    sm.innerHTML = `<img src="${A.user.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
-  } else if (sm) {
-    const l = el('u-av-letter');
-    if (l) l.textContent = A.user?.name?.[0] || 'م';
-  }
-  // topbar greeting
-  const greet = el('u-greeting');
-  if (greet) greet.textContent = new Date().getHours() < 12 ? 'صباح الخير ☀️' : new Date().getHours() < 18 ? 'مساء الخير 🌤️' : 'مساء النور 🌙';
-}
+// loadUser hero integrated below
 
-const __origLoadAdmin = loadAdmin;
-function loadAdmin() {
-  __origLoadAdmin();
-  renderInstHero(myInst(), 'admin');
-}
+// loadAdmin hero integrated below
 
 
 // ════════════════════════════════════════════
