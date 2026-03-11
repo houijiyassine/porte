@@ -1236,10 +1236,9 @@ function loadUser(){
   const h = new Date().getHours();
   const greetTxt = h < 12 ? 'صباح الخير ☀️' : h < 18 ? 'مساء الخير 🌤️' : 'مساء النور 🌙';
   el('u-greeting').textContent = greetTxt + ' ' + (A.user.name.split(' ')[0]);
-  el('u-av').textContent=A.user.name[0];
   const sm = el('u-av-sm');
   if(sm && A.user?.avatar) sm.innerHTML=`<img src="${A.user.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
-  else if(sm){ const l=el('u-av-letter'); if(l) l.textContent=A.user?.name?.[0]||'م'; }
+  else { const l=el('u-av-letter'); if(l) l.textContent=A.user?.name?.[0]||'م'; }
   el('u-doors').innerHTML=(inst?.doors||[]).map(d=>userDoorCard(d,inst)).join('');
   renderInstHero(inst,'user');
   checkGeo(inst,'user');checkTime(inst,'user');
