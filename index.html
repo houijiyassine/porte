@@ -2488,10 +2488,14 @@ async function smartLogin(){
   const tryLogin = async () => {
     let u = A.db.users.find(u => u.email.toLowerCase()===email && u.pw===pass);
     
+    console.log('🔍 Login attempt:', email, pass);
+    console.log('👥 Users in memory:', A.db.users.map(x=>({email:x.email,pw:x.pw,role:x.role})));
+    
     if(!u) {
       // Reload from Supabase in case new user was added
       try {
         await initDB();
+        console.log('🔄 After reload:', A.db.users.map(x=>({email:x.email,pw:x.pw,role:x.role})));
         u = A.db.users.find(u => u.email.toLowerCase()===email && u.pw===pass);
       } catch(e) { console.error(e); }
     }
