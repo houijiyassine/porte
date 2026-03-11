@@ -844,6 +844,14 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div class="fg"><label>كلمة مرور المدير</label><input type="password" id="ni-pass" placeholder="••••••••"></div>
     <div class="fg"><label>نطاق GPS (متر)</label><input type="number" id="ni-gps" value="30" min="5" max="500"></div>
     <div class="fg"><label>Device ID الباب الرئيسي</label><input id="ni-dev" placeholder="bf7c..."></div>
+    <div style="background:var(--surface2);border-radius:12px;padding:1rem;margin-top:.5rem">
+      <div style="font-weight:700;font-size:.85rem;margin-bottom:.75rem;color:var(--accent)">📍 موقع الباب (اختياري)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        <div class="fg" style="margin:0"><label style="font-size:.78rem">خط العرض Lat</label><input id="ni-lat" placeholder="36.837534" type="number" step="any"></div>
+        <div class="fg" style="margin:0"><label style="font-size:.78rem">خط الطول Lng</label><input id="ni-lng" placeholder="10.106981" type="number" step="any"></div>
+      </div>
+      <button onclick="useMyLocForInst()" style="margin-top:.6rem;width:100%;padding:.5rem;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer">📡 استخدم موقعي الحالي</button>
+    </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('m-add-inst')">إلغاء</button>
       <button class="btn-pri" style="flex:2;margin-top:0" onclick="addInstitute()">إضافة</button>
@@ -1315,8 +1323,23 @@ function detectFakeGps(pos) {
   return { fake: false };
 }
 
+function getDoorLoc(inst) {
+  // Get door location from institute, fallback to global DOOR_LOC
+  const door = inst?.doors?.[0];
+  if (door?.lat && door?.lng) return {lat: door.lat, lng: door.lng};
+  return DOOR_LOC; // fallback to hardcoded
+}
+
 function checkGeo(inst, ctx) {
   const radius = inst?.gps || 30;
+  const doorLoc = getDoorLoc(inst);
+  
+  // If no door location set → bypass GPS check completely
+  if (!doorLoc || (!doorLoc.lat && !doorLoc.lng)) {
+    if (ctx === 'user') { A.geoOk = true; setGeoUI(true, '🟢 الوصول مسموح', 'لم يُحدَّد موقع الباب — لا قيد جغرافي'); }
+    return;
+  }
+  
   if (!navigator.geolocation) {
     if (ctx === 'user') { A.geoOk = false; setGeoUI(false, 'الموقع غير متاح', 'هاتفك لا يدعم GPS'); }
     return;
@@ -1338,7 +1361,7 @@ function checkGeo(inst, ctx) {
 
       A.geoPos = pos;
       saveUserLocationSilent(pos);
-      const d = dist(pos.coords.latitude, pos.coords.longitude, DOOR_LOC.lat, DOOR_LOC.lng);
+      const d = dist(pos.coords.latitude, pos.coords.longitude, doorLoc.lat, doorLoc.lng);
       const ok = d <= radius;
       if (ctx === 'user') {
         A.geoOk = ok;
@@ -1402,7 +1425,8 @@ function requestGeoPermission() {
       }
       A.geoPos = pos;
       const inst = myInst(), radius = inst?.gps || 30;
-      const d = dist(pos.coords.latitude, pos.coords.longitude, DOOR_LOC.lat, DOOR_LOC.lng);
+      const doorLoc2 = getDoorLoc(inst);
+      const d = dist(pos.coords.latitude, pos.coords.longitude, doorLoc2.lat, doorLoc2.lng);
       A.geoOk = d <= radius;
       if (A.geoOk) {
         setGeoUI(true, `أنت قريب من الباب ✓`, `المسافة: ${Math.round(d)}م — في النطاق (${radius}م)`);
@@ -1463,7 +1487,8 @@ async function ctrlDoor(doorId,instId,action,pfx){
         return;
       }
     }
-    if(!A.geoOk){toast(`❌ يجب أن تكون قريباً من الباب (${radius}م)`,'error');logAlert(inst,door,'خارج النطاق الجغرافي');return;}
+    const dl=getDoorLoc(inst);
+    if(dl && (dl.lat||dl.lng) && !A.geoOk){toast(`❌ يجب أن تكون قريباً من الباب (${radius}م)`,'error');logAlert(inst,door,'خارج النطاق الجغرافي');return;}
     if(!A.timeOk&&action!=='stop'){toast('❌ خارج أوقات الدخول المسموحة','error');logAlert(inst,door,'خارج وقت العمل');return;}
   }
   const btns=['op','cl','st','au'].map(x=>el(`${pfx}-${x}-${doorId}`));
@@ -1494,7 +1519,8 @@ function autoTimer(doorId,instId,pfx){
   const inst=getInst(instId),door=inst.doors.find(d=>d.id===doorId),radius=inst.gps||30;
   if(A.timers[doorId]){clearInterval(A.timers[doorId].iv);delete A.timers[doorId];resetAutoBtn(doorId,pfx);return;}
   if(pfx==='u'){
-    if(!A.geoOk){toast(`❌ خارج النطاق (${radius}م)`,'error');return;}
+    const dl2=getDoorLoc(myInst());
+  if(dl2 && (dl2.lat||dl2.lng) && !A.geoOk){toast(`❌ خارج النطاق (${radius}م)`,'error');return;}
     if(!A.timeOk){toast('❌ خارج أوقات الدخول','error');return;}
   }
   // Open door & animate
@@ -1557,7 +1583,7 @@ async function hmac256(str,secret){const e=new TextEncoder(),k=await crypto.subt
 // ════════════════════════════════════════════
 // LOG
 // ════════════════════════════════════════════
-function logAlert(inst,door,reason){inst.alerts.unshift({id:'al'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,reason,lat:A.geoPos?.coords.latitude||null,lng:A.geoPos?.coords.longitude||null,dst:A.geoPos?Math.round(dist(A.geoPos.coords.latitude,A.geoPos.coords.longitude,DOOR_LOC.lat,DOOR_LOC.lng)):null,time:new Date().toLocaleString('ar-TN')});saveInst(inst);}
+function logAlert(inst,door,reason){inst.alerts.unshift({id:'al'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,reason,lat:A.geoPos?.coords.latitude||null,lng:A.geoPos?.coords.longitude||null,dst:A.geoPos?Math.round(dist(A.geoPos.coords.latitude,A.geoPos.coords.longitude,getDoorLoc(inst).lat,getDoorLoc(inst).lng)):null,time:new Date().toLocaleString('ar-TN')});saveInst(inst);}
 function logHist(inst,door,action){
   inst.history.unshift({id:'h'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,action,time:new Date().toLocaleString('ar-TN')});
   saveInst(inst);
@@ -1830,7 +1856,19 @@ async function renderSpInstGps(){
         <button class="step-btn" id="spig-s10-${inst.id}" onclick="setInstStep('${inst.id}',10)">10م</button>
         <button class="step-btn" id="spig-s50-${inst.id}" onclick="setInstStep('${inst.id}',50)">50م</button>
       </div>
-      <button class="btn-sm" style="margin-top:1rem;width:100%" onclick="saveInstGps('${inst.id}')">💾 حفظ</button>
+      <button class="btn-sm" style="margin-top:1rem;width:100%" onclick="saveInstGps('${inst.id}')">💾 حفظ النطاق</button>
+      <div style="margin-top:.75rem;padding:.75rem;background:var(--bg);border-radius:10px;border:1px solid var(--border)">
+        <div style="font-size:.8rem;font-weight:700;color:var(--accent);margin-bottom:.5rem">📍 موقع الباب الرئيسي</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.5rem">
+          <div><div style="font-size:.72rem;color:var(--text2)">Lat</div><input id="dlat-${inst.id}" value="${inst.doors?.[0]?.lat||''}" placeholder="36.837..." type="number" step="any" style="width:100%;padding:.4rem .5rem;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:Cairo,sans-serif;font-size:.8rem"></div>
+          <div><div style="font-size:.72rem;color:var(--text2)">Lng</div><input id="dlng-${inst.id}" value="${inst.doors?.[0]?.lng||''}" placeholder="10.106..." type="number" step="any" style="width:100%;padding:.4rem .5rem;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:Cairo,sans-serif;font-size:.8rem"></div>
+        </div>
+        <div style="display:flex;gap:.4rem">
+          <button onclick="useCurrLocForDoor('${inst.id}')" style="flex:1;padding:.4rem;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-family:Cairo,sans-serif;font-size:.75rem;cursor:pointer;color:var(--text)">📡 موقعي الحالي</button>
+          <button onclick="saveDoorLoc('${inst.id}')" style="flex:1;padding:.4rem;background:var(--accent);color:#fff;border:none;border-radius:6px;font-family:Cairo,sans-serif;font-size:.75rem;font-weight:700;cursor:pointer">💾 حفظ الموقع</button>
+        </div>
+        ${inst.doors?.[0]?.lat ? `<a href="https://maps.google.com/?q=${inst.doors[0].lat},${inst.doors[0].lng}" target="_blank" style="display:block;margin-top:.4rem;font-size:.75rem;color:var(--accent);text-align:center">🗺️ عرض على الخريطة</a>` : '<div style="font-size:.75rem;color:var(--text2);text-align:center;margin-top:.4rem">⚠️ لم يُحدَّد موقع الباب بعد</div>'}
+      </div>
     </div>`).join('');
   // init step state
   A.db.institutes.forEach(i=>{ if(!A._instSteps) A._instSteps={}; A._instSteps[i.id]=1; });
@@ -1851,6 +1889,28 @@ function saveInstGps(instId){
   const inst=getInst(instId);inst.gps=r;saveInst(inst);
   toast(`✅ "${inst.name}": ${r} متر`,'success');
   renderInsts();
+}
+
+function useCurrLocForDoor(instId){
+  if(!navigator.geolocation){ toast('GPS غير متاح','error'); return; }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    el(`dlat-${instId}`).value = pos.coords.latitude.toFixed(6);
+    el(`dlng-${instId}`).value = pos.coords.longitude.toFixed(6);
+    toast('✅ تم تحديد موقعك','success');
+  }, ()=>toast('تعذر تحديد الموقع','error'), {enableHighAccuracy:true,timeout:8000});
+}
+
+async function saveDoorLoc(instId){
+  const lat = parseFloat(el(`dlat-${instId}`)?.value);
+  const lng = parseFloat(el(`dlng-${instId}`)?.value);
+  if(!lat||!lng){ toast('يرجى إدخال الإحداثيات','error'); return; }
+  const inst = getInst(instId);
+  if(!inst.doors?.length){ toast('لا يوجد باب','error'); return; }
+  inst.doors[0].lat = lat;
+  inst.doors[0].lng = lng;
+  await saveInst(inst);
+  renderSpInstGps();
+  toast(`✅ تم حفظ موقع الباب: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,'success');
 }
 
 // ════════════════════════════════════════════
@@ -1948,6 +2008,15 @@ async function addInstitute(){
 // ════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════
+function useMyLocForInst(){
+  if(!navigator.geolocation){ toast('GPS غير متاح','error'); return; }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    el('ni-lat').value = pos.coords.latitude.toFixed(6);
+    el('ni-lng').value = pos.coords.longitude.toFixed(6);
+    toast('✅ تم تحديد موقعك الحالي','success');
+  }, ()=>toast('تعذر تحديد الموقع','error'), {enableHighAccuracy:true,timeout:8000});
+}
+
 function el(id){return document.getElementById(id);}
 function v(id){return(el(id)?.value||'').trim();}
 function openModal(id){el(id).classList.add('active');}
