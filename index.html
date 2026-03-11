@@ -1550,7 +1550,10 @@ async function hmac256(str,secret){const e=new TextEncoder(),k=await crypto.subt
 // LOG
 // ════════════════════════════════════════════
 function logAlert(inst,door,reason){inst.alerts.unshift({id:'al'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,reason,lat:A.geoPos?.coords.latitude||null,lng:A.geoPos?.coords.longitude||null,dst:A.geoPos?Math.round(dist(A.geoPos.coords.latitude,A.geoPos.coords.longitude,DOOR_LOC.lat,DOOR_LOC.lng)):null,time:new Date().toLocaleString('ar-TN')});saveInst(inst);}
-function logHist(inst,door,action){// hist: inst.history.unshift({id:'h'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,action,time:new Date().toLocaleString('ar-TN')});saveInst(inst);}
+function logHist(inst,door,action){
+  inst.history.unshift({id:'h'+Date.now(),uid:A.user.id,uname:A.user.name,door:door.name,action,time:new Date().toLocaleString('ar-TN')});
+  saveInst(inst);
+}
 
 // ════════════════════════════════════════════
 // ADMIN DASHBOARD
@@ -1935,31 +1938,15 @@ function toast(msg,type='info'){const t=el('toast');t.textContent=msg;t.classNam
 // INIT
 // ════════════════════════════════════════════
 (async () => {
-  // Show loading spinner
-  const landing = document.getElementById('landing');
-  const landingContent = landing.innerHTML;
-  landing.innerHTML = `
-    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,var(--bg) 70%)">
-      <div style="font-size:3rem;margin-bottom:1.5rem">🔐</div>
-      <div style="font-size:1.1rem;font-weight:700;color:var(--text)">نظام التحكم في الدخول</div>
-      <div style="margin-top:.75rem;font-size:.85rem;color:var(--text2)">جاري الاتصال...</div>
-      <div style="margin-top:1.5rem;width:120px;height:3px;background:var(--border);border-radius:99px;overflow:hidden">
-        <div id="load-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px;transition:width .3s"></div>
-      </div>
-    </div>`;
-  // animate bar
-  let pct = 0;
-  const barTimer = setInterval(()=>{ pct=Math.min(pct+8,85); const b=document.getElementById('load-bar'); if(b) b.style.width=pct+'%'; }, 100);
+  // Show simple loading
+  document.getElementById('landing').style.opacity = '0.5';
   try {
     await initDB();
   } catch(e) {
     console.error('DB init error:', e);
     A.db = { globalGps:30, institutes:[], users:[{id:'su1',name:'Super Admin',email:'super@admin.com',pw:'super123',role:'super',status:'active',instId:null}], userLocations:{} };
   }
-  clearInterval(barTimer);
-  const b = document.getElementById('load-bar'); if(b) b.style.width='100%';
-  await new Promise(r=>setTimeout(r,300));
-  landing.innerHTML = landingContent;
+  document.getElementById('landing').style.opacity = '1';
   document.documentElement.setAttribute('data-theme','dark');
   showLandLogin();
 })();
@@ -2391,8 +2378,7 @@ function backupImport(input) {
     try {
       const data = JSON.parse(e.target.result);
       if (!data.db || !data.db.institutes) { toast('❌ ملف غير صالح', 'error'); return; }
-      if (!confirm(`استعادة النسخة من ${data.exportDate}؟
-سيتم استبدال جميع البيانات الحالية.`)) return;
+      if (!confirm('استعادة النسخة من ' + data.exportDate + '؟\nسيتم استبدال جميع البيانات الحالية.')) return;
       A.db = data.db;
       saveDB(); // full restore
       toast('✅ تم استعادة النسخة الاحتياطية', 'success');
