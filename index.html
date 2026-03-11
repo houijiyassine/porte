@@ -1324,10 +1324,12 @@ function detectFakeGps(pos) {
 }
 
 function getDoorLoc(inst) {
-  // Get door location from institute, fallback to global DOOR_LOC
   const door = inst?.doors?.[0];
-  if (door?.lat && door?.lng) return {lat: door.lat, lng: door.lng};
-  return DOOR_LOC; // fallback to hardcoded
+  // Only use if both lat and lng are valid non-zero numbers
+  if (door?.lat && door?.lng && door.lat !== 0 && door.lng !== 0) {
+    return {lat: door.lat, lng: door.lng};
+  }
+  return null; // no location = no GPS restriction
 }
 
 function checkGeo(inst, ctx) {
@@ -1335,7 +1337,7 @@ function checkGeo(inst, ctx) {
   const doorLoc = getDoorLoc(inst);
   
   // If no door location set → bypass GPS check completely
-  if (!doorLoc || (!doorLoc.lat && !doorLoc.lng)) {
+  if (!doorLoc) {
     if (ctx === 'user') { A.geoOk = true; setGeoUI(true, '🟢 الوصول مسموح', 'لم يُحدَّد موقع الباب — لا قيد جغرافي'); }
     return;
   }
@@ -1901,16 +1903,18 @@ function useCurrLocForDoor(instId){
 }
 
 async function saveDoorLoc(instId){
-  const lat = parseFloat(el(`dlat-${instId}`)?.value);
-  const lng = parseFloat(el(`dlng-${instId}`)?.value);
-  if(!lat||!lng){ toast('يرجى إدخال الإحداثيات','error'); return; }
+  const latVal = el(`dlat-${instId}`)?.value?.trim();
+  const lngVal = el(`dlng-${instId}`)?.value?.trim();
+  const lat = latVal ? parseFloat(latVal) : null;
+  const lng = lngVal ? parseFloat(lngVal) : null;
   const inst = getInst(instId);
   if(!inst.doors?.length){ toast('لا يوجد باب','error'); return; }
   inst.doors[0].lat = lat;
   inst.doors[0].lng = lng;
   await saveInst(inst);
   renderSpInstGps();
-  toast(`✅ تم حفظ موقع الباب: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,'success');
+  if(lat && lng) toast(`✅ تم حفظ موقع الباب: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,'success');
+  else toast('✅ تم إلغاء قيد GPS — الوصول مسموح للجميع','success');
 }
 
 // ════════════════════════════════════════════
