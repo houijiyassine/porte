@@ -2,8 +2,16 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام التحكم في الدخول</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>بوابة الدخول</title>
+<meta name="application-name" content="بوابة الدخول">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="بوابة">
+<meta name="theme-color" content="#0a0f1e">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap');
 :root{
@@ -432,6 +440,9 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
         <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="l-email" placeholder="example@email.com" onkeydown="if(event.key==='Enter')el('l-pass').focus()"></div>
         <div class="fg"><label>كلمة المرور</label><input type="password" id="l-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')smartLogin()"></div>
         <button class="btn-pri" onclick="smartLogin()" id="l-btn">🔐 دخول</button>
+        <div style="display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:.5rem">
+          <span style="font-size:.75rem;color:var(--text2)">🔒 بيانات دخولك ستُحفظ تلقائياً في جهازك</span>
+        </div>
         <div class="auth-toggle" style="margin-top:1rem">ليس لديك حساب؟ <span onclick="showLandRegister()">إنشاء حساب</span></div>
       </div>
 
@@ -1168,6 +1179,40 @@ let A={user:null,mode:'login',utype:'user',db:null,geoOk:false,timeOk:false,geoP
 // ════════════════════════════════════════════
 // NAVIGATION
 // ════════════════════════════════════════════
+function showAutoLoginSplash(u, callback){
+  // Show a beautiful splash for 1.5s then proceed
+  const splash = document.createElement('div');
+  splash.id = 'auto-splash';
+  const inst = getInst(u.instId);
+  splash.innerHTML = `
+    <div style="position:fixed;inset:0;background:#0a0f1e;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem">
+      <div style="width:90px;height:90px;background:linear-gradient(135deg,#3b82f6,#06b6d4);border-radius:28px;display:flex;align-items:center;justify-content:center;font-size:2.8rem;box-shadow:0 0 50px rgba(59,130,246,.5);animation:splashPop .4s ease">
+        🔐
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:1.1rem;font-weight:900;color:#fff;margin-bottom:.3rem">مرحباً ${u.name}</div>
+        <div style="font-size:.85rem;color:#64748b">${inst?.name||''}</div>
+      </div>
+      <div style="width:60px;height:3px;background:var(--surface2);border-radius:3px;overflow:hidden">
+        <div style="height:100%;background:linear-gradient(135deg,#3b82f6,#06b6d4);animation:splashBar 1.4s ease forwards;width:0"></div>
+      </div>
+    </div>
+    <style>
+      @keyframes splashPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+      @keyframes splashBar{from{width:0}to{width:100%}}
+    </style>`;
+  document.body.appendChild(splash);
+  setTimeout(() => {
+    splash.style.opacity='0';
+    splash.style.transition='opacity .3s';
+    setTimeout(()=>{ splash.remove(); callback(); }, 300);
+  }, 1400);
+}
+
+function clearSavedLogin(){
+  try { localStorage.removeItem('dac_saved_creds'); } catch(e){}
+}
+
 function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function swTab(dash,tab,btn){
   const prefix=dash==='admin'?'admin':'super';
@@ -2205,7 +2250,6 @@ function toast(msg,type='info'){const t=el('toast');t.textContent=msg;t.classNam
 // INIT
 // ════════════════════════════════════════════
 (async () => {
-  // Show simple loading
   document.getElementById('landing').style.opacity = '0.5';
   try {
     await initDB();
@@ -2215,6 +2259,26 @@ function toast(msg,type='info'){const t=el('toast');t.textContent=msg;t.classNam
   }
   document.getElementById('landing').style.opacity = '1';
   document.documentElement.setAttribute('data-theme','dark');
+
+  // Auto-login from saved credentials
+  try {
+    const saved = localStorage.getItem('dac_saved_creds');
+    if(saved) {
+      const {email, pass} = JSON.parse(saved);
+      const u = A.db.users.find(u => u.email.toLowerCase()===email.toLowerCase() && u.pw===pass);
+      if(u && u.status==='active') {
+        A.user = u;
+        // Show splash briefly then go to dashboard
+        showAutoLoginSplash(u, () => {
+          if(u.role==='super') loadSuper();
+          else if(u.role==='admin') loadAdmin();
+          else loadUser();
+        });
+        return;
+      }
+    }
+  } catch(e){}
+
   showLandLogin();
 })();
 el('nu-pass').value=Math.random().toString(36).slice(-6);
@@ -2720,6 +2784,8 @@ async function smartLogin(){
     if(u.status==='frozen'){  toast('حسابك موقوف — تواصل مع المدير ❄️','error'); return; }
 
     A.user = u;
+    // Save credentials for auto-login
+    try { localStorage.setItem('dac_saved_creds', JSON.stringify({email, pass})); } catch(e){}
     if(u.role==='super') loadSuper();
     else if(u.role==='admin') loadAdmin();
     else loadUser();
