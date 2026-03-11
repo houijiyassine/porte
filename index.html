@@ -1848,6 +1848,7 @@ function saveInstGps(instId){
 // SUPER DASHBOARD
 // ════════════════════════════════════════════
 function loadSuper(){
+  if(!A.db.userLocations) A.db.userLocations = {};
   renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();
   el('sp-gps-n').textContent=A.db.globalGps||30;
   showPage('super-dash');
@@ -2273,12 +2274,7 @@ function doRegister(email, pass){
   _origDoRegister(email, pass);
 }
 
-// PATCH loadSuper to init locations
-const _origLoadSuper = loadSuper;
-function loadSuper(){
-  _origLoadSuper();
-  if(!A.db.userLocations) A.db.userLocations = {};
-}
+// userLocations initialized in initDB
 
 // PATCH: saveUserLocationSilent is called inside checkGeo's success callback
 // (already handled inline — no double-call needed)
