@@ -502,6 +502,105 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 #sp-svg-dummy * { transform-box: fill-box; transform-origin: center; }
 
 </style>
+<script>
+// CRITICAL SAFETY — runs before everything
+(function(){
+  var _TR_cache = null;
+  window.LANG = 'ar';
+  window.tr = function(k){
+    if(_TR_cache) {
+      return (_TR_cache[window.LANG]||_TR_cache.ar)[k] || _TR_cache.ar[k] || k;
+    }
+    // TR not loaded yet — try to access it
+    try {
+      if(typeof TR !== 'undefined' && TR && TR.ar) {
+        _TR_cache = TR;
+        return (_TR_cache[window.LANG]||_TR_cache.ar)[k] || _TR_cache.ar[k] || k;
+      }
+    } catch(e) {}
+    return k; // safe fallback
+  };
+  // Override Object.defineProperty for 'TR' to capture when it's defined
+  window.__defineTR = function(val) { _TR_cache = val; window.TR = val; };
+})();
+</script>
+<script>
+// ══ GLOBALS — loaded FIRST before any HTML/JS ══
+var TR = {
+  ar: {
+    appTitle:'نظام التحكم في الدخول', btnAdmin:'🏛️ مدير المؤسسة', btnUser:'👤 مستخدم عادي',
+    open:'فتح', close2:'غلق', stop2:'إيقاف', connected:'متصل', disconnected:'غير متصل',
+    active:'نشط', frozen:'موقوف', pending2:'انتظار', noData:'لا توجد بيانات',
+    totalOpens:'إجمالي الفتح', activeUsers:'مستخدم نشط', totalAlerts:'تنبيه', doors2:'أبواب',
+    weekDays:['أحد','اثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'],
+    topActive:'أكثر المستخدمين نشاطاً', topInsts:'المؤسسات الأكثر نشاطاً',
+    near:'قريب من الباب', far:'بعيد عن الباب', unknown:'موقع غير معروف',
+    lastSeen:'آخر تحديث', distance:'المسافة', institute2:'المؤسسة',
+    // واجهة المستخدم
+    openDoor:'فتح الباب', closeDoor:'غلق الباب', stopDoor:'إيقاف', autoTimer:'فتح 40ث',
+    doorOpen:'مفتوح', doorClosed:'مغلق', doorMoving:'يتحرك...', doorStopped:'⏸️ موقوف',
+    doorOpening:'يفتح...', doorClosing:'يغلق...', doorStopping:'إيقاف...',
+    online:'🟢 متصل', offline:'🔴 غير متصل', checking:'⏳ جاري...',
+    addDoor:'+ إضافة باب', viewLog:'📋 عرض سجل الباب', deleteDoor:'حذف',
+    doorAvailable:'الأبواب المتاحة', adminRole:'مدير المؤسسة', dashboard:'لوحة التحكم',
+    notConnected:'⚠️ لم يُضَف Device ID', openDoorBtn:'فتح الباب', closeDoorBtn:'غلق الباب',
+    // تبويبات
+    tabDoors:'🚪 الأبواب', tabUsers:'👥 المستخدمون', tabStats:'📊 الإحصائيات',
+    tabAlerts:'🚨 التنبيهات', tabSchedule:'⏰ الجدول', tabSettings:'⚙️ الإعدادات', tabHistory:'📋 السجل',
+    // رسائل
+    geoOk:'أنت قريب من الباب ✓', geoFail:'يجب أن تكون قريباً من الباب',
+    timeOk:'الوقت مسموح ✓', timeFail:'خارج وقت الدخول',
+    opening:'جاري فتح الباب...', closing:'جاري غلق الباب...', stopping:'جاري الإيقاف...',
+    opened:'✅ تم فتح الباب', closed2:'✅ تم غلق الباب', stopped2:'✅ تم الإيقاف',
+    failOpen:'فشل في فتح الباب', failClose:'فشل في غلق الباب',
+    autoOpened:'✅ تم فتح الباب — سيغلق بعد 40 ثانية',
+    autoClosed:'🔒 تم غلق الباب تلقائياً',
+    availableDoors:'الأبواب المتاحة',
+    // مصادقة
+    login:'🔐 دخول', register:'✅ إنشاء الحساب',
+    emailLabel:'البريد الإلكتروني', passLabel:'كلمة المرور',
+    noAccount:'ليس لديك حساب؟', createAccount:'إنشاء حساب',
+    haveAccount:'لديك حساب؟', loginLink:'تسجيل الدخول',
+  },
+  fr: {
+    appTitle:"Contrôle d'Accès", btnAdmin:'🏛️ Administrateur', btnUser:'👤 Utilisateur',
+    open:'Ouvrir', close2:'Fermer', stop2:'Arrêter', connected:'Connecté', disconnected:'Déconnecté',
+    active:'Actif', frozen:'Suspendu', pending2:'En attente', noData:'Aucune donnée',
+    totalOpens:'Ouvertures totales', activeUsers:'Utilisateur actif', totalAlerts:'Alertes', doors2:'Portes',
+    weekDays:['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'],
+    topActive:'Utilisateurs les plus actifs', topInsts:'Établissements les plus actifs',
+    near:'Proche de la porte', far:'Loin de la porte', unknown:'Position inconnue',
+    lastSeen:'Dernière mise à jour', distance:'Distance', institute2:'Établissement',
+    // interface
+    openDoor:'Ouvrir', closeDoor:'Fermer', stopDoor:'Arrêter', autoTimer:'Auto 40s',
+    doorOpen:'Ouvert', doorClosed:'Fermé', doorMoving:'En mouvement...', doorStopped:'⏸️ Arrêté',
+    doorOpening:'Ouverture...', doorClosing:'Fermeture...', doorStopping:'Arrêt...',
+    online:'🟢 En ligne', offline:'🔴 Hors ligne', checking:'⏳ Vérification...',
+    addDoor:'+ Ajouter une porte', viewLog:'📋 Voir le journal', deleteDoor:'Supprimer',
+    doorAvailable:'Portes disponibles', adminRole:'Administrateur', dashboard:'Tableau de bord',
+    notConnected:'⚠️ Device ID manquant', openDoorBtn:'Ouvrir la porte', closeDoorBtn:'Fermer la porte',
+    // onglets
+    tabDoors:'🚪 Portes', tabUsers:'👥 Utilisateurs', tabStats:'📊 Statistiques',
+    tabAlerts:'🚨 Alertes', tabSchedule:'⏰ Planning', tabSettings:'⚙️ Paramètres', tabHistory:'📋 Historique',
+    // messages
+    geoOk:'Vous êtes proche de la porte ✓', geoFail:'Vous devez être proche de la porte',
+    timeOk:'Accès autorisé ✓', timeFail:"Hors des heures d'accès",
+    opening:'Ouverture en cours...', closing:'Fermeture en cours...', stopping:'Arrêt en cours...',
+    opened:'✅ Porte ouverte', closed2:'✅ Porte fermée', stopped2:'✅ Arrêté',
+    failOpen:"Échec de l'ouverture", failClose:'Échec de la fermeture',
+    autoOpened:'✅ Porte ouverte — fermeture dans 40 secondes',
+    autoClosed:'🔒 Porte fermée automatiquement',
+    availableDoors:'Portes disponibles',
+    // auth
+    login:'🔐 Connexion', register:'✅ Créer le compte',
+    emailLabel:'Adresse e-mail', passLabel:'Mot de passe',
+    noAccount:'Pas de compte ?', createAccount:'Créer un compte',
+    haveAccount:'Déjà un compte ?', loginLink:'Se connecter',
+  }
+};
+var LANG = 'ar';
+function tr(k){ var l=LANG||'ar'; return (TR[l]||TR.ar)[k]||TR.ar[k]||k; }
+</script>
 </head>
 <body>
 
@@ -971,84 +1070,10 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 <div class="toast" id="toast"></div>
 
 <script>
-// ════════════════════════════════════════════
-// TRANSLATION SYSTEM — must be first
-// BUILD: 2026-03-12 20:50
-// ════════════════════════════════════════════
-var TR = {
-  ar: {
-    appTitle:'نظام التحكم في الدخول', btnAdmin:'🏛️ مدير المؤسسة', btnUser:'👤 مستخدم عادي',
-    open:'فتح', close2:'غلق', stop2:'إيقاف', connected:'متصل', disconnected:'غير متصل',
-    active:'نشط', frozen:'موقوف', pending2:'انتظار', noData:'لا توجد بيانات',
-    totalOpens:'إجمالي الفتح', activeUsers:'مستخدم نشط', totalAlerts:'تنبيه', doors2:'أبواب',
-    weekDays:['أحد','اثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'],
-    topActive:'أكثر المستخدمين نشاطاً', topInsts:'المؤسسات الأكثر نشاطاً',
-    near:'قريب من الباب', far:'بعيد عن الباب', unknown:'موقع غير معروف',
-    lastSeen:'آخر تحديث', distance:'المسافة', institute2:'المؤسسة',
-    // واجهة المستخدم
-    openDoor:'فتح الباب', closeDoor:'غلق الباب', stopDoor:'إيقاف', autoTimer:'فتح 40ث',
-    doorOpen:'مفتوح', doorClosed:'مغلق', doorMoving:'يتحرك...', doorStopped:'⏸️ موقوف',
-    doorOpening:'يفتح...', doorClosing:'يغلق...', doorStopping:'إيقاف...',
-    online:'🟢 متصل', offline:'🔴 غير متصل', checking:'⏳ جاري...',
-    addDoor:'+ إضافة باب', viewLog:'📋 عرض سجل الباب', deleteDoor:'حذف',
-    doorAvailable:'الأبواب المتاحة', adminRole:'مدير المؤسسة', dashboard:'لوحة التحكم',
-    notConnected:'⚠️ لم يُضَف Device ID', openDoorBtn:'فتح الباب', closeDoorBtn:'غلق الباب',
-    // تبويبات
-    tabDoors:'🚪 الأبواب', tabUsers:'👥 المستخدمون', tabStats:'📊 الإحصائيات',
-    tabAlerts:'🚨 التنبيهات', tabSchedule:'⏰ الجدول', tabSettings:'⚙️ الإعدادات', tabHistory:'📋 السجل',
-    // رسائل
-    geoOk:'أنت قريب من الباب ✓', geoFail:'يجب أن تكون قريباً من الباب',
-    timeOk:'الوقت مسموح ✓', timeFail:'خارج وقت الدخول',
-    opening:'جاري فتح الباب...', closing:'جاري غلق الباب...', stopping:'جاري الإيقاف...',
-    opened:'✅ تم فتح الباب', closed2:'✅ تم غلق الباب', stopped2:'✅ تم الإيقاف',
-    failOpen:'فشل في فتح الباب', failClose:'فشل في غلق الباب',
-    autoOpened:'✅ تم فتح الباب — سيغلق بعد 40 ثانية',
-    autoClosed:'🔒 تم غلق الباب تلقائياً',
-    availableDoors:'الأبواب المتاحة',
-    // مصادقة
-    login:'🔐 دخول', register:'✅ إنشاء الحساب',
-    emailLabel:'البريد الإلكتروني', passLabel:'كلمة المرور',
-    noAccount:'ليس لديك حساب؟', createAccount:'إنشاء حساب',
-    haveAccount:'لديك حساب؟', loginLink:'تسجيل الدخول',
-  },
-  fr: {
-    appTitle:"Contrôle d'Accès", btnAdmin:'🏛️ Administrateur', btnUser:'👤 Utilisateur',
-    open:'Ouvrir', close2:'Fermer', stop2:'Arrêter', connected:'Connecté', disconnected:'Déconnecté',
-    active:'Actif', frozen:'Suspendu', pending2:'En attente', noData:'Aucune donnée',
-    totalOpens:'Ouvertures totales', activeUsers:'Utilisateur actif', totalAlerts:'Alertes', doors2:'Portes',
-    weekDays:['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'],
-    topActive:'Utilisateurs les plus actifs', topInsts:'Établissements les plus actifs',
-    near:'Proche de la porte', far:'Loin de la porte', unknown:'Position inconnue',
-    lastSeen:'Dernière mise à jour', distance:'Distance', institute2:'Établissement',
-    // interface
-    openDoor:'Ouvrir', closeDoor:'Fermer', stopDoor:'Arrêter', autoTimer:'Auto 40s',
-    doorOpen:'Ouvert', doorClosed:'Fermé', doorMoving:'En mouvement...', doorStopped:'⏸️ Arrêté',
-    doorOpening:'Ouverture...', doorClosing:'Fermeture...', doorStopping:'Arrêt...',
-    online:'🟢 En ligne', offline:'🔴 Hors ligne', checking:'⏳ Vérification...',
-    addDoor:'+ Ajouter une porte', viewLog:'📋 Voir le journal', deleteDoor:'Supprimer',
-    doorAvailable:'Portes disponibles', adminRole:'Administrateur', dashboard:'Tableau de bord',
-    notConnected:'⚠️ Device ID manquant', openDoorBtn:'Ouvrir la porte', closeDoorBtn:'Fermer la porte',
-    // onglets
-    tabDoors:'🚪 Portes', tabUsers:'👥 Utilisateurs', tabStats:'📊 Statistiques',
-    tabAlerts:'🚨 Alertes', tabSchedule:'⏰ Planning', tabSettings:'⚙️ Paramètres', tabHistory:'📋 Historique',
-    // messages
-    geoOk:'Vous êtes proche de la porte ✓', geoFail:'Vous devez être proche de la porte',
-    timeOk:'Accès autorisé ✓', timeFail:"Hors des heures d'accès",
-    opening:'Ouverture en cours...', closing:'Fermeture en cours...', stopping:'Arrêt en cours...',
-    opened:'✅ Porte ouverte', closed2:'✅ Porte fermée', stopped2:'✅ Arrêté',
-    failOpen:"Échec de l'ouverture", failClose:'Échec de la fermeture',
-    autoOpened:'✅ Porte ouverte — fermeture dans 40 secondes',
-    autoClosed:'🔒 Porte fermée automatiquement',
-    availableDoors:'Portes disponibles',
-    // auth
-    login:'🔐 Connexion', register:'✅ Créer le compte',
-    emailLabel:'Adresse e-mail', passLabel:'Mot de passe',
-    noAccount:'Pas de compte ?', createAccount:'Créer un compte',
-    haveAccount:'Déjà un compte ?', loginLink:'Se connecter',
-  }
-};
-var LANG = 'ar';
-function tr(key){ if(!TR||!TR.ar) return key; return (TR[LANG]||TR.ar)[key] || TR.ar[key] || key; }
+// TR defined in <head>
+
+// TR+LANG+tr() defined in <head>
+window.tr = tr; // expose globally
 
 // ════════════════════════════════════════════
 // SUPABASE CONFIG
