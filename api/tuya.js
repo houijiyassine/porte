@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+const crypto = require('crypto');
 
 const CLIENT_ID = '59gmr8xdf3m5vdt55c89';
 const SECRET    = 'f551321a6229419098b3c40728460bdd';
@@ -18,7 +18,7 @@ async function getToken() {
   return data.result?.access_token;
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
@@ -28,11 +28,9 @@ export default async function handler(req, res) {
     const { devId, action } = req.body || {};
     if (!devId || !action) return res.status(400).json({ error: 'Missing devId or action' });
 
-    // Get token
     const tok = await getToken();
     if (!tok) return res.status(500).json({ error: 'Token failed' });
 
-    // Build command
     const cmdMap = {
       open:  [{ code: 'switch_1', value: true  }],
       close: [{ code: 'switch_1', value: false }],
@@ -41,30 +39,24 @@ export default async function handler(req, res) {
     const commands = cmdMap[action];
     if (!commands) return res.status(400).json({ error: 'Unknown action' });
 
-    // Sign command request
-    const t = Date.now().toString();
+    const t   = Date.now().toString();
     const nonce = '';
-    const bodyStr = JSON.stringify({ commands });
+    const bodyStr  = JSON.stringify({ commands });
     const bodyHash = crypto.createHash('sha256').update(bodyStr).digest('hex');
     const url = `/v1.0/iot-03/devices/${devId}/commands`;
-    const strToSign = [
-      'POST',
-      bodyHash,
-      '',
-      url
-    ].join('\n');
-    const signStr = CLIENT_ID + tok + t + nonce + strToSign;
+    const strToSign = ['POST', bodyHash, '', url].join('\n');
+    const signStr   = CLIENT_ID + tok + t + nonce + strToSign;
     const s = sign(signStr);
 
     const r = await fetch(`${BASE}${url}`, {
       method: 'POST',
       headers: {
-        client_id: CLIENT_ID,
+        client_id:    CLIENT_ID,
         access_token: tok,
-        sign: s,
+        sign:         s,
         t,
         nonce,
-        sign_method: 'HMAC-SHA256',
+        sign_method:  'HMAC-SHA256',
         'Content-Type': 'application/json',
       },
       body: bodyStr,
