@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // Allow all origins (PWA can call this)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
@@ -15,7 +14,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing url' });
     }
 
-    // Forward request to Tuya API
     const response = await fetch(url, {
       method,
       headers: {
