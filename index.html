@@ -447,6 +447,33 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   transform: scaleY(0.08);
 }
 
+
+/* ═══════════════════════════════════════
+   STICK PERSON ANIMATION
+═══════════════════════════════════════ */
+.stick-person {
+  transition: transform 0.8s cubic-bezier(0.4,0,0.2,1), opacity 0.4s;
+}
+.stick-person.hidden { opacity: 0; pointer-events: none; }
+
+@keyframes walkIn {
+  0%   { transform: translateX(60px); }
+  100% { transform: translateX(0px); }
+}
+@keyframes walkOut {
+  0%   { transform: translateX(0px); }
+  100% { transform: translateX(-60px); }
+}
+@keyframes idleWave {
+  0%,100% { transform: rotate(0deg); transform-origin: 12px 22px; }
+  30%     { transform: rotate(15deg); transform-origin: 12px 22px; }
+  60%     { transform: rotate(-8deg); transform-origin: 12px 22px; }
+}
+@keyframes stopGesture {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-4px); }
+}
+
 </style>
 </head>
 <body>
@@ -602,14 +629,14 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
       <button class="icon-btn" onclick="logout()">⏏️</button>
     </div>
   </div>
-  <div class="nav-bar">
-    <button class="nav-tab active" onclick="swTab('admin','doors',this)">🚪 الأبواب</button>
-    <button class="nav-tab" onclick="swTab('admin','users',this)">👥 المستخدمون</button>
-    <button class="nav-tab" onclick="swTab('admin','stats',this)">📊 الإحصائيات</button>
-    <button class="nav-tab" onclick="swTab('admin','alerts',this)">🚨 التنبيهات</button>
-    <button class="nav-tab" onclick="swTab('admin','schedule',this)">⏰ الجدول</button>
-    <button class="nav-tab" onclick="swTab('admin','settings',this)">⚙️ الإعدادات</button>
-    <button class="nav-tab" onclick="swTab('admin','history',this)">📋 السجل</button>
+  <div class="nav-bar" id="admin-nav-bar">
+    <button class="nav-tab active" id="atab-doors" onclick="swTab('admin','doors',this)">🚪 الأبواب</button>
+    <button class="nav-tab" id="atab-users" onclick="swTab('admin','users',this)">👥 المستخدمون</button>
+    <button class="nav-tab" id="atab-stats" onclick="swTab('admin','stats',this)">📊 الإحصائيات</button>
+    <button class="nav-tab" id="atab-alerts" onclick="swTab('admin','alerts',this)">🚨 التنبيهات</button>
+    <button class="nav-tab" id="atab-schedule" onclick="swTab('admin','schedule',this)">⏰ الجدول</button>
+    <button class="nav-tab" id="atab-settings" onclick="swTab('admin','settings',this)">⚙️ الإعدادات</button>
+    <button class="nav-tab" id="atab-history" onclick="swTab('admin','history',this)">📋 السجل</button>
   </div>
   <div class="content">
     <div class="tab-pane" id="admin-users">
@@ -1048,6 +1075,30 @@ function buildSwingDoorSVG(doorId, pfx) {
           <rect x="0" y="0" width="114" height="186" rx="2" fill="#0f1f3d"/>
         </svg>
       </div>
+      <!-- STICK PERSON -->
+      <div id="sp-${uid}" class="stick-person hidden" style="position:absolute;bottom:28px;right:4px;width:44px;height:80px;pointer-events:none">
+        <svg id="sp-svg-${uid}" width="44" height="80" viewBox="0 0 44 80" xmlns="http://www.w3.org/2000/svg">
+          <!-- Head -->
+          <circle cx="22" cy="10" r="7" fill="none" stroke="#f0c060" stroke-width="2.2"/>
+          <!-- Smile (default) -->
+          <path id="sp-face-${uid}" d="M18.5 12 Q22 15.5 25.5 12" fill="none" stroke="#f0c060" stroke-width="1.6" stroke-linecap="round"/>
+          <!-- Body -->
+          <line x1="22" y1="17" x2="22" y2="42" stroke="#7dd3fc" stroke-width="2.5" stroke-linecap="round"/>
+          <!-- Left arm -->
+          <line id="sp-larm-${uid}" x1="22" y1="24" x2="10" y2="34" stroke="#7dd3fc" stroke-width="2.2" stroke-linecap="round"/>
+          <!-- Right arm (reaches door) -->
+          <line id="sp-rarm-${uid}" x1="22" y1="24" x2="36" y2="30" stroke="#7dd3fc" stroke-width="2.2" stroke-linecap="round"/>
+          <!-- Left leg -->
+          <line id="sp-lleg-${uid}" x1="22" y1="42" x2="13" y2="60" stroke="#7dd3fc" stroke-width="2.2" stroke-linecap="round"/>
+          <!-- Right leg -->
+          <line id="sp-rleg-${uid}" x1="22" y1="42" x2="31" y2="60" stroke="#7dd3fc" stroke-width="2.2" stroke-linecap="round"/>
+          <!-- Stop hand sign (hidden by default) -->
+          <g id="sp-stop-${uid}" style="display:none">
+            <circle cx="36" cy="26" r="7" fill="rgba(239,68,68,.85)" stroke="#ef4444" stroke-width="1.5"/>
+            <text x="36" y="30" text-anchor="middle" font-size="8" fill="white" font-weight="bold">✋</text>
+          </g>
+        </svg>
+      </div>
     </div>
     <div class="door-status-label closed-lbl" id="ds-lbl-${uid}">
       <span id="ds-ic-${uid}">🔒</span>
@@ -1167,6 +1218,87 @@ function buildGarageDoorSVG(doorId, pfx) {
   </div>`;
 }
 
+
+// ════════════════════════════════════════════
+// STICK PERSON ANIMATION
+// ════════════════════════════════════════════
+function animateStickPerson(doorId, pfx, state) {
+  const uid  = `${pfx}-${doorId}`;
+  const sp   = document.getElementById(`sp-${uid}`);
+  if (!sp) return; // only swing doors have it
+
+  const spSvg  = document.getElementById(`sp-svg-${uid}`);
+  const larm   = document.getElementById(`sp-larm-${uid}`);
+  const rarm   = document.getElementById(`sp-rarm-${uid}`);
+  const lleg   = document.getElementById(`sp-lleg-${uid}`);
+  const rleg   = document.getElementById(`sp-rleg-${uid}`);
+  const face   = document.getElementById(`sp-face-${uid}`);
+  const stopSign = document.getElementById(`sp-stop-${uid}`);
+
+  // Reset inline animation
+  sp.style.animation = '';
+  if(stopSign) stopSign.style.display = 'none';
+
+  if (state === 'opening') {
+    // Appear + walk toward door
+    sp.classList.remove('hidden');
+    sp.style.animation = 'walkIn 0.6s ease-out forwards';
+    // arm pushing door
+    if(rarm) rarm.setAttribute('x2','40');
+    if(rarm) rarm.setAttribute('y2','22');
+    if(larm) larm.setAttribute('x2','8');
+    if(larm) larm.setAttribute('y2','28');
+    // legs walking
+    if(lleg) lleg.setAttribute('x2','10');
+    if(rleg) rleg.setAttribute('x2','34');
+    // happy face
+    if(face) face.setAttribute('d','M18.5 12 Q22 15.5 25.5 12');
+
+  } else if (state === 'open') {
+    // Standing beside open door
+    sp.classList.remove('hidden');
+    sp.style.animation = '';
+    sp.style.transform = 'translateX(0)';
+    if(rarm) { rarm.setAttribute('x2','36'); rarm.setAttribute('y2','30'); }
+    if(larm) { larm.setAttribute('x2','10'); larm.setAttribute('y2','34'); }
+    if(lleg) lleg.setAttribute('x2','13');
+    if(rleg) rleg.setAttribute('x2','31');
+
+  } else if (state === 'closing') {
+    // Pull door shut
+    sp.classList.remove('hidden');
+    sp.style.animation = '';
+    if(rarm) { rarm.setAttribute('x2','38'); rarm.setAttribute('y2','24'); }
+    if(larm) { larm.setAttribute('x2','8'); larm.setAttribute('y2','32'); }
+    if(lleg) lleg.setAttribute('x2','14');
+    if(rleg) rleg.setAttribute('x2','30');
+    // neutral face while closing
+    if(face) face.setAttribute('d','M19 13 Q22 13 25 13');
+
+  } else if (state === 'stopped') {
+    // STOP gesture — show hand sign, freeze
+    sp.classList.remove('hidden');
+    sp.style.animation = 'stopGesture 0.4s ease-out';
+    if(stopSign) stopSign.style.display = 'block';
+    // raise both arms
+    if(rarm) { rarm.setAttribute('x2','38'); rarm.setAttribute('y2','18'); }
+    if(larm) { larm.setAttribute('x2','8'); larm.setAttribute('y2','18'); }
+    // surprised face
+    if(face) face.setAttribute('d','M19 13 Q22 11 25 13');
+
+  } else {
+    // closed — walk away, then hide
+    sp.classList.remove('hidden');
+    sp.style.animation = 'walkOut 0.5s ease-in forwards';
+    if(rarm) { rarm.setAttribute('x2','36'); rarm.setAttribute('y2','30'); }
+    if(lleg) lleg.setAttribute('x2','13');
+    if(rleg) rleg.setAttribute('x2','31');
+    // sad face
+    if(face) face.setAttribute('d','M18.5 14 Q22 11 25.5 14');
+    setTimeout(()=>{ sp.classList.add('hidden'); sp.style.animation=''; }, 600);
+  }
+}
+
 // Door state machine per door
 const doorStates = {}; // uid -> 'closed'|'opening'|'open'|'closing'
 
@@ -1206,6 +1338,9 @@ function animateDoor(doorId, pfx, toState) {
       setLbl('moving-lbl','⏳','يغلق...');
       panel.style.transform = 'translateX(0)';
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
+    } else if (toState === 'stopped') {
+      setLbl('moving-lbl','⏸️','موقوف');
+      // freeze current position
     } else {
       setLbl('closed-lbl','🔒','مغلق');
       panel.style.transform = 'translateX(0)';
@@ -1224,6 +1359,9 @@ function animateDoor(doorId, pfx, toState) {
       setLbl('moving-lbl','⏳','يغلق...');
       panel.style.transform = 'scaleY(1)';
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
+    } else if (toState === 'stopped') {
+      setLbl('moving-lbl','⏸️','موقوف');
+      // freeze current position
     } else {
       setLbl('closed-lbl','🔒','مغلق');
       panel.style.transform = 'scaleY(1)';
@@ -1235,20 +1373,28 @@ function animateDoor(doorId, pfx, toState) {
       setLbl('moving-lbl','⏳','يفتح...');
       panel.style.transform='perspective(400px) rotateY(-70deg)';
       if(shadow) shadow.setAttribute('points','33,23 33,209 80,195 80,37');
+      animateStickPerson(doorId, pfx, 'opening');
       setTimeout(()=>{ if(doorStates[uid]==='opening') animateDoor(doorId,pfx,'open'); },1300);
     } else if (toState === 'open') {
       setLbl('open-lbl','🔓','مفتوح');
       panel.style.transform='perspective(400px) rotateY(-75deg)';
       if(shadow) shadow.setAttribute('points','33,23 33,209 85,200 85,32');
+      animateStickPerson(doorId, pfx, 'open');
     } else if (toState === 'closing') {
       setLbl('moving-lbl','⏳','يغلق...');
       panel.style.transform='perspective(400px) rotateY(0deg)';
       if(shadow) shadow.setAttribute('points','33,23 33,209 33,209 33,23');
+      animateStickPerson(doorId, pfx, 'closing');
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
+    } else if (toState === 'stopped') {
+      setLbl('moving-lbl','⏸️','موقوف');
+      animateStickPerson(doorId, pfx, 'stopped');
+      // keep current transform — freeze in place
     } else {
       setLbl('closed-lbl','🔒','مغلق');
       panel.style.transform='perspective(400px) rotateY(0deg)';
       if(shadow) shadow.setAttribute('points','33,23 33,209 33,209 33,23');
+      animateStickPerson(doorId, pfx, 'closed');
     }
   }
 }
@@ -1710,6 +1856,7 @@ async function ctrlDoor(doorId,instId,action,pfx){
   // Animate door
   if(action==='open') animateDoor(doorId,pfx,'opening');
   else if(action==='close') animateDoor(doorId,pfx,'closing');
+  else if(action==='stop') animateDoor(doorId,pfx,'stopped');
   toast(`جاري ${lbl[action]} الباب...`,'info');
   // Check devId
   if(!door.devId){
@@ -1722,11 +1869,13 @@ async function ctrlDoor(doorId,instId,action,pfx){
     await tuyaCmd(door.devId,action);
     if(action==='open') setTimeout(()=>animateDoor(doorId,pfx,'open'),1300);
     else if(action==='close') setTimeout(()=>animateDoor(doorId,pfx,'closed'),1300);
+    else if(action==='stop') { /* stays in stopped state */ }
     toast(`✅ تم ${lbl[action]} الباب`,'success');
     logHist(inst,door,action);
   }catch(e){
     if(action==='open') animateDoor(doorId,pfx,'closed');
     else if(action==='close') animateDoor(doorId,pfx,'open');
+    else if(action==='stop') { /* keep visual as-is on error */ }
     showTuyaError('فشل التحكم بالباب', e.message||'خطأ غير معروف');
     toast(`فشل في ${lbl[action]} الباب`,'error');
   }
@@ -2848,14 +2997,27 @@ function toggleLang(){
   const isAr = LANG==='ar';
   document.documentElement.dir  = isAr ? 'rtl' : 'ltr';
   document.documentElement.lang = LANG;
-  // تحديث كل أزرار اللغة (id أو بدون id)
-  document.querySelectorAll('#lang-btn, [onclick="toggleLang()"]').forEach(b => {
-    // زر النص الكبير في صفحة الترحيب
-    if(b.id === 'lang-btn') b.textContent = isAr ? '🇫🇷 Français' : '🇸🇦 عربي';
-    // زر الأيقونة في الداشبورد
-    else b.textContent = isAr ? '🌍' : '🌐';
+
+  // زر اللغة في صفحة الترحيب
+  const lb = document.getElementById('lang-btn');
+  if(lb) lb.textContent = isAr ? '🇫🇷 Français' : '🇸🇦 عربي';
+
+  // تحديث تابات Admin مباشرة بالـ id
+  const tabMap = {
+    'atab-doors':    [tr('tabDoors')],
+    'atab-users':    [tr('tabUsers')],
+    'atab-stats':    [tr('tabStats')],
+    'atab-alerts':   [tr('tabAlerts')],
+    'atab-schedule': [tr('tabSchedule')],
+    'atab-settings': [tr('tabSettings')],
+    'atab-history':  [tr('tabHistory')],
+  };
+  Object.entries(tabMap).forEach(([id, [txt]]) => {
+    const el2 = document.getElementById(id);
+    if(el2) el2.textContent = txt;
   });
-  // إعادة تحميل الداشبورد
+
+  // إعادة رسم الداشبورد (يُعيد البناء بـ tr())
   if(A.user){
     if(A.user.role==='super') loadSuper();
     else if(A.user.role==='admin') loadAdmin();
