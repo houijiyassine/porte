@@ -1261,6 +1261,8 @@ function doRegister(email,pass){
 }
 function logout(){
   Object.values(A.timers).forEach(t=>clearInterval(t.iv));
+  // إيقاف كل الـ polling عند الخروج
+  Object.keys(_pollIntervals).forEach(k=>{ clearInterval(_pollIntervals[k]); delete _pollIntervals[k]; });
   A.timers={};A.user=null;
   showPage('landing');
   showLandLogin();
@@ -1281,6 +1283,8 @@ function loadUser(){
   if(sm && A.user?.avatar) sm.innerHTML=`<img src="${A.user.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
   else { const l=el('u-av-letter'); if(l) l.textContent=A.user?.name?.[0]||'م'; }
   el('u-doors').innerHTML=(inst?.doors||[]).map(d=>userDoorCard(d,inst)).join('');
+  // ابدأ الـ polling لكل باب (RC sync)
+  (inst?.doors||[]).forEach(d=>{ if(d.devId) startDoorPolling(d,'u'); });
   renderInstHero(inst,'user');
   checkGeo(inst,'user');checkTime(inst,'user');
   showPage('user-dash');
@@ -1626,6 +1630,42 @@ async function tuyaCmd(devId, action){
 async function hmac256(str,secret){const e=new TextEncoder(),k=await crypto.subtle.importKey('raw',e.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',k,e.encode(str)))).map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();}
 
 // ════════════════════════════════════════════
+// DOOR STATUS POLLING (RC sync)
+// ════════════════════════════════════════════
+const _pollIntervals = {};
+
+function startDoorPolling(door, pfx) {
+  const key = door.id + '_' + pfx;
+  if (_pollIntervals[key]) return;
+
+  _pollIntervals[key] = setInterval(async () => {
+    try {
+      const r = await fetch(`/api/tuya?devId=${door.devId}`);
+      const d = await r.json();
+      if (!d.success) return;
+
+      const uid = `${pfx}-${door.id}`;
+      const currentState = doorStates[uid];
+
+      if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening') {
+        animateDoor(door.id, pfx, 'open');
+      } else if ((d.doorState === 'close' || d.doorState === 'stopped') &&
+                 currentState !== 'closed' && currentState !== 'closing') {
+        animateDoor(door.id, pfx, 'closed');
+      }
+    } catch(e) {}
+  }, 4000);
+}
+
+function stopDoorPolling(doorId, pfx) {
+  const key = doorId + '_' + pfx;
+  if (_pollIntervals[key]) {
+    clearInterval(_pollIntervals[key]);
+    delete _pollIntervals[key];
+  }
+}
+
+// ════════════════════════════════════════════
 // LOG
 // ════════════════════════════════════════════
 function logAlert(inst,door,reason){
@@ -1711,6 +1751,8 @@ function renderAdminDoors(inst){
         📋 سجل هذا الباب
       </button>
     </div>`).join('');
+  // ابدأ الـ polling لكل باب (RC sync)
+  inst.doors.forEach(d=>{ if(d.devId) stopDoorPolling(d.id,'a'); startDoorPolling(d,'a'); });
 }
 
 function buildSlidingDoorIcon(){
