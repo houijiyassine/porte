@@ -1536,6 +1536,13 @@ async function ctrlDoor(doorId,instId,action,pfx){
   if(action==='open') animateDoor(doorId,pfx,'opening');
   else if(action==='close') animateDoor(doorId,pfx,'closing');
   toast(`جاري ${lbl[action]} الباب...`,'info');
+  // Check devId
+  if(!door.devId){
+    btns.forEach(b=>b&&(b.disabled=false));
+    animateDoor(doorId,pfx,'closed');
+    showTuyaError('لا يوجد Device ID', 'اذهب للاعدادات واضف Device ID للباب: '+door.name);
+    return;
+  }
   try{
     await tuyaCmd(door.devId,action);
     if(action==='open') setTimeout(()=>animateDoor(doorId,pfx,'open'),1300);
@@ -1545,7 +1552,8 @@ async function ctrlDoor(doorId,instId,action,pfx){
   }catch(e){
     if(action==='open') animateDoor(doorId,pfx,'closed');
     else if(action==='close') animateDoor(doorId,pfx,'open');
-    toast(`❌ فشل في ${lbl[action]} الباب`,'error');
+    showTuyaError('فشل التحكم بالباب', e.message||'خطأ غير معروف');
+    toast(`فشل في ${lbl[action]} الباب`,'error');
   }
   setTimeout(()=>btns.forEach(b=>b&&(b.disabled=false)),2000);
 }
