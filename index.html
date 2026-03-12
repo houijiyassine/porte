@@ -573,7 +573,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     </div>
     <div style="display:flex;gap:.5rem;align-items:center">
       <button class="icon-btn" onclick="toggleTheme()" id="theme-btn">🌙</button>
-      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem;overflow:hidden;flex-shrink:0;border:2px solid var(--border)" id="u-av-sm"><span id="u-av-letter">م</span></div>
+
       <button class="icon-btn" onclick="logout()">⏏️</button>
     </div>
   </div>
@@ -1182,7 +1182,7 @@ function buildSwingDoorSVG(doorId, pfx) {
         </svg>
       </div>
       <!-- PERSON CHARACTER -->
-      <div id="sp-${uid}" class="door-person hidden" style="position:absolute;bottom:18px;right:-2px;width:60px;height:110px;pointer-events:none">
+      <div id="sp-${uid}" class="door-person hidden" style="position:absolute;bottom:18px;right:40px;width:60px;height:110px;pointer-events:none">
         <svg id="sp-svg-${uid}" width="56" height="106" viewBox="0 0 52 100" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <radialGradient id="skinG-${uid}" cx="50%" cy="40%" r="55%">
@@ -1607,9 +1607,14 @@ function animateStickPerson(doorId, pfx, state) {
     stopWalk();
     sp.style.animation = 'personBob 2s ease-in-out infinite';
     setFace('happy');
-    // يد بجانب الجسم مرتاحة (ليس ممسكاً بالباب لأنه مفتوح بالكامل)
-    setArm(larm, 20, LAX, LAY);
-    setArm(rarm,-18, RAX, RAY);
+    // يد تمسك المقبض بعد الفتح
+    if (doorType === 'sliding') {
+      setArm(rarm, -75, RAX, RAY);
+      setArm(larm,  10, LAX, LAY);
+    } else {
+      setArm(rarm, -70, RAX, RAY);
+      setArm(larm,  20, LAX, LAY);
+    }
 
   } else if (state === 'closing') {
     sp.classList.remove('hidden');
@@ -1623,10 +1628,10 @@ function animateStickPerson(doorId, pfx, state) {
       setLegT(lleg,  10, LLX, LLY);
       setLegT(rleg, -5,  RLX, RLY);
     } else {
-      // swing: يد تسحب الباب من -75 إلى +20
-      setArm(rarm, -75, RAX, RAY);
+      // swing: يد تمسك المقبض وتسحب الباب للإغلاق
+      setArm(rarm, -68, RAX, RAY);
       setArm(larm,  20, LAX, LAY);
-      trackHandle(-75, 22, 1000);
+      trackHandle(-68, 25, 1100);
       setLegT(lleg,  8, LLX, LLY);
       setLegT(rleg, -8, RLX, RLY);
     }
