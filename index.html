@@ -974,7 +974,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 // ════════════════════════════════════════════
 // TRANSLATION SYSTEM — must be first
 // ════════════════════════════════════════════
-const TR = {
+var TR = {
   ar: {
     appTitle:'نظام التحكم في الدخول', btnAdmin:'🏛️ مدير المؤسسة', btnUser:'👤 مستخدم عادي',
     open:'فتح', close2:'غلق', stop2:'إيقاف', connected:'متصل', disconnected:'غير متصل',
@@ -1046,8 +1046,8 @@ const TR = {
     haveAccount:'Déjà un compte ?', loginLink:'Se connecter',
   }
 };
-let LANG = 'ar';
-function tr(key){ return (TR[LANG]||TR.ar)[key] || TR.ar[key] || key; }
+var LANG = 'ar';
+function tr(key){ if(!TR||!TR.ar) return key; return (TR[LANG]||TR.ar)[key] || TR.ar[key] || key; }
 
 // ════════════════════════════════════════════
 // SUPABASE CONFIG
