@@ -1291,7 +1291,7 @@ function loadUser(){
 }
 function userDoorCard(d,inst){
   return `<div class="door-card">
-    <div class="door-hdr"><div class="door-name">🚪 ${d.name}</div><span class="${d.active?'badge-on':'badge-off'}">${d.active?'متصل':'غير متصل'}</span></div>
+    <div class="door-hdr"><div class="door-name">🚪 ${d.name}</div><span id="online-badge-${d.id}" class="${d.active?'badge-on':'badge-off'}">${d.active?'🟢 متصل':'🔴 غير متصل'}</span></div>
     <div class="door-btns">
       <button class="dbtn db-open" id="u-op-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','open','u')"><span class="ic">🟢</span>فتح الباب</button>
       <button class="dbtn db-close" id="u-cl-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','close','u')"><span class="ic">🔴</span>غلق الباب</button>
@@ -1634,27 +1634,45 @@ async function hmac256(str,secret){const e=new TextEncoder(),k=await crypto.subt
 // ════════════════════════════════════════════
 const _pollIntervals = {};
 
+async function fetchDoorStatus(door, pfx) {
+  try {
+    const r = await fetch(`/api/tuya?devId=${door.devId}`);
+    const d = await r.json();
+    if (!d.success) return;
+
+    const uid = `${pfx}-${door.id}`;
+    const currentState = doorStates[uid];
+
+    // تحديث حالة الباب
+    if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening') {
+      animateDoor(door.id, pfx, 'open');
+    } else if ((d.doorState === 'close' || d.doorState === 'stopped') &&
+               currentState !== 'closed' && currentState !== 'closing') {
+      animateDoor(door.id, pfx, 'closed');
+    }
+
+    // تحديث شارة online/offline
+    const badge = document.getElementById(`online-badge-${door.id}`);
+    if (badge) {
+      if (d.online === true) {
+        badge.textContent = '🟢 متصل';
+        badge.className = 'badge-on';
+      } else if (d.online === false) {
+        badge.textContent = '🔴 غير متصل';
+        badge.className = 'badge-off';
+      }
+    }
+  } catch(e) {}
+}
+
 function startDoorPolling(door, pfx) {
   const key = door.id + '_' + pfx;
   if (_pollIntervals[key]) return;
 
-  _pollIntervals[key] = setInterval(async () => {
-    try {
-      const r = await fetch(`/api/tuya?devId=${door.devId}`);
-      const d = await r.json();
-      if (!d.success) return;
+  // اقرأ الحالة فوراً عند البدء (يحل مشكلة الـ refresh)
+  fetchDoorStatus(door, pfx);
 
-      const uid = `${pfx}-${door.id}`;
-      const currentState = doorStates[uid];
-
-      if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening') {
-        animateDoor(door.id, pfx, 'open');
-      } else if ((d.doorState === 'close' || d.doorState === 'stopped') &&
-                 currentState !== 'closed' && currentState !== 'closing') {
-        animateDoor(door.id, pfx, 'closed');
-      }
-    } catch(e) {}
-  }, 4000);
+  _pollIntervals[key] = setInterval(() => fetchDoorStatus(door, pfx), 4000);
 }
 
 function stopDoorPolling(doorId, pfx) {
@@ -1732,7 +1750,10 @@ function renderAdminDoors(inst){
     <div class="door-card">
       <div class="door-hdr">
         <div>
-          <div class="door-name">${buildSlidingDoorIcon()} ${d.name}</div>
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <div class="door-name">${buildSlidingDoorIcon()} ${d.name}</div>
+            <span id="online-badge-${d.id}" class="badge-off" style="font-size:.72rem">⏳ جاري...</span>
+          </div>
           <div style="font-size:.72rem;color:var(--text2);margin-top:.2rem">${d.devId?'ID: '+d.devId.slice(0,16)+'…':'⚠️ لم يُضَف Device ID'}</div>
         </div>
         ${isSuperCtx?`<button class="btn-sm btn-danger" onclick="delDoor('${d.id}')">حذف</button>`:''}
