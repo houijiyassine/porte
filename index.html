@@ -1983,15 +1983,16 @@ function logout(){
 // USER DASHBOARD
 // ════════════════════════════════════════════
 function loadUser(){
+  showPage('user');
   const inst=myInst();
-  el('u-inst-name').textContent=inst?.name||'المؤسسة';
+  if(el('u-inst-name')) el('u-inst-name').textContent=inst?.name||'المؤسسة';
   const h = new Date().getHours();
   const greetTxt = h < 12 ? 'صباح الخير ☀️' : h < 18 ? 'مساء الخير 🌤️' : 'مساء النور 🌙';
-  el('u-greeting').textContent = greetTxt + ' ' + (A.user.name.split(' ')[0]);
+  if(el('u-greeting')) el('u-greeting').textContent = greetTxt + ' ' + (A.user?.name?.split(' ')?.[0]||'');
   const sm = el('u-av-sm');
   if(sm && A.user?.avatar) sm.innerHTML=`<img src="${A.user.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
   else { const l=el('u-av-letter'); if(l) l.textContent=A.user?.name?.[0]||'م'; }
-  el('u-doors').innerHTML=(inst?.doors||[]).map(d=>userDoorCard(d,inst)).join('');
+  if(el('u-doors')) el('u-doors').innerHTML=(inst?.doors||[]).map(d=>userDoorCard(d,inst)).join('');
   // ابدأ الـ polling لكل باب (RC sync)
   (inst?.doors||[]).forEach(d=>{ if(d.devId) startDoorPolling(d,'u'); });
   renderInstHero(inst,'user');
@@ -2457,8 +2458,9 @@ function logRcEvent(inst, door, action){
 // ADMIN DASHBOARD
 // ════════════════════════════════════════════
 function loadAdmin(){
+  showPage('admin');
   const inst=myInst();
-  el('ad-inst-name').textContent=inst?.name||tr('dashboard');
+  if(el('ad-inst-name')) el('ad-inst-name').textContent=inst?.name||tr('dashboard');
   renderAdminUsers(inst);renderAdminDoors(inst);renderAlerts(inst);renderSch(inst);renderHist(inst);
   renderPerDoorGps(inst);
   renderInstHero(inst, 'admin');
