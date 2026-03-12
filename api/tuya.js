@@ -51,57 +51,70 @@ module.exports = async function handler(req, res) {
 
     const tok = await getToken();
 
-    // Map actions to switch_1 commands
-    const cmdMap = {
-      open:  [{ code: 'switch_1', value: true  }],
-      close: [{ code: 'switch_1', value: false }],
-      stop:  [{ code: 'switch_1', value: false }],
-    };
-    const commands = cmdMap[action];
-    if (!commands) return res.status(400).json({ error: 'Unknown action: ' + action });
+    if (!['open','close','stop'].includes(action))
+      return res.status(400).json({ error: 'Unknown action: ' + action });
 
-    const t     = Date.now().toString();
-    const nonce = '';
-    const url   = `/v1.0/iot-03/devices/${devId}/commands`;
-    const bodyStr  = JSON.stringify({ commands });
-    const bodyHash = sha256(bodyStr);
+    // Helper: send one command set to Tuya
+    async function sendCmd(commands) {
+      const t2      = Date.now().toString();
+      const nonce   = '';
+      const url     = `/v1.0/iot-03/devices/${devId}/commands`;
+      const bodyStr = JSON.stringify({ commands });
+      const bodyHash= sha256(bodyStr);
+      const strToSign = ['POST', bodyHash, '', url].join('\n');
+      const signStr   = CLIENT_ID + tok + t2 + nonce + strToSign;
+      const s = sign(signStr);
 
-    // Correct Tuya signing with access_token:
-    // strToSign = METHOD + \n + sha256(body) + \n + headers_str + \n + url
-    const strToSign = ['POST', bodyHash, '', url].join('\n');
-    const signStr   = CLIENT_ID + tok + t + nonce + strToSign;
-    const s = sign(signStr);
+      const r = await fetch(`${BASE}${url}`, {
+        method: 'POST',
+        headers: {
+          client_id:    CLIENT_ID,
+          access_token: tok,
+          sign:         s,
+          t:            t2,
+          nonce,
+          sign_method:  'HMAC-SHA256',
+          'Content-Type': 'application/json',
+        },
+        body: bodyStr,
+      });
+      return r.json();
+    }
 
-    console.log('→ Sending to Tuya:', url, bodyStr);
-    console.log('→ signStr:', signStr);
+    function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-    const r = await fetch(`${BASE}${url}`, {
-      method: 'POST',
-      headers: {
-        client_id:    CLIENT_ID,
-        access_token: tok,
-        sign:         s,
-        t,
-        nonce,
-        sign_method:  'HMAC-SHA256',
-        'Content-Type': 'application/json',
-      },
-      body: bodyStr,
-    });
+    // Step 1: ALWAYS stop both relays first (protect motor)
+    const stopResult = await sendCmd([
+      { code: 'switch_1', value: false },
+      { code: 'switch_2', value: false },
+    ]);
+    console.log('← STOP result:', JSON.stringify(stopResult));
 
-    const data = await r.json();
-    console.log('← Tuya response:', JSON.stringify(data));
+    if (action === 'stop') {
+      return res.status(200).json({ success: true, result: stopResult.result });
+    }
 
-    if (!data.success) {
+    // Step 2: Wait 300ms so relays are fully OFF before switching direction
+    await delay(300);
+
+    // Step 3: Send the direction command
+    const dirCmd = action === 'open'
+      ? [{ code: 'switch_1', value: true  }, { code: 'switch_2', value: false }]
+      : [{ code: 'switch_1', value: false }, { code: 'switch_2', value: true  }];
+
+    const dirResult = await sendCmd(dirCmd);
+    console.log('← DIR result:', JSON.stringify(dirResult));
+
+    if (!dirResult.success) {
       return res.status(200).json({
         success: false,
-        code: data.code,
-        msg:  data.msg || 'Tuya rejected command',
-        raw:  data
+        code: dirResult.code,
+        msg:  dirResult.msg || 'Tuya rejected command',
+        raw:  dirResult,
       });
     }
 
-    return res.status(200).json({ success: true, result: data.result });
+    return res.status(200).json({ success: true, result: dirResult.result });
 
   } catch (e) {
     console.error('Handler error:', e);
