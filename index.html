@@ -504,7 +504,10 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 </style>
 
 <script>
-// ══ GLOBALS — loaded FIRST before any HTML/JS ══
+// ════════════════════════════════════════════
+// TRANSLATION SYSTEM — must be first
+// BUILD: 2026-03-12 20:50
+// ════════════════════════════════════════════
 var TR = {
   ar: {
     appTitle:'نظام التحكم في الدخول', btnAdmin:'🏛️ مدير المؤسسة', btnUser:'👤 مستخدم عادي',
@@ -578,8 +581,8 @@ var TR = {
   }
 };
 var LANG = 'ar';
-function tr(k){ var l=LANG||'ar'; return (TR[l]||TR.ar)[k]||TR.ar[k]||k; }
-</script>
+function tr(key){ if(!TR||!TR.ar) return key; return (TR[LANG]||TR.ar)[key] || TR.ar[key] || key; }
+
 </head>
 <body>
 
@@ -1047,10 +1050,6 @@ function tr(k){ var l=LANG||'ar'; return (TR[l]||TR.ar)[k]||TR.ar[k]||k; }
 </div>
 
 <div class="toast" id="toast"></div>
-
-<script>
-// TR+LANG+tr() defined in <head>
-window.tr = tr; // expose globally
 
 // ════════════════════════════════════════════
 // SUPABASE CONFIG
