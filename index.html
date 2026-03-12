@@ -1592,75 +1592,29 @@ function resetAutoBtn(doorId,pfx){
 // ════════════════════════════════════════════
 // TUYA API
 // ════════════════════════════════════════════
-async function getTok(){
-  try{
-    const ts=Date.now().toString();
-    const sign=await hmac256(TUYA.clientId+ts,TUYA.secret);
-    const d=await tuyaFetch(`${TUYA.base}/v1.0/token?grant_type=1`,{
-      headers:{'client_id':TUYA.clientId,'sign':sign,'t':ts,'sign_method':'HMAC-SHA256'}
-    });
-    return d.result?.access_token;
-  }catch{return null;}
-}
-async function tuyaCmd(devId,action){
-  if(!devId){await new Promise(r=>setTimeout(r,700));return;}
-  
-  // Step 1: Get token
-  let tok, tokRaw;
+async function tuyaCmd(devId, action){
+  if(!devId){ await new Promise(r=>setTimeout(r,700)); return; }
+
+  let d;
   try {
-    const ts0=Date.now().toString();
-    const sign0=await hmac256(TUYA.clientId+ts0,TUYA.secret);
-    tokRaw=await tuyaFetch(`${TUYA.base}/v1.0/token?grant_type=1`,{
-      headers:{'client_id':TUYA.clientId,'sign':sign0,'t':ts0,'sign_method':'HMAC-SHA256'}
+    const r = await fetch('/api/tuya', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ devId, action })
     });
-    tok = tokRaw?.result?.access_token;
-    if(!tok) throw new Error(`Token failed: code=${tokRaw?.code} msg=${tokRaw?.msg||JSON.stringify(tokRaw)}`);
+    d = await r.json();
   } catch(e) {
-    showTuyaError('❌ فشل الاتصال بـ Tuya', e.message);
+    showTuyaError('❌ فشل الاتصال بالخادم', e.message);
     throw e;
   }
 
-  // Step 2: Send command
-  const ts=Date.now().toString();
-  const sign=await hmac256(TUYA.clientId+tok+ts,TUYA.secret);
-  const cmds={open:[{code:'switch_1',value:true}],close:[{code:'switch_1',value:false}],stop:[{code:'switch_1',value:false}]};
-  let d;
-  try {
-    d=await tuyaFetch(`${TUYA.base}/v1.0/iot-03/devices/${devId}/commands`,{
-      method:'POST',
-      headers:{'client_id':TUYA.clientId,'access_token':tok,'sign':sign,'t':ts,'sign_method':'HMAC-SHA256','Content-Type':'application/json'},
-      body:JSON.stringify({commands:cmds[action]})
-    });
-  } catch(e) {
-    showTuyaError('❌ فشل إرسال الأمر', e.message);
-    throw e;
-  }
-  
   if(!d.success){
-    const errMsg = `code=${d.code} | ${d.msg||'Tuya error'} | devId=${devId.slice(0,8)}…`;
+    const errMsg = `code=${d.code||d.error} | ${d.msg||d.error||'Tuya error'}`;
     showTuyaError('❌ رفض Tuya الأمر', errMsg);
     throw new Error(errMsg);
   }
 }
 
-function showTuyaError(title, detail){
-  // Show a visible error overlay on mobile
-  const existing = document.getElementById('tuya-err-overlay');
-  if(existing) existing.remove();
-  const div = document.createElement('div');
-  div.id = 'tuya-err-overlay';
-  div.innerHTML = `
-    <div style="position:fixed;bottom:80px;left:1rem;right:1rem;background:#1a0a0a;border:1px solid #ef4444;border-radius:14px;padding:1rem;z-index:9999;box-shadow:0 8px 32px rgba(239,68,68,.3)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
-        <span style="font-weight:800;color:#ef4444;font-size:.9rem">${title}</span>
-        <button onclick="this.closest('#tuya-err-overlay').remove()" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer">✕</button>
-      </div>
-      <code style="font-size:.72rem;color:#fca5a5;word-break:break-all;display:block;line-height:1.5">${detail}</code>
-      <div style="margin-top:.6rem;font-size:.72rem;color:#64748b">Device ID: ${(document.querySelector('[id^="a-op-"]')||{}).id||'—'}</div>
-    </div>`;
-  document.body.appendChild(div);
-  setTimeout(()=>div.remove(), 15000);
-}
 async function hmac256(str,secret){const e=new TextEncoder(),k=await crypto.subtle.importKey('raw',e.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',k,e.encode(str)))).map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();}
 
 // ════════════════════════════════════════════
