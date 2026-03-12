@@ -423,6 +423,29 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .note-ta{width:100%;padding:.875rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Cairo',sans-serif;font-size:.9rem;outline:none;resize:vertical;min-height:100px;line-height:1.6;}
 .note-ta:focus{border-color:var(--accent);}
 
+
+/* ═══════════════════════════════════════
+   DOOR TYPE ANIMATIONS
+═══════════════════════════════════════ */
+/* Sliding door */
+.door-sliding .door-panel-sliding {
+  transition: transform 1.2s cubic-bezier(0.4,0,0.2,1);
+  transform: translateX(0);
+}
+.door-sliding.open .door-panel-sliding {
+  transform: translateX(-85%);
+}
+/* Swing door (existing style kept) */
+/* Garage door */
+.door-garage .door-panel-garage {
+  transition: transform 1.2s cubic-bezier(0.4,0,0.2,1);
+  transform: scaleY(1);
+  transform-origin: top center;
+}
+.door-garage.open .door-panel-garage {
+  transform: scaleY(0.08);
+}
+
 </style>
 </head>
 <body>
@@ -804,6 +827,27 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <h3 class="modal-title">إضافة باب جديد</h3>
     <div class="fg"><label>اسم الباب</label><input id="nd-name" placeholder="الباب الرئيسي"></div>
     <div class="fg"><label>Device ID (Tuya)</label><input id="nd-devid" placeholder="bf7c670914391fc80cwayk"></div>
+    <div class="fg">
+      <label>نوع الباب</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem;margin-top:.4rem" id="door-type-picker">
+        <div onclick="selectDoorType('swing')" id="dtype-swing" class="door-type-opt door-type-active" style="border:2px solid var(--accent);border-radius:12px;padding:.75rem .5rem;text-align:center;cursor:pointer;background:rgba(59,130,246,.1);transition:all .2s">
+          <div style="font-size:1.8rem">🚪</div>
+          <div style="font-size:.72rem;font-weight:700;margin-top:.3rem;color:var(--accent)">باب عادي</div>
+          <div style="font-size:.65rem;color:var(--text2)">Battante</div>
+        </div>
+        <div onclick="selectDoorType('sliding')" id="dtype-sliding" class="door-type-opt" style="border:2px solid var(--border);border-radius:12px;padding:.75rem .5rem;text-align:center;cursor:pointer;transition:all .2s">
+          <div style="font-size:1.8rem">↔️</div>
+          <div style="font-size:.72rem;font-weight:700;margin-top:.3rem;color:var(--text2)">انزلاقي</div>
+          <div style="font-size:.65rem;color:var(--text2)">Coulissante</div>
+        </div>
+        <div onclick="selectDoorType('garage')" id="dtype-garage" class="door-type-opt" style="border:2px solid var(--border);border-radius:12px;padding:.75rem .5rem;text-align:center;cursor:pointer;transition:all .2s">
+          <div style="font-size:1.8rem">🏠</div>
+          <div style="font-size:.72rem;font-weight:700;margin-top:.3rem;color:var(--text2)">مرآب</div>
+          <div style="font-size:.65rem;color:var(--text2)">Garage</div>
+        </div>
+      </div>
+      <input type="hidden" id="nd-type" value="swing">
+    </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('m-add-door')">إلغاء</button>
       <button class="btn-pri" style="flex:2;margin-top:0" onclick="addDoor()">إضافة</button>
@@ -948,89 +992,161 @@ const DAYS=['الأحد','الاثنين','الثلاثاء','الأربعاء',
 // ════════════════════════════════════════════
 // ANIMATED DOOR SVG BUILDER
 // ════════════════════════════════════════════
-function buildDoorSVG(doorId, pfx) {
+function buildDoorSVG(doorId, pfx, doorType) {
+  const type = doorType || 'swing';
+  if (type === 'sliding') return buildSlidingDoorSVG(doorId, pfx);
+  if (type === 'garage')  return buildGarageDoorSVG(doorId, pfx);
+  return buildSwingDoorSVG(doorId, pfx);
+}
+
+// ── SWING DOOR (باب عادي) ──
+function buildSwingDoorSVG(doorId, pfx) {
   const uid = `${pfx}-${doorId}`;
   return `
   <div class="door-visual-wrap" id="dvw-${uid}">
     <div style="position:relative;width:180px;height:240px;">
       <svg width="180" height="240" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
-        <!-- Wall / frame background -->
         <rect x="0" y="0" width="180" height="240" rx="4" fill="#0d1525"/>
-
-        <!-- Floor -->
         <rect x="0" y="215" width="180" height="25" fill="#0a0f1e"/>
         <line x1="0" y1="215" x2="180" y2="215" stroke="#1e3a5f" stroke-width="2"/>
-
-        <!-- Door frame outer -->
-        <rect x="20" y="10" width="140" height="210" rx="4"
-              fill="none" stroke="#1e3a5f" stroke-width="3"/>
-
-        <!-- Frame sides (3D effect) -->
+        <rect x="20" y="10" width="140" height="210" rx="4" fill="none" stroke="#1e3a5f" stroke-width="3"/>
         <rect x="20" y="10" width="12" height="210" fill="#162035"/>
         <rect x="148" y="10" width="12" height="210" fill="#162035"/>
         <rect x="20" y="10" width="140" height="12" fill="#162035"/>
-
-        <!-- Door shadow (always visible behind door) -->
         <rect x="33" y="23" width="114" height="186" fill="#080d18" rx="2"/>
-
-        <!-- Perspective shadow when door is open -->
-        <polygon id="dp-shadow-${uid}"
-          points="33,23 33,209 33,209 33,23"
-          fill="rgba(0,0,0,0.5)"
-          style="transition:all 1.2s cubic-bezier(0.4,0,0.2,1)"/>
+        <polygon id="dp-shadow-${uid}" points="33,23 33,209 33,209 33,23" fill="rgba(0,0,0,0.5)" style="transition:all 1.2s cubic-bezier(0.4,0,0.2,1)"/>
       </svg>
-
-      <!-- Door panel (CSS 3D transform) -->
-      <div id="dp-${uid}" style="
-        position:absolute;
-        left:33px; top:23px;
-        width:114px; height:186px;
-        transform-origin:left center;
-        transform:perspective(400px) rotateY(0deg);
-        transition:transform 1.2s cubic-bezier(0.4,0,0.2,1);
-        transform-style:preserve-3d;
-      ">
-        <!-- Front face -->
+      <div id="dp-${uid}" style="position:absolute;left:33px;top:23px;width:114px;height:186px;transform-origin:left center;transform:perspective(400px) rotateY(0deg);transition:transform 1.2s cubic-bezier(0.4,0,0.2,1);transform-style:preserve-3d;">
         <svg width="114" height="186" viewBox="0 0 114 186" style="position:absolute;top:0;left:0;backface-visibility:hidden;">
-          <!-- Door body -->
-          <rect x="0" y="0" width="114" height="186" rx="2"
-                fill="url(#dg-${uid})"/>
-          <defs>
-            <linearGradient id="dg-${uid}" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#1a4080"/>
-              <stop offset="40%" stop-color="#2563eb"/>
-              <stop offset="100%" stop-color="#1e3a6e"/>
-            </linearGradient>
-          </defs>
-          <!-- Panel inset top -->
-          <rect x="10" y="12" width="94" height="72" rx="3"
-                fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
-          <rect x="13" y="15" width="88" height="66" rx="2"
-                fill="rgba(255,255,255,0.04)"/>
-          <!-- Panel inset bottom -->
-          <rect x="10" y="96" width="94" height="78" rx="3"
-                fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
-          <rect x="13" y="99" width="88" height="72" rx="2"
-                fill="rgba(255,255,255,0.04)"/>
-          <!-- Handle -->
+          <rect x="0" y="0" width="114" height="186" rx="2" fill="url(#dg-${uid})"/>
+          <defs><linearGradient id="dg-${uid}" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1a4080"/><stop offset="40%" stop-color="#2563eb"/><stop offset="100%" stop-color="#1e3a6e"/></linearGradient></defs>
+          <rect x="10" y="12" width="94" height="72" rx="3" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+          <rect x="13" y="15" width="88" height="66" rx="2" fill="rgba(255,255,255,0.04)"/>
+          <rect x="10" y="96" width="94" height="78" rx="3" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+          <rect x="13" y="99" width="88" height="72" rx="2" fill="rgba(255,255,255,0.04)"/>
           <circle cx="96" cy="100" r="6" fill="#f59e0b"/>
           <circle cx="96" cy="100" r="3.5" fill="#d97706"/>
           <rect x="94" y="100" width="4" height="12" rx="2" fill="#d97706"/>
-          <!-- Hinges -->
           <rect x="2" y="22" width="6" height="16" rx="2" fill="#94a3b8"/>
           <rect x="2" y="148" width="6" height="16" rx="2" fill="#94a3b8"/>
-          <!-- Light reflection -->
-          <rect x="1" y="0" width="3" height="186"
-                fill="rgba(255,255,255,0.06)" rx="1"/>
+          <rect x="1" y="0" width="3" height="186" fill="rgba(255,255,255,0.06)" rx="1"/>
         </svg>
-        <!-- Back face (inside of door) -->
         <svg width="114" height="186" viewBox="0 0 114 186" style="position:absolute;top:0;left:0;transform:rotateY(180deg);backface-visibility:hidden;">
           <rect x="0" y="0" width="114" height="186" rx="2" fill="#0f1f3d"/>
         </svg>
       </div>
     </div>
+    <div class="door-status-label closed-lbl" id="ds-lbl-${uid}">
+      <span id="ds-ic-${uid}">🔒</span>
+      <span id="ds-txt-${uid}">مغلق</span>
+    </div>
+  </div>`;
+}
 
-    <!-- Status label -->
+// ── SLIDING DOOR (باب انزلاقي) ──
+function buildSlidingDoorSVG(doorId, pfx) {
+  const uid = `${pfx}-${doorId}`;
+  return `
+  <div class="door-visual-wrap" id="dvw-${uid}">
+    <div style="position:relative;width:200px;height:200px;">
+      <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <!-- Background wall -->
+        <rect width="200" height="200" fill="#0d1525"/>
+        <!-- Floor -->
+        <rect x="0" y="178" width="200" height="22" fill="#0a0f1e"/>
+        <line x1="0" y1="178" x2="200" y2="178" stroke="#1e3a5f" stroke-width="2"/>
+        <!-- Track top -->
+        <rect x="10" y="14" width="180" height="8" rx="3" fill="#1e3a5f"/>
+        <rect x="10" y="16" width="180" height="4" rx="2" fill="#162035"/>
+        <!-- Track bottom -->
+        <rect x="10" y="172" width="180" height="6" rx="2" fill="#1e3a5f"/>
+        <!-- Wall sides -->
+        <rect x="10" y="14" width="10" height="164" fill="#162035"/>
+        <rect x="180" y="14" width="10" height="164" fill="#162035"/>
+        <!-- Door opening (dark) -->
+        <rect x="20" y="22" width="160" height="150" fill="#080d18"/>
+        <!-- Sliding panel -->
+        <g id="dp-${uid}" style="transition:transform 1.2s cubic-bezier(0.4,0,0.2,1);transform:translateX(0)">
+          <rect x="20" y="22" width="155" height="150" rx="2" fill="url(#sdg-${uid})"/>
+          <defs>
+            <linearGradient id="sdg-${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#1a4080"/>
+              <stop offset="50%" stop-color="#2563eb"/>
+              <stop offset="100%" stop-color="#1e3a6e"/>
+            </linearGradient>
+          </defs>
+          <!-- Panel details -->
+          <rect x="28" y="32" width="139" height="60" rx="3" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+          <rect x="28" y="105" width="139" height="55" rx="3" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+          <!-- Handle -->
+          <rect x="26" y="85" width="5" height="30" rx="2.5" fill="#f59e0b"/>
+          <rect x="24" y="93" width="9" height="14" rx="2" fill="#d97706"/>
+          <!-- Roller wheels -->
+          <circle cx="50" cy="24" r="5" fill="#94a3b8"/>
+          <circle cx="50" cy="24" r="2.5" fill="#64748b"/>
+          <circle cx="150" cy="24" r="5" fill="#94a3b8"/>
+          <circle cx="150" cy="24" r="2.5" fill="#64748b"/>
+          <!-- Light reflection -->
+          <rect x="21" y="22" width="4" height="150" fill="rgba(255,255,255,0.06)" rx="1"/>
+        </g>
+      </svg>
+    </div>
+    <div class="door-status-label closed-lbl" id="ds-lbl-${uid}">
+      <span id="ds-ic-${uid}">🔒</span>
+      <span id="ds-txt-${uid}">مغلق</span>
+    </div>
+  </div>`;
+}
+
+// ── GARAGE DOOR (باب مرآب) ──
+function buildGarageDoorSVG(doorId, pfx) {
+  const uid = `${pfx}-${doorId}`;
+  return `
+  <div class="door-visual-wrap" id="dvw-${uid}">
+    <div style="position:relative;width:200px;height:180px;">
+      <svg width="200" height="180" viewBox="0 0 200 180" xmlns="http://www.w3.org/2000/svg">
+        <!-- Wall -->
+        <rect width="200" height="180" fill="#0d1525"/>
+        <!-- Floor -->
+        <rect x="0" y="158" width="200" height="22" fill="#0a0f1e"/>
+        <line x1="0" y1="158" x2="200" y2="158" stroke="#1e3a5f" stroke-width="2"/>
+        <!-- Frame -->
+        <rect x="15" y="10" width="170" height="148" rx="3" fill="none" stroke="#1e3a5f" stroke-width="3"/>
+        <rect x="15" y="10" width="170" height="10" fill="#162035"/>
+        <rect x="15" y="10" width="10" height="148" fill="#162035"/>
+        <rect x="175" y="10" width="10" height="148" fill="#162035"/>
+        <!-- Door opening -->
+        <rect x="25" y="20" width="150" height="138" fill="#080d18"/>
+        <!-- Garage panel group -->
+        <g id="dp-${uid}" style="transition:transform 1.2s cubic-bezier(0.4,0,0.2,1);transform-origin:center top;transform:scaleY(1)">
+          <!-- Panel 1 (top) -->
+          <rect x="25" y="20" width="150" height="33" fill="url(#gdg-${uid})" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+          <defs>
+            <linearGradient id="gdg-${uid}" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#2563eb"/>
+              <stop offset="100%" stop-color="#1a4080"/>
+            </linearGradient>
+          </defs>
+          <!-- Panel 2 -->
+          <rect x="25" y="54" width="150" height="33" fill="#1d3d7a" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+          <!-- Panel 3 -->
+          <rect x="25" y="88" width="150" height="33" fill="#1a3870" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+          <!-- Panel 4 (bottom) -->
+          <rect x="25" y="122" width="150" height="36" fill="#162d5e" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+          <!-- Horizontal lines (panel separators highlight) -->
+          <line x1="25" y1="53" x2="175" y2="53" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+          <line x1="25" y1="87" x2="175" y2="87" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+          <line x1="25" y1="121" x2="175" y2="121" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+          <!-- Handle -->
+          <rect x="88" y="148" width="24" height="7" rx="3.5" fill="#f59e0b"/>
+          <!-- Light reflection -->
+          <rect x="26" y="20" width="4" height="138" fill="rgba(255,255,255,0.05)" rx="1"/>
+        </g>
+        <!-- Rails -->
+        <line x1="25" y1="10" x2="25" y2="20" stroke="#94a3b8" stroke-width="2"/>
+        <line x1="175" y1="10" x2="175" y2="20" stroke="#94a3b8" stroke-width="2"/>
+      </svg>
+    </div>
     <div class="door-status-label closed-lbl" id="ds-lbl-${uid}">
       <span id="ds-ic-${uid}">🔒</span>
       <span id="ds-txt-${uid}">مغلق</span>
@@ -1042,46 +1158,85 @@ function buildDoorSVG(doorId, pfx) {
 const doorStates = {}; // uid -> 'closed'|'opening'|'open'|'closing'
 
 function animateDoor(doorId, pfx, toState) {
-  const uid = `${pfx}-${doorId}`;
+  const uid   = `${pfx}-${doorId}`;
   const panel = document.getElementById(`dp-${uid}`);
-  const shadow = document.getElementById(`dp-shadow-${uid}`);
-  const lbl = document.getElementById(`ds-lbl-${uid}`);
-  const ic = document.getElementById(`ds-ic-${uid}`);
-  const txt = document.getElementById(`ds-txt-${uid}`);
-  if(!panel) return;
+  const shadow= document.getElementById(`dp-shadow-${uid}`);
+  const lbl   = document.getElementById(`ds-lbl-${uid}`);
+  const ic    = document.getElementById(`ds-ic-${uid}`);
+  const txt   = document.getElementById(`ds-txt-${uid}`);
+  if (!panel) return;
 
   doorStates[uid] = toState;
 
-  if(toState === 'opening') {
-    if(lbl){lbl.className='door-status-label moving-lbl';}
-    if(ic) ic.textContent='⏳';
-    if(txt) txt.textContent='يفتح...';
-    panel.style.transform='perspective(400px) rotateY(-70deg)';
-    if(shadow) shadow.setAttribute('points','33,23 33,209 80,195 80,37');
-    setTimeout(()=>{
-      if(doorStates[uid]==='opening') animateDoor(doorId,pfx,'open');
-    },1300);
-  } else if(toState === 'open') {
-    if(lbl){lbl.className='door-status-label open-lbl';}
-    if(ic) ic.textContent='🔓';
-    if(txt) txt.textContent='مفتوح';
-    panel.style.transform='perspective(400px) rotateY(-75deg)';
-    if(shadow) shadow.setAttribute('points','33,23 33,209 85,200 85,32');
-  } else if(toState === 'closing') {
-    if(lbl){lbl.className='door-status-label moving-lbl';}
-    if(ic) ic.textContent='⏳';
-    if(txt) txt.textContent='يغلق...';
-    panel.style.transform='perspective(400px) rotateY(0deg)';
-    if(shadow) shadow.setAttribute('points','33,23 33,209 33,209 33,23');
-    setTimeout(()=>{
-      if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed');
-    },1300);
-  } else { // closed
-    if(lbl){lbl.className='door-status-label closed-lbl';}
-    if(ic) ic.textContent='🔒';
-    if(txt) txt.textContent='مغلق';
-    panel.style.transform='perspective(400px) rotateY(0deg)';
-    if(shadow) shadow.setAttribute('points','33,23 33,209 33,209 33,23');
+  // Detect door type from stored data
+  const inst = myInst() || (A.db?.institutes||[]).find(i=>i.doors?.find(d=>d.id===doorId));
+  const door = inst?.doors?.find(d=>d.id===doorId);
+  const dtype = door?.type || 'swing';
+
+  // Label updates (common)
+  const setLbl = (cls, icTxt, txtTxt) => {
+    if(lbl) lbl.className = 'door-status-label ' + cls;
+    if(ic)  ic.textContent  = icTxt;
+    if(txt) txt.textContent = txtTxt;
+  };
+
+  if (dtype === 'sliding') {
+    // ── Sliding animation ──
+    if (toState === 'opening') {
+      setLbl('moving-lbl','⏳','يفتح...');
+      panel.style.transform = 'translateX(-82%)';
+      setTimeout(()=>{ if(doorStates[uid]==='opening') animateDoor(doorId,pfx,'open'); },1300);
+    } else if (toState === 'open') {
+      setLbl('open-lbl','🔓','مفتوح');
+      panel.style.transform = 'translateX(-82%)';
+    } else if (toState === 'closing') {
+      setLbl('moving-lbl','⏳','يغلق...');
+      panel.style.transform = 'translateX(0)';
+      setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
+    } else {
+      setLbl('closed-lbl','🔒','مغلق');
+      panel.style.transform = 'translateX(0)';
+    }
+
+  } else if (dtype === 'garage') {
+    // ── Garage animation ──
+    if (toState === 'opening') {
+      setLbl('moving-lbl','⏳','يفتح...');
+      panel.style.transform = 'scaleY(0.08)';
+      setTimeout(()=>{ if(doorStates[uid]==='opening') animateDoor(doorId,pfx,'open'); },1300);
+    } else if (toState === 'open') {
+      setLbl('open-lbl','🔓','مفتوح');
+      panel.style.transform = 'scaleY(0.08)';
+    } else if (toState === 'closing') {
+      setLbl('moving-lbl','⏳','يغلق...');
+      panel.style.transform = 'scaleY(1)';
+      setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
+    } else {
+      setLbl('closed-lbl','🔒','مغلق');
+      panel.style.transform = 'scaleY(1)';
+    }
+
+  } else {
+    // ── Swing animation (default) ──
+    if (toState === 'opening') {
+      setLbl('moving-lbl','⏳','يفتح...');
+      panel.style.transform='perspective(400px) rotateY(-70deg)';
+      if(shadow) shadow.setAttribute('points','33,23 33,209 80,195 80,37');
+      setTimeout(()=>{ if(doorStates[uid]==='opening') animateDoor(doorId,pfx,'open'); },1300);
+    } else if (toState === 'open') {
+      setLbl('open-lbl','🔓','مفتوح');
+      panel.style.transform='perspective(400px) rotateY(-75deg)';
+      if(shadow) shadow.setAttribute('points','33,23 33,209 85,200 85,32');
+    } else if (toState === 'closing') {
+      setLbl('moving-lbl','⏳','يغلق...');
+      panel.style.transform='perspective(400px) rotateY(0deg)';
+      if(shadow) shadow.setAttribute('points','33,23 33,209 33,209 33,23');
+      setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
+    } else {
+      setLbl('closed-lbl','🔒','مغلق');
+      panel.style.transform='perspective(400px) rotateY(0deg)';
+      if(shadow) shadow.setAttribute('points','33,23 33,209 33,209 33,23');
+    }
   }
 }
 
@@ -1301,6 +1456,7 @@ function userDoorCard(d,inst){
         <span class="ic" id="au-ic-u-${d.id}">⏱️</span><span id="au-lb-u-${d.id}">فتح 30ث</span>
       </button>
     </div>
+    ${buildDoorSVG(d.id,'u',d.type)}
   </div>`;
 }
 
@@ -1516,6 +1672,8 @@ function dist(la1,ln1,la2,ln2){
 // DOOR CONTROL
 // ════════════════════════════════════════════
 async function ctrlDoor(doorId,instId,action,pfx){
+  // Haptic feedback
+  if(navigator.vibrate) navigator.vibrate(action==='stop' ? 30 : 60);
   const inst=getInst(instId),door=inst.doors.find(d=>d.id===doorId),radius=inst.gps||30;
   if(action==='close'&&A.timers[doorId]){clearInterval(A.timers[doorId].iv);delete A.timers[doorId];resetAutoBtn(doorId,pfx);}
   if(pfx==='u'){
@@ -1566,6 +1724,7 @@ async function ctrlDoor(doorId,instId,action,pfx){
 // AUTO TIMER
 // ════════════════════════════════════════════
 function autoTimer(doorId,instId,pfx){
+  if(navigator.vibrate) navigator.vibrate(80);
   const inst=getInst(instId),door=inst.doors.find(d=>d.id===doorId),radius=inst.gps||30;
   if(A.timers[doorId]){clearInterval(A.timers[doorId].iv);delete A.timers[doorId];resetAutoBtn(doorId,pfx);return;}
   if(pfx==='u'){
@@ -1750,9 +1909,10 @@ function renderAdminDoors(inst){
     <div class="door-card">
       <div class="door-hdr">
         <div>
-          <div style="display:flex;align-items:center;gap:.5rem">
+          <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
             <div class="door-name">${buildSlidingDoorIcon()} ${d.name}</div>
             <span id="online-badge-${d.id}" class="badge-off" style="font-size:.72rem">⏳ جاري...</span>
+            <span style="background:rgba(129,140,248,.12);color:var(--purple);border:1px solid rgba(129,140,248,.25);border-radius:99px;padding:.15rem .5rem;font-size:.65rem;font-weight:700">${d.type==='sliding'?'↔️ انزلاقي':d.type==='garage'?'🏠 مرآب':'🚪 عادي'}</span>
           </div>
           <div style="font-size:.72rem;color:var(--text2);margin-top:.2rem">${d.devId?'ID: '+d.devId.slice(0,16)+'…':'⚠️ لم يُضَف Device ID'}</div>
         </div>
@@ -1767,7 +1927,7 @@ function renderAdminDoors(inst){
           <span class="ic" id="au-ic-a-${d.id}">⏱️</span><span id="au-lb-a-${d.id}">فتح 30ث</span>
         </button>
       </div>
-      ${buildDoorSVG(d.id,'a')}
+      ${buildDoorSVG(d.id,'a',d.type)}
       <button onclick="showDoorHist('${d.id}','${inst.id}')" style="width:100%;padding:.6rem;margin-top:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text2);font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;transition:all .2s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
         📋 سجل هذا الباب
       </button>
@@ -2090,9 +2250,47 @@ async function addUser(){
 }
 async function addDoor(){
   const name=v('nd-name'),devId=v('nd-devid'),inst=myInst();
+  const dtype = document.getElementById('nd-type')?.value || 'swing';
   if(!name){toast('يرجى إدخال اسم الباب','error');return;}
-  inst.doors.push({id:'door'+Date.now(),name,devId,active:true});
-  saveInst(inst);renderAdminDoors(inst);closeModal('m-add-door');toast('✅ تم إضافة الباب','success');
+  inst.doors.push({id:'door'+Date.now(),name,devId,active:true,type:dtype});
+  saveInst(inst);renderAdminDoors(inst);closeModal('m-add-door');
+  // Reset type selector
+  selectDoorType('swing');
+  toast('✅ تم إضافة الباب','success');
+}
+
+function selectEditDoorType(type) {
+  document.getElementById('ed-type').value = type;
+  ['swing','sliding','garage'].forEach(t => {
+    const el2 = document.getElementById('edtype-'+t);
+    if (!el2) return;
+    if (t === type) {
+      el2.style.border = '2px solid var(--accent)';
+      el2.style.background = 'rgba(59,130,246,.1)';
+      el2.querySelector('div:last-child').style.color = 'var(--accent)';
+    } else {
+      el2.style.border = '2px solid var(--border)';
+      el2.style.background = 'transparent';
+      el2.querySelector('div:last-child').style.color = 'var(--text2)';
+    }
+  });
+}
+
+function selectDoorType(type) {
+  document.getElementById('nd-type').value = type;
+  ['swing','sliding','garage'].forEach(t => {
+    const el2 = document.getElementById('dtype-'+t);
+    if (!el2) return;
+    if (t === type) {
+      el2.style.border = '2px solid var(--accent)';
+      el2.style.background = 'rgba(59,130,246,.1)';
+      el2.querySelector('div:nth-child(2)').style.color = 'var(--accent)';
+    } else {
+      el2.style.border = '2px solid var(--border)';
+      el2.style.background = 'transparent';
+      el2.querySelector('div:nth-child(2)').style.color = 'var(--text2)';
+    }
+  });
 }
 
 // ════════════════════════════════════════════
@@ -2379,6 +2577,7 @@ function editDoorModal(doorId, instId){
   el('ed-dev').value = door.devId || '';
   el('ed-lat').value = door.lat || '';
   el('ed-lng').value = door.lng || '';
+  selectEditDoorType(door.type || 'swing');
   openModal('m-edit-door');
 }
 
@@ -2390,6 +2589,7 @@ async function saveEditDoor(){
   if(!door) return;
   door.name  = el('ed-name').value.trim() || door.name;
   door.devId = el('ed-dev').value.trim();
+  door.type  = el('ed-type')?.value || 'swing';
   door.lat   = parseFloat(el('ed-lat').value) || null;
   door.lng   = parseFloat(el('ed-lng').value) || null;
   await saveInst(inst);
@@ -3101,6 +3301,21 @@ async function smartRegister(){
     <input type="hidden" id="ed-inst-id">
     <div class="fg"><label>اسم الباب</label><input id="ed-name" placeholder="الباب الرئيسي"></div>
     <div class="fg"><label>Device ID</label><input id="ed-dev" placeholder="bf7c670914391fc80cwayk"></div>
+    <div class="fg">
+      <label>نوع الباب</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-top:.4rem" id="edit-door-type-picker">
+        <div onclick="selectEditDoorType('swing')" id="edtype-swing" style="border:2px solid var(--accent);border-radius:10px;padding:.6rem .4rem;text-align:center;cursor:pointer;background:rgba(59,130,246,.1);transition:all .2s">
+          <div style="font-size:1.5rem">🚪</div><div style="font-size:.68rem;font-weight:700;color:var(--accent)">عادي</div>
+        </div>
+        <div onclick="selectEditDoorType('sliding')" id="edtype-sliding" style="border:2px solid var(--border);border-radius:10px;padding:.6rem .4rem;text-align:center;cursor:pointer;transition:all .2s">
+          <div style="font-size:1.5rem">↔️</div><div style="font-size:.68rem;font-weight:700;color:var(--text2)">انزلاقي</div>
+        </div>
+        <div onclick="selectEditDoorType('garage')" id="edtype-garage" style="border:2px solid var(--border);border-radius:10px;padding:.6rem .4rem;text-align:center;cursor:pointer;transition:all .2s">
+          <div style="font-size:1.5rem">🏠</div><div style="font-size:.68rem;font-weight:700;color:var(--text2)">مرآب</div>
+        </div>
+      </div>
+      <input type="hidden" id="ed-type" value="swing">
+    </div>
     <div style="background:var(--surface2);border-radius:12px;padding:1rem;margin-top:.5rem">
       <div style="font-weight:700;font-size:.85rem;margin-bottom:.75rem;color:var(--accent)">📍 موقع الباب</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
