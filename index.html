@@ -1182,7 +1182,7 @@ function buildSwingDoorSVG(doorId, pfx) {
         </svg>
       </div>
       <!-- PERSON CHARACTER -->
-      <div id="sp-${uid}" class="door-person hidden" style="position:absolute;bottom:18px;right:0px;width:56px;height:106px;pointer-events:none">
+      <div id="sp-${uid}" class="door-person hidden" style="position:absolute;bottom:18px;right:-2px;width:60px;height:110px;pointer-events:none">
         <svg id="sp-svg-${uid}" width="56" height="106" viewBox="0 0 52 100" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <radialGradient id="skinG-${uid}" cx="50%" cy="40%" r="55%">
@@ -1331,7 +1331,7 @@ function buildSlidingDoorSVG(doorId, pfx) {
         </g>
       </svg>
       <!-- PERSON for sliding door — stands in front and pushes/pulls -->
-      <div id="sp-${uid}" class="door-person hidden" style="position:absolute;bottom:22px;right:4px;width:56px;height:106px;pointer-events:none">
+      <div id="sp-${uid}" class="door-person hidden" style="position:absolute;bottom:22px;left:2px;width:56px;height:106px;pointer-events:none">
         <svg id="sp-svg-${uid}" width="56" height="106" viewBox="0 0 52 100" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <radialGradient id="skinG-${uid}" cx="50%" cy="40%" r="55%">
@@ -3680,6 +3680,9 @@ function renderInstHero(inst, ctx) {
   const active = users.filter(u => u.status === 'active').length;
 
   if (ctx === 'user') {
+    // نخفي بانر المؤسسة في واجهة المستخدم
+    const heroEl = el('u-inst-hero');
+    if (heroEl) heroEl.style.display = 'none';
     const nameEl = el('u-inst-hero-name');
     const subEl  = el('u-inst-hero-sub');
     if (nameEl) nameEl.textContent = inst.name;
@@ -3687,7 +3690,7 @@ function renderInstHero(inst, ctx) {
     const greet = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء النور' : 'مساء الخير';
     if (subEl)  subEl.innerHTML = `<span>${greet}، <strong style="color:var(--text)">${A.user.name.split(' ')[0]}</strong> 👋</span>`;
     const tb = el('u-inst-name');
-    if (tb) tb.textContent = inst.name;
+    if (tb) tb.style.display = 'none';
   }
   if (ctx === 'admin') {
     const nameEl = el('ad-inst-hero-name');
