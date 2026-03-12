@@ -223,7 +223,8 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .al-map-btn{display:inline-flex;align-items:center;gap:.4rem;margin-top:.5rem;padding:.3rem .75rem;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:var(--warning);font-size:.75rem;font-weight:700;text-decoration:none;}
 
 /* HISTORY */
-.hist-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:.5rem;display:flex;gap:1rem;align-items:center;}
+.hist-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1rem 1rem .75rem;margin-bottom:.65rem;display:flex;gap:.75rem;align-items:flex-start;transition:background .2s;}
+.hist-item:hover{background:var(--surface2);}
 .hist-ic{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
 .h-open{background:rgba(16,185,129,.15);}
 .h-close{background:rgba(239,68,68,.15);}
@@ -857,25 +858,37 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 <div class="modal-ov" id="m-hist">
   <div class="modal" style="max-width:480px">
     <h3 class="modal-title" id="m-hist-title">سجل المستخدم</h3>
-    <!-- Mini tabs inside modal -->
-    <div style="display:flex;gap:.5rem;margin-bottom:1.25rem;background:var(--surface2);border-radius:12px;padding:.35rem;">
-      <button id="mh-tab-user" onclick="switchHistTab('user')" style="flex:1;padding:.6rem;border:none;border-radius:9px;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;background:var(--accent);color:#fff;transition:all .2s">👤 سجل المستخدم</button>
-      <button id="mh-tab-door" onclick="switchHistTab('door')" style="flex:1;padding:.6rem;border:none;border-radius:9px;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;background:transparent;color:var(--text2);transition:all .2s">🚪 سجل الباب</button>
-    </div>
-    <!-- User history -->
-    <div id="mh-pane-user">
-      <div id="m-hist-body"></div>
-    </div>
-    <!-- Door history: pick door then show its log -->
-    <div id="mh-pane-door" style="display:none">
-      <div class="fg" style="margin-bottom:1rem">
-        <select id="mh-door-select" onchange="renderDoorHistModal()" style="width:100%;padding:.75rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Cairo,sans-serif;outline:none;font-size:.9rem">
-          <option value="">اختر الباب</option>
-        </select>
-      </div>
-      <div id="m-door-hist-body"></div>
-    </div>
+    <div id="m-hist-body"></div>
     <div class="modal-actions" style="margin-top:1rem"><button class="btn-pri" style="margin-top:0" onclick="closeModal('m-hist')">إغلاق</button></div>
+  </div>
+</div>
+
+<!-- DOOR HISTORY MODAL (منفصل) -->
+<div class="modal-ov" id="m-door-hist">
+  <div class="modal" style="max-width:520px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+      <h3 class="modal-title" style="margin:0" id="m-door-hist-title">📋 سجل الباب</h3>
+      <button onclick="closeModal('m-door-hist')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.3rem .7rem;cursor:pointer;color:var(--text);font-family:Cairo,sans-serif">✕</button>
+    </div>
+
+    <!-- فلتر اليوم -->
+    <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+      <select id="dh-filter-day" onchange="renderDoorHistFiltered()" style="flex:1;min-width:140px;padding:.65rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:Cairo,sans-serif;font-size:.82rem;outline:none">
+        <option value="">📅 كل الأيام</option>
+      </select>
+      <select id="dh-filter-action" onchange="renderDoorHistFiltered()" style="flex:1;min-width:110px;padding:.65rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:Cairo,sans-serif;font-size:.82rem;outline:none">
+        <option value="">كل الأحداث</option>
+        <option value="open">🟢 فتح</option>
+        <option value="close">🔴 غلق</option>
+        <option value="stop">🟡 إيقاف</option>
+      </select>
+      <button onclick="clearDoorHistFilters()" style="padding:.55rem .8rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:Cairo,sans-serif;font-size:.78rem;cursor:pointer">🔄 إعادة</button>
+    </div>
+
+    <!-- عداد النتائج -->
+    <div id="dh-count" style="font-size:.78rem;color:var(--text2);margin-bottom:.75rem;padding:.4rem .75rem;background:var(--surface2);border-radius:8px;display:inline-block"></div>
+
+    <div id="m-door-hist-body"></div>
   </div>
 </div>
 <div class="modal-ov" id="m-add-inst">
@@ -1847,34 +1860,39 @@ function stopDoorPolling(doorId, pfx) {
 // ════════════════════════════════════════════
 function logAlert(inst,door,reason){
   const now = new Date();
-  const hh = String(now.getHours()).padStart(2,'0');
-  const mm = String(now.getMinutes()).padStart(2,'0');
-  const timeStr = `${hh}h${mm}`;
+  const hh  = String(now.getHours()).padStart(2,'0');
+  const mm  = String(now.getMinutes()).padStart(2,'0');
+  const timeStr = `${hh}:${mm}`;
+  // تاريخ بدون ثواني
+  const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${timeStr}`;
   const reasonLabel = reason==='خارج النطاق الجغرافي'
     ? `وهو بعيد عن الباب (${A.geoPos?Math.round(dist(A.geoPos.coords.latitude,A.geoPos.coords.longitude,getDoorLoc(inst)?.lat||0,getDoorLoc(inst)?.lng||0))+'م':'-'})`
     : reason==='خارج وقت العمل' ? 'وهو خارج الوقت المحدد'
     : reason;
-  const msg = `${A.user.name} أراد فتح ${door.name} في الساعة ${timeStr} ${reasonLabel}`;
   inst.alerts.unshift({
     id:'al'+Date.now(),
-    uid:A.user.id,uname:A.user.name,
-    door:door.name,reason:msg,
+    uid:A.user.id, uname:A.user.name,
+    door:door.name, reason:reasonLabel,
     lat:A.geoPos?.coords.latitude||null,
     lng:A.geoPos?.coords.longitude||null,
     dst:A.geoPos&&getDoorLoc(inst)?Math.round(dist(A.geoPos.coords.latitude,A.geoPos.coords.longitude,getDoorLoc(inst).lat,getDoorLoc(inst).lng)):null,
-    time:now.toLocaleString('ar-TN')
+    time: dateStr
   });
   saveInst(inst);
 }
 function logHist(inst,door,action,via='app'){
+  const now = new Date();
+  const hh  = String(now.getHours()).padStart(2,'0');
+  const mm  = String(now.getMinutes()).padStart(2,'0');
+  const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${hh}:${mm}`;
   inst.history.unshift({
     id:'h'+Date.now(),
-    uid: via==='rc' ? 'rc' : A.user?.id,
+    uid:   via==='rc' ? 'rc' : A.user?.id,
     uname: via==='rc' ? 'RC' : A.user?.name||'—',
     door:door.name,
     action,
     via,
-    time:new Date().toLocaleString('ar-TN')
+    time: dateStr
   });
   saveInst(inst);
 }
@@ -1912,9 +1930,9 @@ function renderAdminDoors(inst){
           <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
             <div class="door-name">${buildSlidingDoorIcon()} ${d.name}</div>
             <span id="online-badge-${d.id}" class="badge-off" style="font-size:.72rem">⏳ جاري...</span>
-            <span style="background:rgba(129,140,248,.12);color:var(--purple);border:1px solid rgba(129,140,248,.25);border-radius:99px;padding:.15rem .5rem;font-size:.65rem;font-weight:700">${d.type==='sliding'?'↔️ انزلاقي':d.type==='garage'?'🏠 مرآب':'🚪 عادي'}</span>
+            ${isSuperCtx?`<span style="background:rgba(129,140,248,.12);color:var(--purple);border:1px solid rgba(129,140,248,.25);border-radius:99px;padding:.15rem .5rem;font-size:.65rem;font-weight:700">${d.type==='sliding'?'↔️ انزلاقي':d.type==='garage'?'🏠 مرآب':'🚪 عادي'}</span>`:''}
           </div>
-          <div style="font-size:.72rem;color:var(--text2);margin-top:.2rem">${d.devId?'ID: '+d.devId.slice(0,16)+'…':'⚠️ لم يُضَف Device ID'}</div>
+          ${isSuperCtx?`<div style="font-size:.72rem;color:var(--text2);margin-top:.2rem">${d.devId?'ID: '+d.devId.slice(0,16)+'…':'⚠️ لم يُضَف Device ID'}</div>`:''}
         </div>
         ${isSuperCtx?`<button class="btn-sm btn-danger" onclick="delDoor('${d.id}')">حذف</button>`:''}
       </div>
@@ -1928,8 +1946,8 @@ function renderAdminDoors(inst){
         </button>
       </div>
       ${buildDoorSVG(d.id,'a',d.type)}
-      <button onclick="showDoorHist('${d.id}','${inst.id}')" style="width:100%;padding:.6rem;margin-top:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text2);font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;transition:all .2s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
-        📋 سجل هذا الباب
+      <button onclick="showDoorHist('${d.id}','${inst.id}')" style="width:100%;padding:.65rem;margin-top:.5rem;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:12px;color:var(--accent);font-family:Cairo,sans-serif;font-size:.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;transition:all .2s" onmouseover="this.style.background='rgba(59,130,246,.15)'" onmouseout="this.style.background='rgba(59,130,246,.08)'">
+        📋 عرض سجل الباب
       </button>
     </div>`).join('');
   // ابدأ الـ polling لكل باب (RC sync)
@@ -2091,14 +2109,33 @@ function renderAlerts(inst){
   if(!inst)return;
   const als=inst.alerts||[];
   el('al-count').textContent=`${als.length} تنبيه`;
-  el('admin-alert-list').innerHTML=als.length?als.map(a=>`<div class="alert-item">
-    <div class="al-icon">⚠️</div>
-    <div class="al-text">
-      <h4 style="font-size:.85rem;line-height:1.4">${a.reason||a.uname+' — '+a.door}</h4>
-      <p style="margin-top:.3rem">🕐 ${a.time}</p>
-      ${a.lat?`<p class="al-loc">📍 ${Number(a.lat).toFixed(5)}, ${Number(a.lng).toFixed(5)} — ${a.dst||'?'} متر</p>
-      <a class="al-map-btn" href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank">🗺️ عرض على الخريطة</a>`:''}
-    </div></div>`).join(''):`<p class="empty">لا توجد تنبيهات 🎉</p>`;
+  el('admin-alert-list').innerHTML=als.length?als.map(a=>`
+    <div class="alert-item" style="flex-direction:column;gap:.6rem;padding:1rem 1.1rem">
+      <!-- رأس التنبيه: اسم المستخدم + الوقت -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+        <div style="display:flex;align-items:center;gap:.6rem">
+          <div style="width:34px;height:34px;border-radius:10px;background:rgba(239,68,68,.15);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">⚠️</div>
+          <div>
+            <div style="font-weight:800;font-size:.92rem;color:var(--danger)">${a.uname||'مجهول'}</div>
+            <div style="font-size:.72rem;color:var(--text2)">🚪 ${a.door||'—'}</div>
+          </div>
+        </div>
+        <div style="font-size:.82rem;font-weight:700;color:var(--accent);background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.15);border-radius:8px;padding:.25rem .6rem;white-space:nowrap">
+          🕐 ${a.time||'—'}
+        </div>
+      </div>
+      <!-- سبب التنبيه -->
+      <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:8px;padding:.5rem .75rem;font-size:.82rem;color:var(--text2);line-height:1.5">
+        ${a.reason||'محاولة دخول مرفوضة'}
+      </div>
+      <!-- الموقع -->
+      ${a.lat?`
+      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <span style="font-size:.75rem;color:var(--warning)">📍 ${Number(a.lat).toFixed(5)}, ${Number(a.lng).toFixed(5)}</span>
+        ${a.dst?`<span style="background:rgba(245,158,11,.1);color:var(--warning);border-radius:6px;padding:.15rem .5rem;font-size:.75rem;font-weight:700">${a.dst} متر من الباب</span>`:''}
+        <a class="al-map-btn" href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank" style="margin:0">🗺️ خريطة</a>
+      </div>`:''}
+    </div>`).join(''):`<p class="empty">لا توجد تنبيهات 🎉</p>`;
 }
 function renderSch(inst){
   if(!inst)return;
@@ -2155,90 +2192,106 @@ function showHist(uid) {
   const u = A.db.users.find(u => u.id === uid);
   const inst = getInst(u?.instId);
   _histCtx = { uid, instId: inst?.id };
-
   el('m-hist-title').textContent = '📋 سجل: ' + (u?.name || '');
-
-  // Populate door selector
-  const sel = el('mh-door-select');
-  sel.innerHTML = '<option value="">اختر الباب</option>';
-  (inst?.doors || []).forEach(d => {
-    sel.innerHTML += `<option value="${d.id}">${d.name}</option>`;
-  });
-
-  // Reset to user tab
-  switchHistTab('user');
+  const h = (inst?.history || []).filter(h => h.uid === uid);
+  if (el('m-hist-body'))
+    el('m-hist-body').innerHTML = h.length ? h.map(histItem).join('') : `<p class="empty">لا يوجد سجل لهذا المستخدم</p>`;
   openModal('m-hist');
 }
 
 function switchHistTab(tab) {
-  // Style tabs
-  const tabUser = el('mh-tab-user'), tabDoor = el('mh-tab-door');
-  const paneUser = el('mh-pane-user'), paneDoor = el('mh-pane-door');
-  if (tab === 'user') {
-    tabUser.style.background = 'var(--accent)'; tabUser.style.color = '#fff';
-    tabDoor.style.background = 'transparent'; tabDoor.style.color = 'var(--text2)';
-    paneUser.style.display = 'block'; paneDoor.style.display = 'none';
-    // Render user history
-    const inst = getInst(_histCtx.instId);
-    const h = (inst?.history || []).filter(h => h.uid === _histCtx.uid);
+  // kept for backward compat — now only user tab used in m-hist
+  const inst = getInst(_histCtx?.instId);
+  const h = (inst?.history || []).filter(h => h.uid === _histCtx?.uid);
+  if (el('m-hist-body'))
     el('m-hist-body').innerHTML = h.length ? h.map(histItem).join('') : `<p class="empty">لا يوجد سجل لهذا المستخدم</p>`;
-  } else {
-    tabDoor.style.background = 'var(--accent)'; tabDoor.style.color = '#fff';
-    tabUser.style.background = 'transparent'; tabUser.style.color = 'var(--text2)';
-    paneDoor.style.display = 'block'; paneUser.style.display = 'none';
-    renderDoorHistModal();
-  }
-}
-
-function renderDoorHistModal() {
-  const doorId = el('mh-door-select')?.value;
-  const inst = getInst(_histCtx.instId);
-  if (!doorId) {
-    el('m-door-hist-body').innerHTML = `<p class="empty">اختر باباً لعرض سجله</p>`;
-    return;
-  }
-  const door = inst?.doors?.find(d => d.id === doorId);
-  const h = (inst?.history || []).filter(h => h.door === door?.name);
-  el('m-door-hist-body').innerHTML = h.length
-    ? h.map(h => histItemWithUser(h)).join('')
-    : `<p class="empty">لا يوجد سجل لهذا الباب</p>`;
 }
 
 function histItemWithUser(h) {
   const lbl = { open: 'فتح', close: 'غلق', stop: 'إيقاف' };
   const cls = h.action === 'open' ? 'h-open' : h.action === 'close' ? 'h-close' : 'h-stop';
-  const ic = h.action === 'open' ? '🟢' : h.action === 'close' ? '🔴' : '🟡';
+  const ic  = h.action === 'open' ? '🟢' : h.action === 'close' ? '🔴' : '🟡';
+  const actionColor = h.action === 'open' ? 'var(--success)' : h.action === 'close' ? 'var(--danger)' : 'var(--warning)';
   const isRC = h.via === 'rc';
   const byLabel = isRC
-    ? `<span style="background:rgba(139,92,246,.15);color:#a78bfa;border-radius:5px;padding:.1rem .4rem;font-size:.7rem;font-weight:700">📡 RC</span>`
-    : `<span style="color:var(--accent);font-weight:700">${h.uname||'—'}</span>`;
-  return `<div class="hist-item">
-    <div class="hist-ic ${cls}">${ic}</div>
-    <div class="hist-text" style="flex:1">
-      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-        <span style="font-weight:700">${lbl[h.action]||h.action}</span>
+    ? `<span style="background:rgba(139,92,246,.15);color:#a78bfa;border:1px solid rgba(139,92,246,.25);border-radius:6px;padding:.15rem .5rem;font-size:.72rem;font-weight:700">📡 RC</span>`
+    : `<span style="background:rgba(59,130,246,.1);color:var(--accent);border:1px solid rgba(59,130,246,.2);border-radius:6px;padding:.15rem .5rem;font-size:.72rem;font-weight:700">👤 ${h.uname||'—'}</span>`;
+  // parse date/time nicely
+  const timeParts = (h.time||'').split(' ');
+  const datePart  = timeParts[0] || '';
+  const timePart  = timeParts[1] || '';
+  return `<div class="hist-item" style="border-right:3px solid ${actionColor};padding-right:.75rem">
+    <div class="hist-ic ${cls}" style="flex-shrink:0">${ic}</div>
+    <div class="hist-text" style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.35rem">
+        <span style="font-weight:800;font-size:.9rem;color:${actionColor}">${lbl[h.action]||h.action}</span>
         ${byLabel}
-        <span style="margin-right:auto;font-size:.72rem;color:var(--text2)">🚪 ${h.door||'—'}</span>
       </div>
-      <div style="font-size:.75rem;color:var(--text2);margin-top:.2rem">🕐 ${h.time}</div>
+      <div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:.2rem">🚪 ${h.door||'—'}</div>
+      <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+        <span style="font-size:.85rem;font-weight:700;color:var(--accent);background:rgba(59,130,246,.08);border-radius:6px;padding:.2rem .5rem">🕐 ${timePart}</span>
+        <span style="font-size:.78rem;color:var(--text2)">📅 ${datePart}</span>
+      </div>
     </div>
   </div>`;
+}
+
+// ── دوال سجل الباب مع فلتر اليوم ──
+function populateDoorHistDays(inst, door) {
+  const h = (inst?.history||[]).filter(x => x.door === door?.name);
+  // استخراج الأيام الفريدة
+  const days = [...new Set(h.map(x => {
+    const parts = (x.time||'').split(' ');
+    return parts[0] || '';
+  }))].filter(Boolean).sort().reverse();
+
+  const sel = el('dh-filter-day');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">📅 كل الأيام</option>';
+  days.forEach(d => {
+    sel.innerHTML += `<option value="${d}">${d}</option>`;
+  });
+}
+
+function renderDoorHistFiltered() {
+  const inst   = getInst(_histCtx?.instId);
+  const doorId = _histCtx?.doorId;
+  const door   = inst?.doors?.find(d => d.id === doorId);
+  if (!door) return;
+
+  const filterDay    = el('dh-filter-day')?.value    || '';
+  const filterAction = el('dh-filter-action')?.value || '';
+
+  let h = (inst?.history||[]).filter(x => x.door === door.name);
+  if (filterDay)    h = h.filter(x => (x.time||'').startsWith(filterDay));
+  if (filterAction) h = h.filter(x => x.action === filterAction);
+
+  // عداد النتائج
+  const countEl = el('dh-count');
+  if (countEl) countEl.textContent = `${h.length} سجل${filterDay ? ' — ' + filterDay : ''}`;
+
+  const body = el('m-door-hist-body');
+  if (!body) return;
+  body.innerHTML = h.length
+    ? h.map(x => histItemWithUser(x)).join('')
+    : `<p class="empty">لا توجد سجلات${filterDay ? ' لهذا اليوم' : ''}</p>`;
+}
+
+function clearDoorHistFilters() {
+  const s1 = el('dh-filter-day');    if(s1) s1.value = '';
+  const s2 = el('dh-filter-action'); if(s2) s2.value = '';
+  renderDoorHistFiltered();
 }
 function showDoorHist(doorId, instId){
   const inst=getInst(instId);
   const door=inst?.doors?.find(d=>d.id===doorId);
   if(!door)return;
-  _histCtx={uid:null,instId};
-  el('m-hist-title').textContent='📋 سجل الباب: '+door.name;
-  // Setup door selector and select this door
-  const sel=el('mh-door-select');
-  sel.innerHTML='<option value="">اختر الباب</option>';
-  (inst?.doors||[]).forEach(d=>{
-    sel.innerHTML+=`<option value="${d.id}" ${d.id===doorId?'selected':''}>${d.name}</option>`;
-  });
-  // Go straight to door tab
-  switchHistTab('door');
-  openModal('m-hist');
+  _histCtx={uid:null,instId,doorId};
+  el('m-door-hist-title').textContent='📋 سجل الباب: '+door.name;
+  // بناء قائمة الأيام المتاحة في السجل
+  populateDoorHistDays(inst, door);
+  renderDoorHistFiltered();
+  openModal('m-door-hist');
 }
 
 async function addUser(){
@@ -2447,18 +2500,14 @@ function renderInsts(){
 }
 
 function showDoorHistSuper(doorId, instId){
-  _histCtx={uid:null,instId};
   const inst=getInst(instId);
   const door=inst?.doors?.find(d=>d.id===doorId);
   if(!door)return;
-  el('m-hist-title').textContent='📋 سجل الباب: '+door.name+' — '+inst.name;
-  const sel=el('mh-door-select');
-  sel.innerHTML='<option value="">اختر الباب</option>';
-  (inst?.doors||[]).forEach(d=>{
-    sel.innerHTML+=`<option value="${d.id}" ${d.id===doorId?'selected':''}>${d.name}</option>`;
-  });
-  switchHistTab('door');
-  openModal('m-hist');
+  _histCtx={uid:null,instId,doorId};
+  el('m-door-hist-title').textContent='📋 سجل الباب: '+door.name+' — '+inst.name;
+  populateDoorHistDays(inst, door);
+  renderDoorHistFiltered();
+  openModal('m-door-hist');
 }
 
 function populateSpFilter(){
@@ -2529,14 +2578,29 @@ function goToAdminAlerts(){
 function openAlertsModal(){
   const allAlerts = A._allAlerts || [];
   el('m-all-alerts-body').innerHTML = allAlerts.length
-    ? allAlerts.map(a=>`<div class="alert-item">
-        <div class="al-icon">⚠️</div>
-        <div class="al-text">
-          <h4>${a.uname||'—'} — ${a.door||'—'}</h4>
-          <p>${a.reason||'—'} | ${a.time||'—'}</p>
-          ${a.lat?`<p class="al-loc">📍 ${Number(a.lat).toFixed(5)}, ${Number(a.lng).toFixed(5)} — ${a.dst||'?'} متر</p>
-          <a class="al-map-btn" href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank">🗺️ عرض على الخريطة</a>`:''}
+    ? allAlerts.map(a=>`
+      <div class="alert-item" style="flex-direction:column;gap:.6rem;padding:1rem 1.1rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+          <div style="display:flex;align-items:center;gap:.6rem">
+            <div style="width:34px;height:34px;border-radius:10px;background:rgba(239,68,68,.15);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">⚠️</div>
+            <div>
+              <div style="font-weight:800;font-size:.92rem;color:var(--danger)">${a.uname||'مجهول'}</div>
+              <div style="font-size:.72rem;color:var(--text2)">🚪 ${a.door||'—'}</div>
+            </div>
+          </div>
+          <div style="font-size:.82rem;font-weight:700;color:var(--accent);background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.15);border-radius:8px;padding:.25rem .6rem;white-space:nowrap">
+            🕐 ${a.time||'—'}
+          </div>
         </div>
+        <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:8px;padding:.5rem .75rem;font-size:.82rem;color:var(--text2);line-height:1.5">
+          ${a.reason||'محاولة دخول مرفوضة'}
+        </div>
+        ${a.lat?`
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+          <span style="font-size:.75rem;color:var(--warning)">📍 ${Number(a.lat).toFixed(5)}, ${Number(a.lng).toFixed(5)}</span>
+          ${a.dst?`<span style="background:rgba(245,158,11,.1);color:var(--warning);border-radius:6px;padding:.15rem .5rem;font-size:.75rem;font-weight:700">${a.dst} متر من الباب</span>`:''}
+          <a class="al-map-btn" href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank" style="margin:0">🗺️ خريطة</a>
+        </div>`:''}
       </div>`).join('')
     : `<p class="empty">لا توجد تنبيهات 🎉</p>`;
   openModal('m-all-alerts');
