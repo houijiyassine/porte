@@ -569,7 +569,6 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 <div id="user-dash" class="page">
   <div class="topbar">
     <div>
-      <div class="tb-inst" id="u-inst-name">المؤسسة</div>
       <div class="tb-user-greet" id="u-greeting">مرحباً</div>
     </div>
     <div style="display:flex;gap:.5rem;align-items:center">
@@ -579,7 +578,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     </div>
   </div>
   <div class="content" style="display:flex;flex-direction:column;gap:1rem;">
-    <div class="inst-hero" id="u-inst-hero">
+    <div class="inst-hero" id="u-inst-hero" style="display:none">
       <div class="inst-hero-icon">🏛️</div>
       <div style="flex:1;min-width:0">
         <div class="inst-hero-name" id="u-inst-hero-name">المؤسسة</div>
@@ -1149,7 +1148,7 @@ function buildDoorSVG(doorId, pfx, doorType) {
 function buildSwingDoorSVG(doorId, pfx) {
   const uid = `${pfx}-${doorId}`;
   return `
-  <div class="door-visual-wrap" id="dvw-${uid}">
+  <div class="door-visual-wrap" id="dvw-${uid}" data-dtype="swing">
     <div style="position:relative;width:180px;height:240px;">
       <svg width="180" height="240" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
         <rect x="0" y="0" width="180" height="240" rx="4" fill="#0d1525"/>
@@ -1182,8 +1181,8 @@ function buildSwingDoorSVG(doorId, pfx) {
         </svg>
       </div>
       <!-- PERSON CHARACTER -->
-      <div id="sp-${uid}" class="door-person hidden" style="position:absolute;bottom:26px;right:2px;width:52px;height:100px;pointer-events:none">
-        <svg id="sp-svg-${uid}" width="52" height="100" viewBox="0 0 52 100" xmlns="http://www.w3.org/2000/svg">
+      <div id="sp-${uid}" class="door-person hidden" style="position:absolute;bottom:18px;right:0px;width:56px;height:106px;pointer-events:none">
+        <svg id="sp-svg-${uid}" width="56" height="106" viewBox="0 0 52 100" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <radialGradient id="skinG-${uid}" cx="50%" cy="40%" r="55%">
               <stop offset="0%" stop-color="#fcd5a0"/>
@@ -1287,7 +1286,7 @@ function buildSwingDoorSVG(doorId, pfx) {
 function buildSlidingDoorSVG(doorId, pfx) {
   const uid = `${pfx}-${doorId}`;
   return `
-  <div class="door-visual-wrap" id="dvw-${uid}">
+  <div class="door-visual-wrap" id="dvw-${uid}" data-dtype="sliding">
     <div style="position:relative;width:200px;height:200px;">
       <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
         <!-- Background wall -->
@@ -1330,6 +1329,71 @@ function buildSlidingDoorSVG(doorId, pfx) {
           <rect x="21" y="22" width="4" height="150" fill="rgba(255,255,255,0.06)" rx="1"/>
         </g>
       </svg>
+      <!-- PERSON for sliding door — stands in front and pushes/pulls -->
+      <div id="sp-${uid}" class="door-person hidden" style="position:absolute;bottom:22px;right:4px;width:56px;height:106px;pointer-events:none">
+        <svg id="sp-svg-${uid}" width="56" height="106" viewBox="0 0 52 100" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="skinG-${uid}" cx="50%" cy="40%" r="55%">
+              <stop offset="0%" stop-color="#fcd5a0"/>
+              <stop offset="100%" stop-color="#e8a96a"/>
+            </radialGradient>
+            <linearGradient id="shirtG-${uid}" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#3b82f6"/>
+              <stop offset="100%" stop-color="#1d4ed8"/>
+            </linearGradient>
+            <linearGradient id="pantsG-${uid}" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#374151"/>
+              <stop offset="100%" stop-color="#1f2937"/>
+            </linearGradient>
+          </defs>
+          <ellipse cx="26" cy="98" rx="14" ry="3" fill="rgba(0,0,0,0.25)"/>
+          <g id="sp-legs-${uid}">
+            <g id="sp-lleg-${uid}" style="transform-origin:26px 64px">
+              <rect x="18" y="64" width="9" height="22" rx="4" fill="url(#pantsG-${uid})"/>
+              <ellipse cx="21" cy="87" rx="6" ry="3.5" fill="#1a1a2e"/>
+              <rect x="16" y="84" width="10" height="5" rx="2.5" fill="#1a1a2e"/>
+            </g>
+            <g id="sp-rleg-${uid}" style="transform-origin:26px 64px">
+              <rect x="25" y="64" width="9" height="22" rx="4" fill="url(#pantsG-${uid})"/>
+              <ellipse cx="31" cy="87" rx="6" ry="3.5" fill="#1a1a2e"/>
+              <rect x="26" y="84" width="10" height="5" rx="2.5" fill="#111827"/>
+            </g>
+          </g>
+          <g id="sp-body-${uid}" style="transform-origin:26px 46px">
+            <rect x="16" y="36" width="20" height="30" rx="5" fill="url(#shirtG-${uid})"/>
+            <polygon points="22,36 26,42 30,36" fill="#93c5fd" opacity="0.6"/>
+            <rect x="18" y="40" width="6" height="5" rx="1.5" fill="rgba(255,255,255,0.15)"/>
+          </g>
+          <g id="sp-larm-${uid}" style="transform-origin:17px 39px; transform:rotate(35deg)">
+            <rect x="9" y="38" width="8" height="20" rx="4" fill="url(#shirtG-${uid})"/>
+            <ellipse cx="13" cy="59" rx="4" ry="3.5" fill="url(#skinG-${uid})"/>
+          </g>
+          <g id="sp-rarm-${uid}" style="transform-origin:35px 39px; transform:rotate(-35deg)">
+            <rect x="35" y="38" width="8" height="20" rx="4" fill="url(#shirtG-${uid})"/>
+            <ellipse cx="39" cy="59" rx="4" ry="3.5" fill="url(#skinG-${uid})"/>
+          </g>
+          <g id="sp-head-${uid}">
+            <rect x="23" y="26" width="6" height="11" rx="3" fill="url(#skinG-${uid})"/>
+            <ellipse cx="26" cy="20" rx="11" ry="13" fill="url(#skinG-${uid})"/>
+            <path d="M15 16 Q16 6 26 5 Q36 6 37 16 Q33 10 26 10 Q19 10 15 16Z" fill="#2d1b00"/>
+            <rect x="15" y="12" width="22" height="5" rx="2" fill="#2d1b00"/>
+            <ellipse id="sp-leye-${uid}" cx="21" cy="19" rx="2.5" ry="2.5" fill="white"/>
+            <ellipse cx="21" cy="19" rx="1.4" ry="1.6" fill="#1a0a00"/>
+            <circle cx="21.6" cy="18.3" r="0.5" fill="white"/>
+            <ellipse id="sp-reye-${uid}" cx="31" cy="19" rx="2.5" ry="2.5" fill="white"/>
+            <ellipse cx="31" cy="19" rx="1.4" ry="1.6" fill="#1a0a00"/>
+            <circle cx="31.6" cy="18.3" r="0.5" fill="white"/>
+            <path id="sp-lbrow-${uid}" d="M19 15.5 Q21 14.5 23 15.5" fill="none" stroke="#2d1b00" stroke-width="1.5" stroke-linecap="round"/>
+            <path id="sp-rbrow-${uid}" d="M29 15.5 Q31 14.5 33 15.5" fill="none" stroke="#2d1b00" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M25 21 Q26 24 27 21" fill="none" stroke="#c8855a" stroke-width="1.2" stroke-linecap="round"/>
+            <path id="sp-mouth-${uid}" d="M22 26.5 Q26 29.5 30 26.5" fill="none" stroke="#b05c3a" stroke-width="1.6" stroke-linecap="round"/>
+          </g>
+          <g id="sp-stop-${uid}" style="display:none;opacity:0;transition:opacity 0.3s">
+            <circle cx="44" cy="14" r="10" fill="#ef4444" opacity="0.92"/>
+            <text x="44" y="19" text-anchor="middle" font-size="11" fill="white" font-weight="900">✋</text>
+          </g>
+        </svg>
+      </div>
     </div>
     <div class="door-status-label closed-lbl" id="ds-lbl-${uid}">
       <span id="ds-ic-${uid}">🔒</span>
@@ -1342,7 +1406,7 @@ function buildSlidingDoorSVG(doorId, pfx) {
 function buildGarageDoorSVG(doorId, pfx) {
   const uid = `${pfx}-${doorId}`;
   return `
-  <div class="door-visual-wrap" id="dvw-${uid}">
+  <div class="door-visual-wrap" id="dvw-${uid}" data-dtype="garage">
     <div style="position:relative;width:200px;height:180px;">
       <svg width="200" height="180" viewBox="0 0 200 180" xmlns="http://www.w3.org/2000/svg">
         <!-- Wall -->
@@ -1412,17 +1476,18 @@ function animateStickPerson(doorId, pfx, state) {
   const rbrow = document.getElementById(`sp-rbrow-${uid}`);
   const stopB = document.getElementById(`sp-stop-${uid}`);
 
-  // SVG transform helper: rotate around pivot point
-  // rotate(deg, cx, cy) — correct SVG syntax
+  // نحدد نوع الباب من خلال فحص SVG الموجود
+  const dvw = document.getElementById(`dvw-${uid}`);
+  const doorType = dvw ? (dvw.dataset.dtype || 'swing') : 'swing';
+
   const setArm  = (el, deg, cx, cy) => el && el.setAttribute('transform', `rotate(${deg},${cx},${cy})`);
   const setLegT = (el, deg, cx, cy) => el && el.setAttribute('transform', `rotate(${deg},${cx},${cy})`);
 
-  // Arm pivots (top of arm group)
-  const LAX=17, LAY=38;  // left arm pivot
-  const RAX=43, RAY=38;  // right arm pivot
-  // Leg pivots (hip joint)
-  const LLX=22, LLY=64;  // left leg pivot
-  const RLX=30, RLY=64;  // right leg pivot
+  // Pivots
+  const LAX=17, LAY=38;
+  const RAX=43, RAY=38;
+  const LLX=22, LLY=64;
+  const RLX=30, RLY=64;
 
   const resetAll = () => {
     sp.style.animation = '';
@@ -1447,7 +1512,6 @@ function animateStickPerson(doorId, pfx, state) {
     rbrow.setAttribute('d', f.rb);
   };
 
-  // Animate legs walking with CSS keyframes on transform attribute
   const startWalk = () => {
     let step = 0;
     return setInterval(() => {
@@ -1466,63 +1530,114 @@ function animateStickPerson(doorId, pfx, state) {
     setLegT(rleg, 0, RLX, RLY);
   };
 
+  // ── حركة اليد تمسك المقبض مع الباب ──
+  // swing: اليد اليمنى تدفع الباب (يتحرك مع زاوية الباب)
+  // sliding: اليد اليمنى ممتدة للأمام تدفع/تسحب
+  const holdDoorOpen = () => {
+    if (doorType === 'sliding') {
+      // يد ممتدة للأمام تدفع الباب جانباً
+      setArm(rarm, -70, RAX, RAY);
+      setArm(larm,  15, LAX, LAY);
+    } else {
+      // swing: يد تمتد للمقبض وتدفع (زاوية -65 = مستقيمة إلى الأمام)
+      setArm(rarm, -65, RAX, RAY);
+      setArm(larm,  25, LAX, LAY);
+    }
+  };
+
+  const holdDoorClose = () => {
+    if (doorType === 'sliding') {
+      // يد ممتدة للأمام تسحب الباب (عكس)
+      setArm(rarm, -50, RAX, RAY);
+      setArm(larm,  20, LAX, LAY);
+    } else {
+      // swing: يد تسحب المقبض نحوها
+      setArm(rarm, 20, RAX, RAY);
+      setArm(larm, 10, LAX, LAY);
+    }
+  };
+
+  // animate rarm continuously while door moves (تتبع المقبض)
+  const trackHandle = (fromDeg, toDeg, duration) => {
+    if (!rarm) return;
+    const start = performance.now();
+    const diff = toDeg - fromDeg;
+    const anim = (now) => {
+      const t = Math.min((now - start) / duration, 1);
+      const ease = t < .5 ? 2*t*t : -1+(4-2*t)*t;
+      setArm(rarm, fromDeg + diff * ease, RAX, RAY);
+      if (t < 1) requestAnimationFrame(anim);
+    };
+    requestAnimationFrame(anim);
+  };
+
   resetAll();
-  if(walkInterval) clearInterval(walkInterval);
+  if(sp._walkInterval) clearInterval(sp._walkInterval);
+  walkInterval = null;
 
   if (state === 'opening') {
     sp.classList.remove('hidden');
-    sp.style.animation = 'personWalkIn 0.55s cubic-bezier(0.4,0,0.2,1) forwards';
     setFace('effort');
-    // Start leg walk loop
-    walkInterval = startWalk(); sp._walkInterval = walkInterval;
-    // Right arm reaches forward to push
-    setArm(rarm, -55, RAX, RAY);
-    setArm(larm,  20, LAX, LAY);
-    // After arriving: push gesture
-    setTimeout(() => {
-      stopWalk();
-      // Push arm animation: extend then hold
-      let pushStep = 0;
-      const pushAnim = setInterval(() => {
-        pushStep++;
-        const a = -55 - Math.min(pushStep * 3, 20);
-        setArm(rarm, a, RAX, RAY);
-        if(pushStep >= 8) clearInterval(pushAnim);
-      }, 30);
-    }, 500);
+    if (doorType === 'sliding') {
+      // شخص واقف يدفع الباب للجانب
+      sp.style.animation = '';
+      setArm(larm, 15, LAX, LAY);
+      // يد تنطلق من -20 إلى -70 مع الباب
+      trackHandle(-20, -75, 1100);
+      // قدم للأمام قليلاً
+      setLegT(lleg,  15, LLX, LLY);
+      setLegT(rleg, -10, RLX, RLY);
+    } else {
+      // swing: يمشي للداخل ويدفع الباب
+      sp.style.animation = 'personWalkIn 0.5s cubic-bezier(0.4,0,0.2,1) forwards';
+      walkInterval = startWalk(); sp._walkInterval = walkInterval;
+      setArm(rarm, -30, RAX, RAY);
+      setArm(larm,  20, LAX, LAY);
+      setTimeout(() => {
+        stopWalk();
+        // يد تتبع الباب وهو يفتح (من -30 إلى -75)
+        trackHandle(-30, -75, 900);
+        setArm(larm, 25, LAX, LAY);
+      }, 450);
+    }
 
   } else if (state === 'open') {
     sp.classList.remove('hidden');
     stopWalk();
     sp.style.animation = 'personBob 2s ease-in-out infinite';
     setFace('happy');
+    // يد بجانب الجسم مرتاحة (ليس ممسكاً بالباب لأنه مفتوح بالكامل)
     setArm(larm, 20, LAX, LAY);
-    setArm(rarm,-20, RAX, RAY);
+    setArm(rarm,-18, RAX, RAY);
 
   } else if (state === 'closing') {
     sp.classList.remove('hidden');
     stopWalk();
     setFace('effort');
-    // Right arm: swing to pull door — animate with interval
-    let pullStep = 0;
-    const pullAnim = setInterval(() => {
-      pullStep++;
-      const a = -20 + pullStep * 5; // from -20 to +20
-      setArm(rarm, Math.min(a, 25), RAX, RAY);
-      if(pullStep >= 10) clearInterval(pullAnim);
-    }, 50);
-    setArm(larm, 35, LAX, LAY);
-    setLegT(lleg,  10, LLX, LLY);
-    setLegT(rleg, -10, RLX, RLY);
+    if (doorType === 'sliding') {
+      // يد كانت ممدودة (-75) تسحب الباب للأمام (-20)
+      setArm(rarm, -75, RAX, RAY);
+      setArm(larm,  15, LAX, LAY);
+      trackHandle(-75, -20, 1100);
+      setLegT(lleg,  10, LLX, LLY);
+      setLegT(rleg, -5,  RLX, RLY);
+    } else {
+      // swing: يد تسحب الباب من -75 إلى +20
+      setArm(rarm, -75, RAX, RAY);
+      setArm(larm,  20, LAX, LAY);
+      trackHandle(-75, 22, 1000);
+      setLegT(lleg,  8, LLX, LLY);
+      setLegT(rleg, -8, RLX, RLY);
+    }
 
   } else if (state === 'stopped') {
     sp.classList.remove('hidden');
     stopWalk();
     sp.style.animation = 'personStop 0.35s ease-out';
     setFace('stop');
-    // Both arms up — STOP
-    setArm(larm, -90, LAX, LAY);
-    setArm(rarm,  90, RAX, RAY);
+    // يدان مرفوعتان — STOP
+    setArm(larm, -85, LAX, LAY);
+    setArm(rarm,  85, RAX, RAY);
     setLegT(lleg, 0, LLX, LLY);
     setLegT(rleg, 0, RLX, RLY);
     if(stopB) {
@@ -1531,11 +1646,11 @@ function animateStickPerson(doorId, pfx, state) {
     }
 
   } else {
-    // closed → walk away → disappear
+    // closed → يمشي للخارج
     stopWalk();
     setFace('neutral');
     setArm(larm, 20, LAX, LAY);
-    setArm(rarm,-20, RAX, RAY);
+    setArm(rarm,-18, RAX, RAY);
     walkInterval = startWalk(); sp._walkInterval = walkInterval;
     sp.style.animation = 'personWalkOut 0.55s ease-in forwards';
     setTimeout(() => {
@@ -1577,20 +1692,24 @@ function animateDoor(doorId, pfx, toState) {
     if (toState === 'opening') {
       setLbl('moving-lbl','⏳',tr('doorOpening'));
       panel.style.transform = 'translateX(-82%)';
+      animateStickPerson(doorId, pfx, 'opening');
       setTimeout(()=>{ if(doorStates[uid]==='opening') animateDoor(doorId,pfx,'open'); },1300);
     } else if (toState === 'open') {
       setLbl('open-lbl','🔓',tr('doorOpen'));
       panel.style.transform = 'translateX(-82%)';
+      animateStickPerson(doorId, pfx, 'open');
     } else if (toState === 'closing') {
       setLbl('moving-lbl','⏳',tr('doorClosing'));
       panel.style.transform = 'translateX(0)';
+      animateStickPerson(doorId, pfx, 'closing');
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
     } else if (toState === 'stopped') {
       setLbl('moving-lbl','⏸️',tr('doorStopped'));
-      // freeze current position
+      animateStickPerson(doorId, pfx, 'stopped');
     } else {
       setLbl('closed-lbl','🔒',tr('doorClosed'));
       panel.style.transform = 'translateX(0)';
+      animateStickPerson(doorId, pfx, 'closed');
     }
 
   } else if (dtype === 'garage') {
@@ -1878,9 +1997,12 @@ function loadUser(){
   showPage('user-dash');
 }
 function userDoorCard(d,inst){
-  return `<div class="door-card">
-    <div class="door-hdr"><div class="door-name">🚪 ${d.name}</div><span id="online-badge-${d.id}" class="${d.active?'badge-on':'badge-off'}">${d.active?tr('online'):tr('offline')}</span></div>
-    <div class="door-btns">
+  return `<div class="door-card u-door-card-full">
+    <div class="u-door-topbar">
+      <div class="door-name" style="font-size:1rem;font-weight:700">🚪 ${d.name}</div>
+      <span id="online-badge-${d.id}" class="${d.active?'badge-on':'badge-off'}">${d.active?tr('online'):tr('offline')}</span>
+    </div>
+    <div class="door-btns u-btns-top">
       <button class="dbtn db-open" id="u-op-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','open','u')"><span class="ic">🟢</span>${tr("openDoorBtn")}</button>
       <button class="dbtn db-close" id="u-cl-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','close','u')"><span class="ic">🔴</span>${tr("closeDoorBtn")}</button>
       <button class="dbtn db-stop" id="u-st-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','stop','u')"><span class="ic">🟡</span>${tr('stop2')}</button>
@@ -1889,7 +2011,9 @@ function userDoorCard(d,inst){
         <span class="ic" id="au-ic-u-${d.id}">${tr("autoTimer")}</span><span id="au-lb-u-${d.id}">${tr("autoTimer")}</span>
       </button>
     </div>
-    ${buildDoorSVG(d.id,'u',d.type)}
+    <div class="u-door-visual-center">
+      ${buildDoorSVG(d.id,'u',d.type)}
+    </div>
   </div>`;
 }
 
@@ -3479,7 +3603,42 @@ function exportPDF(){
   const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
   <style>body{font-family:Arial;direction:rtl;padding:2rem;}h1{color:#1e3a5f;font-size:1.3rem;margin-bottom:1rem;}
   table{width:100%;border-collapse:collapse;font-size:.9rem;}th{background:#1e3a5f;color:#fff;padding:.6rem;text-align:right;}
-  td{padding:.5rem;border-bottom:1px solid #e2e8f0;}tr:nth-child(even){background:#f8fafc;}</style></head>
+  td{padding:.5rem;border-bottom:1px solid #e2e8f0;}tr:nth-child(even){background:#f8fafc;}
+/* ── USER DOOR CARD — FULL LAYOUT ── */
+.u-door-card-full {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.u-door-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .9rem 1.25rem .5rem;
+}
+.u-btns-top {
+  padding: .25rem 1rem .75rem;
+  margin-bottom: 0;
+  gap: .5rem;
+  flex-wrap: nowrap;
+}
+.u-btns-top .dbtn {
+  flex: 1;
+  min-width: 0;
+  padding: .7rem .4rem;
+  font-size: .78rem;
+}
+.u-door-visual-center {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: .5rem 1rem 1rem;
+}
+.u-door-visual-center .door-visual-wrap {
+  margin: 0 auto;
+}
+</style></head>
   <body><h1>سجل النشاطات — ${inst.name}</h1>
   <p style="color:#64748b;font-size:.85rem;margin-bottom:1rem">تاريخ التصدير: ${new Date().toLocaleString('ar-TN')} | عدد السجلات: ${h.length}</p>
   <table><thead><tr><th>المستخدم</th><th>الباب</th><th>العملية</th><th>التاريخ</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
