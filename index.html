@@ -585,7 +585,15 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
         <div class="inst-hero-sub" id="u-inst-hero-sub">مرحباً بك</div>
       </div>
     </div>
-    <div class="status-card"><div class="si ok" id="geo-ic">📍</div><div class="st"><h3 id="geo-t">جاري التحقق من موقعك...</h3><p id="geo-s">يجب أن تكون قريباً من الباب ليتم الفتح</p></div></div>
+    <!-- الأبواب أولاً -->
+    <h2 style="font-size:1rem;color:var(--text2);font-weight:600;">الأبواب المتاحة</h2>
+    <div id="u-doors"></div>
+
+    <!-- الوقت المسموح -->
+    <div class="status-card"><div class="si ok" id="time-ic">⏰</div><div class="st"><h3 id="time-t">جاري التحقق من الوقت...</h3><p id="time-s">يتم التحقق من ساعات العمل</p></div></div>
+
+    <!-- التواجد أمام الباب -->
+    <div class="status-card"><div class="si ok" id="geo-ic">📍</div><div class="st"><h3 id="geo-t">التواجد الجغرافي أمام الباب</h3><p id="geo-s">يجب أن تكون قريباً من الباب ليتم الفتح</p></div></div>
 
     <!-- GPS Permission Banner -->
     <div id="geo-perm-banner" style="display:none;background:linear-gradient(135deg,rgba(239,68,68,0.12),rgba(239,68,68,0.06));border:1px solid rgba(239,68,68,0.4);border-radius:16px;padding:1.25rem;gap:1rem;align-items:flex-start;flex-direction:column;">
@@ -636,10 +644,6 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
         🔄 المحاولة مجدداً
       </button>
     </div>
-
-    <div class="status-card"><div class="si ok" id="time-ic">⏰</div><div class="st"><h3 id="time-t">جاري التحقق من الوقت...</h3><p id="time-s">يتم التحقق من ساعات العمل</p></div></div>
-    <h2 style="font-size:1rem;color:var(--text2);font-weight:600;">الأبواب المتاحة</h2>
-    <div id="u-doors"></div>
   </div>
 </div>
 
