@@ -508,16 +508,17 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 <!-- LANDING → direct login -->
 <div id="landing" class="page active">
   <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,var(--bg) 70%);padding:2rem;">
-    <div class="logo">🔐</div>
+    <div class="logo" id="logo-tap" onclick="logoTap()" style="cursor:pointer">🔐</div>
     <h1 class="landing-title">نظام التحكم في الدخول</h1>
     <p class="landing-sub">نظام ذكي لإدارة أبواب المؤسسات</p>
 
     <div class="auth-box" style="margin-top:1.5rem">
       <!-- LOGIN FORM -->
       <div id="land-login">
-        <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="l-email" placeholder="example@email.com" onkeydown="if(event.key==='Enter')el('l-pass').focus()"></div>
-        <div class="fg"><label>كلمة المرور</label><input type="password" id="l-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')smartLogin()"></div>
+        <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="l-email" placeholder="example@email.com" oninput="el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')el('l-pass').focus()"></div>
+        <div class="fg"><label>كلمة المرور</label><input type="password" id="l-pass" placeholder="••••••••" oninput="el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')smartLogin()"></div>
         <button class="btn-pri" onclick="smartLogin()" id="l-btn">🔐 دخول</button>
+        <div id="login-error-msg" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:.6rem .9rem;font-size:.8rem;color:#ef4444;margin-top:.5rem;text-align:center"></div>
         <div style="display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:.5rem">
           <span style="font-size:.75rem;color:var(--text2)">🔒 بيانات دخولك ستُحفظ تلقائياً في جهازك</span>
         </div>
@@ -1572,29 +1573,56 @@ function animateDoor(doorId, pfx, toState) {
 // ════════════════════════════════════════════
 async function initDB(){
   // Load from Supabase
-  const [users, institutes] = await Promise.all([
-    sbGet('users', 'select=*'),
-    sbGet('institutes', 'select=*')
-  ]);
+  let users, institutes;
+  try {
+    [users, institutes] = await Promise.all([
+      sbGet('users', 'select=*'),
+      sbGet('institutes', 'select=*')
+    ]);
+  } catch(e) {
+    console.error('Supabase fetch error:', e);
+    throw new Error('تعذّر الاتصال بقاعدة البيانات — تحقق من الإنترنت');
+  }
 
-  // Map Supabase columns to app format
-  const mappedInsts = (institutes||[]).map(i => ({
+  // تحقق من الاستجابة
+  if(!Array.isArray(users)) {
+    console.error('Users response invalid:', users);
+    // إذا كانت استجابة خطأ من Supabase (object بدل array)
+    if(users?.message || users?.error) {
+      throw new Error('Supabase error: ' + (users.message || users.error));
+    }
+    users = [];
+  }
+  if(!Array.isArray(institutes)) institutes = [];
+
+  console.log(`✅ Loaded ${users.length} users, ${institutes.length} institutes from Supabase`);
+
+  const mappedInsts = institutes.map(i => ({
     id: i.id, name: i.name, gps: i.gps||30,
     doors: i.doors||[], schedule: i.schedule||defSch(),
     alerts: i.alerts||[], history: i.history||[]
   }));
 
-  const mappedUsers = (users||[]).map(u => ({
-    id: u.id, name: u.name, email: u.email, pw: u.pw,
+  const mappedUsers = users.map(u => ({
+    id: u.id, name: u.name,
+    email: (u.email||'').toLowerCase().trim(),
+    pw: (u.pw||'').trim(),
     role: u.role, status: u.status, instId: u.inst_id,
     avatar: u.avatar, note: u.note, lastLoc: u.last_loc
   }));
+
+  // الحفاظ على super admin دائماً
+  const hasSuperInMemory = (A.db?.users||[]).some(u=>u.role==='super');
+  if(hasSuperInMemory && !mappedUsers.some(u=>u.role==='super')) {
+    const superUser = A.db.users.find(u=>u.role==='super');
+    if(superUser) mappedUsers.unshift(superUser);
+  }
 
   A.db = {
     globalGps: 30,
     institutes: mappedInsts,
     users: mappedUsers,
-    userLocations: {}
+    userLocations: A.db?.userLocations || {}
   };
 }
 
@@ -3063,6 +3091,9 @@ function toast(msg,type='info'){const t=el('toast');t.textContent=msg;t.classNam
   } catch(e) {
     console.error('DB init error:', e);
     A.db = { globalGps:30, institutes:[], users:[{id:'su1',name:'Super Admin',email:'super@admin.com',pw:'super123',role:'super',status:'active',instId:null}], userLocations:{} };
+    // إظهار تحذير الاتصال
+    const errD = document.getElementById('login-error-msg');
+    if(errD){ errD.textContent = '⚠️ تعذّر الاتصال بقاعدة البيانات — يمكنك الدخول إذا كانت بياناتك محفوظة'; errD.style.display='block'; }
   }
   document.getElementById('landing').style.opacity = '1';
   document.documentElement.setAttribute('data-theme','dark');
@@ -3634,49 +3665,69 @@ function setRegType(type){
   }
 }
 
+let _logoTapCount = 0;
+function logoTap(){
+  _logoTapCount++;
+  if(_logoTapCount >= 5){
+    _logoTapCount = 0;
+    // عرض قائمة المستخدمين للـ debug (للمطور فقط)
+    if(A.db?.users?.length){
+      const info = A.db.users.slice(0,10).map(u=>
+        `${u.email} | ${u.pw ? '🔑 لديه كلمة سر' : '❌ بدون pw'} | ${u.role} | ${u.status}`
+      ).join('\n');
+      alert('👥 مستخدمو قاعدة البيانات:\n\n' + info);
+    } else {
+      alert('⚠️ قاعدة البيانات فارغة أو لم تُحمَّل بعد');
+    }
+  }
+}
+
 async function smartLogin(){
   const email = (el('l-email')?.value||'').trim().toLowerCase();
-  const pass  = el('l-pass')?.value||'';
+  const pass  = (el('l-pass')?.value||'').trim();
   if(!email||!pass){ toast('يرجى ملء البريد وكلمة المرور','error'); return; }
 
   const btn = el('l-btn');
   btn.textContent = '⏳ جاري التحقق...';
   btn.disabled = true;
 
-  // Try local first, then reload from Supabase
-  btn.textContent = '⏳ جاري التحقق...';
-  
   const tryLogin = async () => {
-    let u = A.db.users.find(u => u.email.toLowerCase()===email && u.pw===pass);
-    
-    console.log('🔍 Login attempt:', email, pass);
-    console.log('👥 Users in memory:', A.db.users.map(x=>({email:x.email,pw:x.pw,role:x.role})));
-    
-    if(!u) {
-      // Reload from Supabase in case new user was added
-      try {
-        await initDB();
-        console.log('🔄 After reload:', A.db.users.map(x=>({email:x.email,pw:x.pw,role:x.role})));
-        u = A.db.users.find(u => u.email.toLowerCase()===email && u.pw===pass);
-      } catch(e) { console.error(e); }
+    // دائماً حمّل آخر بيانات من Supabase أولاً
+    try {
+      await initDB();
+    } catch(e) {
+      console.error('initDB error:', e);
     }
-    
+
+    // مقارنة email + pw (trim + lowercase)
+    const u = A.db.users.find(u =>
+      u.email?.toLowerCase().trim() === email &&
+      (u.pw||'').trim() === pass
+    );
+
     btn.textContent = '🔐 دخول';
     btn.disabled = false;
-    
-    if(!u){ toast('البريد أو كلمة المرور غير صحيحة ❌','error'); return; }
+
+    if(!u){
+      const emailExists = A.db.users.find(x => x.email?.toLowerCase().trim()===email);
+      const msg = emailExists ? 'كلمة المرور غير صحيحة ❌' : 'البريد الإلكتروني غير مسجل ❌';
+      toast(msg,'error');
+      const errDiv = el('login-error-msg');
+      if(errDiv){ errDiv.textContent = msg; errDiv.style.display='block'; }
+      return;
+    }
     if(u.status==='pending'){ toast('حسابك في انتظار موافقة المدير ⏳','info'); return; }
-    if(u.status==='frozen'){  toast('❄️ ' + tr('frozen') + ' — تواصل مع المدير','error'); return; }
+    if(u.status==='frozen'){  toast('❄️ حسابك موقوف — تواصل مع المدير','error'); return; }
+    if(u.status!=='active'){  toast('حساب غير مفعّل — تواصل مع المدير','error'); return; }
 
     A.user = u;
-    // Save credentials for auto-login
     try { localStorage.setItem('dac_saved_creds', JSON.stringify({email, pass})); } catch(e){}
     if(u.role==='super') loadSuper();
     else if(u.role==='admin') loadAdmin();
     else loadUser();
   };
-  
-  setTimeout(() => tryLogin(), 200);
+
+  setTimeout(() => tryLogin(), 100);
 }
 
 async function smartRegister(){
