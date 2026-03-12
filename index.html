@@ -449,29 +449,54 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 
 /* ═══════════════════════════════════════
-   STICK PERSON ANIMATION
+   PERSON ANIMATION
 ═══════════════════════════════════════ */
-.stick-person {
-  transition: transform 0.8s cubic-bezier(0.4,0,0.2,1), opacity 0.4s;
+.door-person {
+  transition: transform 0.7s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease;
+  transform-origin: center bottom;
 }
-.stick-person.hidden { opacity: 0; pointer-events: none; }
+.door-person.hidden { opacity: 0; }
 
-@keyframes walkIn {
-  0%   { transform: translateX(60px); }
-  100% { transform: translateX(0px); }
+@keyframes personWalkIn {
+  0%   { transform: translateX(55px); opacity: 0; }
+  25%  { opacity: 1; }
+  100% { transform: translateX(0px); opacity: 1; }
 }
-@keyframes walkOut {
-  0%   { transform: translateX(0px); }
-  100% { transform: translateX(-60px); }
+@keyframes personWalkOut {
+  0%   { transform: translateX(0px); opacity: 1; }
+  75%  { opacity: 1; }
+  100% { transform: translateX(-70px); opacity: 0; }
 }
-@keyframes idleWave {
-  0%,100% { transform: rotate(0deg); transform-origin: 12px 22px; }
-  30%     { transform: rotate(15deg); transform-origin: 12px 22px; }
-  60%     { transform: rotate(-8deg); transform-origin: 12px 22px; }
+@keyframes personBob {
+  0%,100% { transform: translateY(0px); }
+  50%     { transform: translateY(-2.5px); }
 }
-@keyframes stopGesture {
-  0%,100% { transform: translateY(0); }
-  50%     { transform: translateY(-4px); }
+@keyframes personStop {
+  0%   { transform: translateX(0) scale(1); }
+  30%  { transform: translateX(-3px) scale(1.04); }
+  60%  { transform: translateX(2px) scale(1.04); }
+  100% { transform: translateX(0) scale(1); }
+}
+@keyframes armPush {
+  0%   { transform: rotate(0deg); }
+  40%  { transform: rotate(35deg); }
+  100% { transform: rotate(25deg); }
+}
+@keyframes armPull {
+  0%   { transform: rotate(25deg); }
+  100% { transform: rotate(-15deg); }
+}
+@keyframes legWalkL {
+  0%,100% { transform: rotate(-18deg); }
+  50%     { transform: rotate(18deg); }
+}
+@keyframes legWalkR {
+  0%,100% { transform: rotate(18deg); }
+  50%     { transform: rotate(-18deg); }
+}
+@keyframes breathe {
+  0%,100% { transform: scaleY(1); }
+  50%     { transform: scaleY(1.02); }
 }
 
 </style>
@@ -1075,27 +1100,97 @@ function buildSwingDoorSVG(doorId, pfx) {
           <rect x="0" y="0" width="114" height="186" rx="2" fill="#0f1f3d"/>
         </svg>
       </div>
-      <!-- STICK PERSON -->
-      <div id="sp-${uid}" class="stick-person hidden" style="position:absolute;bottom:28px;right:4px;width:44px;height:80px;pointer-events:none">
-        <svg id="sp-svg-${uid}" width="44" height="80" viewBox="0 0 44 80" xmlns="http://www.w3.org/2000/svg">
-          <!-- Head -->
-          <circle cx="22" cy="10" r="7" fill="none" stroke="#f0c060" stroke-width="2.2"/>
-          <!-- Smile (default) -->
-          <path id="sp-face-${uid}" d="M18.5 12 Q22 15.5 25.5 12" fill="none" stroke="#f0c060" stroke-width="1.6" stroke-linecap="round"/>
-          <!-- Body -->
-          <line x1="22" y1="17" x2="22" y2="42" stroke="#7dd3fc" stroke-width="2.5" stroke-linecap="round"/>
-          <!-- Left arm -->
-          <line id="sp-larm-${uid}" x1="22" y1="24" x2="10" y2="34" stroke="#7dd3fc" stroke-width="2.2" stroke-linecap="round"/>
-          <!-- Right arm (reaches door) -->
-          <line id="sp-rarm-${uid}" x1="22" y1="24" x2="36" y2="30" stroke="#7dd3fc" stroke-width="2.2" stroke-linecap="round"/>
-          <!-- Left leg -->
-          <line id="sp-lleg-${uid}" x1="22" y1="42" x2="13" y2="60" stroke="#7dd3fc" stroke-width="2.2" stroke-linecap="round"/>
-          <!-- Right leg -->
-          <line id="sp-rleg-${uid}" x1="22" y1="42" x2="31" y2="60" stroke="#7dd3fc" stroke-width="2.2" stroke-linecap="round"/>
-          <!-- Stop hand sign (hidden by default) -->
-          <g id="sp-stop-${uid}" style="display:none">
-            <circle cx="36" cy="26" r="7" fill="rgba(239,68,68,.85)" stroke="#ef4444" stroke-width="1.5"/>
-            <text x="36" y="30" text-anchor="middle" font-size="8" fill="white" font-weight="bold">✋</text>
+      <!-- PERSON CHARACTER -->
+      <div id="sp-${uid}" class="door-person hidden" style="position:absolute;bottom:26px;right:2px;width:52px;height:100px;pointer-events:none">
+        <svg id="sp-svg-${uid}" width="52" height="100" viewBox="0 0 52 100" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="skinG-${uid}" cx="50%" cy="40%" r="55%">
+              <stop offset="0%" stop-color="#fcd5a0"/>
+              <stop offset="100%" stop-color="#e8a96a"/>
+            </radialGradient>
+            <linearGradient id="shirtG-${uid}" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#3b82f6"/>
+              <stop offset="100%" stop-color="#1d4ed8"/>
+            </linearGradient>
+            <linearGradient id="pantsG-${uid}" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#374151"/>
+              <stop offset="100%" stop-color="#1f2937"/>
+            </linearGradient>
+          </defs>
+
+          <!-- SHADOW -->
+          <ellipse cx="26" cy="98" rx="14" ry="3" fill="rgba(0,0,0,0.25)"/>
+
+          <!-- LEGS group -->
+          <g id="sp-legs-${uid}">
+            <!-- Left leg -->
+            <g id="sp-lleg-${uid}" style="transform-origin:26px 64px">
+              <rect x="18" y="64" width="9" height="22" rx="4" fill="url(#pantsG-${uid})"/>
+              <!-- Left shoe -->
+              <ellipse cx="21" cy="87" rx="6" ry="3.5" fill="#1a1a2e"/>
+              <rect x="16" y="84" width="10" height="5" rx="2.5" fill="#1a1a2e"/>
+            </g>
+            <!-- Right leg -->
+            <g id="sp-rleg-${uid}" style="transform-origin:26px 64px">
+              <rect x="25" y="64" width="9" height="22" rx="4" fill="url(#pantsG-${uid})"/>
+              <!-- Right shoe -->
+              <ellipse cx="31" cy="87" rx="6" ry="3.5" fill="#1a1a2e"/>
+              <rect x="26" y="84" width="10" height="5" rx="2.5" fill="#111827"/>
+            </g>
+          </g>
+
+          <!-- TORSO (shirt) -->
+          <g id="sp-body-${uid}" style="transform-origin:26px 46px">
+            <rect x="16" y="36" width="20" height="30" rx="5" fill="url(#shirtG-${uid})"/>
+            <!-- Collar -->
+            <polygon points="22,36 26,42 30,36" fill="#93c5fd" opacity="0.6"/>
+            <!-- Shirt pocket -->
+            <rect x="18" y="40" width="6" height="5" rx="1.5" fill="rgba(255,255,255,0.15)"/>
+          </g>
+
+          <!-- LEFT ARM group -->
+          <g id="sp-larm-${uid}" style="transform-origin:17px 39px; transform:rotate(35deg)">
+            <rect x="9" y="38" width="8" height="20" rx="4" fill="url(#shirtG-${uid})"/>
+            <!-- Left hand -->
+            <ellipse cx="13" cy="59" rx="4" ry="3.5" fill="url(#skinG-${uid})"/>
+          </g>
+
+          <!-- RIGHT ARM group (reaches door handle) -->
+          <g id="sp-rarm-${uid}" style="transform-origin:35px 39px; transform:rotate(-35deg)">
+            <rect x="35" y="38" width="8" height="20" rx="4" fill="url(#shirtG-${uid})"/>
+            <!-- Right hand -->
+            <ellipse cx="39" cy="59" rx="4" ry="3.5" fill="url(#skinG-${uid})"/>
+          </g>
+
+          <!-- HEAD -->
+          <g id="sp-head-${uid}">
+            <!-- Neck -->
+            <rect x="23" y="26" width="6" height="11" rx="3" fill="url(#skinG-${uid})"/>
+            <!-- Head shape -->
+            <ellipse cx="26" cy="20" rx="11" ry="13" fill="url(#skinG-${uid})"/>
+            <!-- Hair -->
+            <path d="M15 16 Q16 6 26 5 Q36 6 37 16 Q33 10 26 10 Q19 10 15 16Z" fill="#2d1b00"/>
+            <rect x="15" y="12" width="22" height="5" rx="2" fill="#2d1b00"/>
+            <!-- Eyes -->
+            <ellipse id="sp-leye-${uid}" cx="21" cy="19" rx="2.5" ry="2.5" fill="white"/>
+            <ellipse cx="21" cy="19" rx="1.4" ry="1.6" fill="#1a0a00"/>
+            <circle cx="21.6" cy="18.3" r="0.5" fill="white"/>
+            <ellipse id="sp-reye-${uid}" cx="31" cy="19" rx="2.5" ry="2.5" fill="white"/>
+            <ellipse cx="31" cy="19" rx="1.4" ry="1.6" fill="#1a0a00"/>
+            <circle cx="31.6" cy="18.3" r="0.5" fill="white"/>
+            <!-- Eyebrows -->
+            <path id="sp-lbrow-${uid}" d="M19 15.5 Q21 14.5 23 15.5" fill="none" stroke="#2d1b00" stroke-width="1.5" stroke-linecap="round"/>
+            <path id="sp-rbrow-${uid}" d="M29 15.5 Q31 14.5 33 15.5" fill="none" stroke="#2d1b00" stroke-width="1.5" stroke-linecap="round"/>
+            <!-- Nose -->
+            <path d="M25 21 Q26 24 27 21" fill="none" stroke="#c8855a" stroke-width="1.2" stroke-linecap="round"/>
+            <!-- Mouth -->
+            <path id="sp-mouth-${uid}" d="M22 26.5 Q26 29.5 30 26.5" fill="none" stroke="#b05c3a" stroke-width="1.6" stroke-linecap="round"/>
+          </g>
+
+          <!-- STOP BADGE (hidden by default) -->
+          <g id="sp-stop-${uid}" style="display:none;opacity:0;transition:opacity 0.3s">
+            <circle cx="44" cy="14" r="10" fill="#ef4444" opacity="0.92"/>
+            <text x="44" y="19" text-anchor="middle" font-size="11" fill="white" font-weight="900">✋</text>
           </g>
         </svg>
       </div>
@@ -1220,82 +1315,127 @@ function buildGarageDoorSVG(doorId, pfx) {
 
 
 // ════════════════════════════════════════════
-// STICK PERSON ANIMATION
+// PERSON CHARACTER ANIMATION
 // ════════════════════════════════════════════
 function animateStickPerson(doorId, pfx, state) {
-  const uid  = `${pfx}-${doorId}`;
-  const sp   = document.getElementById(`sp-${uid}`);
-  if (!sp) return; // only swing doors have it
+  const uid   = `${pfx}-${doorId}`;
+  const sp    = document.getElementById(`sp-${uid}`);
+  if (!sp) return;
 
-  const spSvg  = document.getElementById(`sp-svg-${uid}`);
-  const larm   = document.getElementById(`sp-larm-${uid}`);
-  const rarm   = document.getElementById(`sp-rarm-${uid}`);
-  const lleg   = document.getElementById(`sp-lleg-${uid}`);
-  const rleg   = document.getElementById(`sp-rleg-${uid}`);
-  const face   = document.getElementById(`sp-face-${uid}`);
-  const stopSign = document.getElementById(`sp-stop-${uid}`);
+  const rarm  = document.getElementById(`sp-rarm-${uid}`);
+  const larm  = document.getElementById(`sp-larm-${uid}`);
+  const lleg  = document.getElementById(`sp-lleg-${uid}`);
+  const rleg  = document.getElementById(`sp-rleg-${uid}`);
+  const mouth = document.getElementById(`sp-mouth-${uid}`);
+  const lbrow = document.getElementById(`sp-lbrow-${uid}`);
+  const rbrow = document.getElementById(`sp-rbrow-${uid}`);
+  const stopB = document.getElementById(`sp-stop-${uid}`);
+  const head  = document.getElementById(`sp-head-${uid}`);
+  const body  = document.getElementById(`sp-body-${uid}`);
 
-  // Reset inline animation
-  sp.style.animation = '';
-  if(stopSign) stopSign.style.display = 'none';
+  // Helper: reset all animations
+  const resetAnims = () => {
+    [sp, rarm, larm, lleg, rleg, head, body].forEach(el => {
+      if(el) { el.style.animation = ''; }
+    });
+    if(stopB) { stopB.style.display='none'; stopB.style.opacity='0'; }
+  };
+
+  // Helper: set expression
+  const setFace = (type) => {
+    if (!mouth || !lbrow || !rbrow) return;
+    if (type === 'happy') {
+      mouth.setAttribute('d','M22 26.5 Q26 29.5 30 26.5');
+      lbrow.setAttribute('d','M19 15.5 Q21 14.5 23 15.5');
+      rbrow.setAttribute('d','M29 15.5 Q31 14.5 33 15.5');
+    } else if (type === 'effort') {
+      mouth.setAttribute('d','M22 27 Q26 28 30 27');
+      lbrow.setAttribute('d','M19 16 Q21 14 23 15');
+      rbrow.setAttribute('d','M29 15 Q31 14 33 16');
+    } else if (type === 'stop') {
+      mouth.setAttribute('d','M22 28 Q26 26.5 30 28');
+      lbrow.setAttribute('d','M19 14 Q21 16 23 14.5');
+      rbrow.setAttribute('d','M29 14.5 Q31 16 33 14');
+    } else { // neutral
+      mouth.setAttribute('d','M22 27.5 Q26 28.5 30 27.5');
+      lbrow.setAttribute('d','M19 15.5 Q21 14.5 23 15.5');
+      rbrow.setAttribute('d','M29 15.5 Q31 14.5 33 15.5');
+    }
+  };
+
+  resetAnims();
 
   if (state === 'opening') {
-    // Appear + walk toward door
+    // Walk in from right + push door
     sp.classList.remove('hidden');
-    sp.style.animation = 'walkIn 0.6s ease-out forwards';
-    // arm pushing door
-    if(rarm) rarm.setAttribute('x2','40');
-    if(rarm) rarm.setAttribute('y2','22');
-    if(larm) larm.setAttribute('x2','8');
-    if(larm) larm.setAttribute('y2','28');
-    // legs walking
-    if(lleg) lleg.setAttribute('x2','10');
-    if(rleg) rleg.setAttribute('x2','34');
-    // happy face
-    if(face) face.setAttribute('d','M18.5 12 Q22 15.5 25.5 12');
+    sp.style.animation = 'personWalkIn 0.55s cubic-bezier(0.4,0,0.2,1) forwards';
+    setFace('effort');
+    // Arms: right arm forward pushing
+    if(rarm) rarm.style.transform = 'rotate(-65deg)';
+    if(larm) larm.style.transform = 'rotate(20deg)';
+    // Legs walking
+    if(lleg) lleg.style.animation = 'legWalkL 0.45s ease-in-out infinite';
+    if(rleg) rleg.style.animation = 'legWalkR 0.45s ease-in-out infinite';
+    setTimeout(() => {
+      if(rarm) rarm.style.animation = 'armPush 0.6s ease-out forwards';
+      if(larm) larm.style.transform = 'rotate(15deg)';
+    }, 400);
 
   } else if (state === 'open') {
-    // Standing beside open door
     sp.classList.remove('hidden');
-    sp.style.animation = '';
-    sp.style.transform = 'translateX(0)';
-    if(rarm) { rarm.setAttribute('x2','36'); rarm.setAttribute('y2','30'); }
-    if(larm) { larm.setAttribute('x2','10'); larm.setAttribute('y2','34'); }
-    if(lleg) lleg.setAttribute('x2','13');
-    if(rleg) rleg.setAttribute('x2','31');
+    sp.style.animation = 'personBob 2s ease-in-out infinite';
+    setFace('happy');
+    // Standing relaxed — arms at sides
+    if(rarm) { rarm.style.animation=''; rarm.style.transform='rotate(-20deg)'; }
+    if(larm) { larm.style.animation=''; larm.style.transform='rotate(20deg)'; }
+    if(lleg) { lleg.style.animation=''; lleg.style.transform='rotate(0deg)'; }
+    if(rleg) { rleg.style.animation=''; rleg.style.transform='rotate(0deg)'; }
 
   } else if (state === 'closing') {
-    // Pull door shut
     sp.classList.remove('hidden');
-    sp.style.animation = '';
-    if(rarm) { rarm.setAttribute('x2','38'); rarm.setAttribute('y2','24'); }
-    if(larm) { larm.setAttribute('x2','8'); larm.setAttribute('y2','32'); }
-    if(lleg) lleg.setAttribute('x2','14');
-    if(rleg) rleg.setAttribute('x2','30');
-    // neutral face while closing
-    if(face) face.setAttribute('d','M19 13 Q22 13 25 13');
+    setFace('effort');
+    // Right arm pulling door closed
+    if(rarm) { rarm.style.animation = 'armPull 0.8s ease-in-out forwards'; }
+    if(larm) { larm.style.transform = 'rotate(30deg)'; }
+    // Slight lean back as pulling
+    if(body) body.style.transform = 'rotate(-5deg)';
+    if(head) head.style.transform = 'translateX(-2px)';
+    if(lleg) { lleg.style.animation=''; lleg.style.transform='rotate(8deg)'; }
+    if(rleg) { rleg.style.animation=''; rleg.style.transform='rotate(-8deg)'; }
 
   } else if (state === 'stopped') {
-    // STOP gesture — show hand sign, freeze
     sp.classList.remove('hidden');
-    sp.style.animation = 'stopGesture 0.4s ease-out';
-    if(stopSign) stopSign.style.display = 'block';
-    // raise both arms
-    if(rarm) { rarm.setAttribute('x2','38'); rarm.setAttribute('y2','18'); }
-    if(larm) { larm.setAttribute('x2','8'); larm.setAttribute('y2','18'); }
-    // surprised face
-    if(face) face.setAttribute('d','M19 13 Q22 11 25 13');
+    sp.style.animation = 'personStop 0.4s ease-out forwards';
+    setFace('stop');
+    // Both arms raised — STOP gesture
+    if(rarm) { rarm.style.animation=''; rarm.style.transform='rotate(-90deg)'; }
+    if(larm) { larm.style.animation=''; larm.style.transform='rotate(90deg)'; }
+    if(body) body.style.transform = 'rotate(0deg)';
+    if(head) head.style.transform = 'translateX(0)';
+    if(lleg) { lleg.style.animation=''; lleg.style.transform='rotate(0deg)'; }
+    if(rleg) { rleg.style.animation=''; rleg.style.transform='rotate(0deg)'; }
+    // Show stop badge
+    if(stopB) {
+      stopB.style.display = 'block';
+      setTimeout(()=>{ stopB.style.opacity='1'; }, 50);
+    }
 
   } else {
-    // closed — walk away, then hide
+    // closed — walk away then hide
     sp.classList.remove('hidden');
-    sp.style.animation = 'walkOut 0.5s ease-in forwards';
-    if(rarm) { rarm.setAttribute('x2','36'); rarm.setAttribute('y2','30'); }
-    if(lleg) lleg.setAttribute('x2','13');
-    if(rleg) rleg.setAttribute('x2','31');
-    // sad face
-    if(face) face.setAttribute('d','M18.5 14 Q22 11 25.5 14');
-    setTimeout(()=>{ sp.classList.add('hidden'); sp.style.animation=''; }, 600);
+    setFace('neutral');
+    if(body) body.style.transform = 'rotate(0deg)';
+    if(head) head.style.transform = 'translateX(0)';
+    if(rarm) { rarm.style.animation=''; rarm.style.transform='rotate(-20deg)'; }
+    if(larm) { larm.style.animation=''; larm.style.transform='rotate(20deg)'; }
+    if(lleg) lleg.style.animation = 'legWalkL 0.4s ease-in-out infinite';
+    if(rleg) rleg.style.animation = 'legWalkR 0.4s ease-in-out infinite';
+    sp.style.animation = 'personWalkOut 0.55s ease-in forwards';
+    setTimeout(() => {
+      sp.classList.add('hidden');
+      sp.style.animation = '';
+      [rarm,larm,lleg,rleg].forEach(el => { if(el) el.style.animation=''; });
+    }, 600);
   }
 }
 
@@ -1609,7 +1749,7 @@ function userDoorCard(d,inst){
     <div class="door-btns">
       <button class="dbtn db-open" id="u-op-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','open','u')"><span class="ic">🟢</span>فتح الباب</button>
       <button class="dbtn db-close" id="u-cl-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','close','u')"><span class="ic">🔴</span>غلق الباب</button>
-      <button class="dbtn db-stop" id="u-st-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','stop','u')"><span class="ic">🟡</span>\${tr('stop2')}</button>
+      <button class="dbtn db-stop" id="u-st-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','stop','u')"><span class="ic">🟡</span>${tr('stop2')}</button>
       <button class="dbtn db-auto" id="u-au-${d.id}" onclick="autoTimer('${d.id}','${inst.id}','u')">
         <div class="cring" id="cr-u-${d.id}"><svg width="38" height="38" viewBox="0 0 38 38"><circle cx="19" cy="19" r="16"/><circle class="cp" id="cp-u-${d.id}" cx="19" cy="19" r="16" style="stroke-dasharray:100;stroke-dashoffset:0"/></svg><div class="cn" id="cn-u-${d.id}">30</div></div>
         <span class="ic" id="au-ic-u-${d.id}">${tr("autoTimer")}</span><span id="au-lb-u-${d.id}">${tr("autoTimer")}</span>
@@ -2086,9 +2226,9 @@ function renderAdminDoors(inst){
         ${isSuperCtx?`<button class="btn-sm btn-danger" onclick="delDoor('${d.id}')">حذف</button>`:''}
       </div>
       <div class="door-btns" style="margin-bottom:.75rem">
-        <button class="dbtn db-open" id="a-op-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','open','a')"><span class="ic">🟢</span>\${tr('open')}</button>
-        <button class="dbtn db-close" id="a-cl-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','close','a')"><span class="ic">🔴</span>\${tr('close2')}</button>
-        <button class="dbtn db-stop" id="a-st-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','stop','a')"><span class="ic">🟡</span>\${tr('stop2')}</button>
+        <button class="dbtn db-open" id="a-op-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','open','a')"><span class="ic">🟢</span>${tr('open')}</button>
+        <button class="dbtn db-close" id="a-cl-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','close','a')"><span class="ic">🔴</span>${tr('close2')}</button>
+        <button class="dbtn db-stop" id="a-st-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','stop','a')"><span class="ic">🟡</span>${tr('stop2')}</button>
         <button class="dbtn db-auto" id="a-au-${d.id}" onclick="autoTimer('${d.id}','${inst.id}','a')">
           <div class="cring" id="cr-a-${d.id}"><svg width="38" height="38" viewBox="0 0 38 38"><circle cx="19" cy="19" r="16"/><circle class="cp" id="cp-a-${d.id}" cx="19" cy="19" r="16" style="stroke-dasharray:100;stroke-dashoffset:0"/></svg><div class="cn" id="cn-a-${d.id}">30</div></div>
           <span class="ic" id="au-ic-a-${d.id}">⏱️</span><span id="au-lb-a-${d.id}">${tr('autoTimer')}</span>
