@@ -498,6 +498,8 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   0%,100% { transform: scaleY(1); }
   50%     { transform: scaleY(1.02); }
 }
+/* Fix SVG transform-origin */
+#sp-svg-dummy * { transform-box: fill-box; transform-origin: center; }
 
 </style>
 </head>
@@ -877,7 +879,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 </div>
 <div class="modal-ov" id="m-add-door">
   <div class="modal">
-    <h3 class="modal-title">إضافة باب جديد</h3>
+    <h3 class="modal-title" id="add-door-modal-title">إضافة باب جديد</h3>
     <div class="fg"><label>اسم الباب</label><input id="nd-name" placeholder="الباب الرئيسي"></div>
     <div class="fg"><label>Device ID (Tuya)</label><input id="nd-devid" placeholder="bf7c670914391fc80cwayk"></div>
     <div class="fg">
@@ -1197,7 +1199,7 @@ function buildSwingDoorSVG(doorId, pfx) {
     </div>
     <div class="door-status-label closed-lbl" id="ds-lbl-${uid}">
       <span id="ds-ic-${uid}">🔒</span>
-      <span id="ds-txt-${uid}">مغلق</span>
+      <span id="ds-txt-${uid}">${tr("doorClosed")}</span>
     </div>
   </div>`;
 }
@@ -1252,7 +1254,7 @@ function buildSlidingDoorSVG(doorId, pfx) {
     </div>
     <div class="door-status-label closed-lbl" id="ds-lbl-${uid}">
       <span id="ds-ic-${uid}">🔒</span>
-      <span id="ds-txt-${uid}">مغلق</span>
+      <span id="ds-txt-${uid}">${tr("doorClosed")}</span>
     </div>
   </div>`;
 }
@@ -1308,7 +1310,7 @@ function buildGarageDoorSVG(doorId, pfx) {
     </div>
     <div class="door-status-label closed-lbl" id="ds-lbl-${uid}">
       <span id="ds-ic-${uid}">🔒</span>
-      <span id="ds-txt-${uid}">مغلق</span>
+      <span id="ds-txt-${uid}">${tr("doorClosed")}</span>
     </div>
   </div>`;
 }
@@ -1330,111 +1332,137 @@ function animateStickPerson(doorId, pfx, state) {
   const lbrow = document.getElementById(`sp-lbrow-${uid}`);
   const rbrow = document.getElementById(`sp-rbrow-${uid}`);
   const stopB = document.getElementById(`sp-stop-${uid}`);
-  const head  = document.getElementById(`sp-head-${uid}`);
-  const body  = document.getElementById(`sp-body-${uid}`);
 
-  // Helper: reset all animations
-  const resetAnims = () => {
-    [sp, rarm, larm, lleg, rleg, head, body].forEach(el => {
-      if(el) { el.style.animation = ''; }
-    });
+  // SVG transform helper: rotate around pivot point
+  // rotate(deg, cx, cy) — correct SVG syntax
+  const setArm  = (el, deg, cx, cy) => el && el.setAttribute('transform', `rotate(${deg},${cx},${cy})`);
+  const setLegT = (el, deg, cx, cy) => el && el.setAttribute('transform', `rotate(${deg},${cx},${cy})`);
+
+  // Arm pivots (top of arm group)
+  const LAX=17, LAY=38;  // left arm pivot
+  const RAX=43, RAY=38;  // right arm pivot
+  // Leg pivots (hip joint)
+  const LLX=22, LLY=64;  // left leg pivot
+  const RLX=30, RLY=64;  // right leg pivot
+
+  const resetAll = () => {
+    sp.style.animation = '';
     if(stopB) { stopB.style.display='none'; stopB.style.opacity='0'; }
+    setArm(larm, 0, LAX, LAY);
+    setArm(rarm, 0, RAX, RAY);
+    setLegT(lleg, 0, LLX, LLY);
+    setLegT(rleg, 0, RLX, RLY);
   };
 
-  // Helper: set expression
   const setFace = (type) => {
     if (!mouth || !lbrow || !rbrow) return;
-    if (type === 'happy') {
-      mouth.setAttribute('d','M22 26.5 Q26 29.5 30 26.5');
-      lbrow.setAttribute('d','M19 15.5 Q21 14.5 23 15.5');
-      rbrow.setAttribute('d','M29 15.5 Q31 14.5 33 15.5');
-    } else if (type === 'effort') {
-      mouth.setAttribute('d','M22 27 Q26 28 30 27');
-      lbrow.setAttribute('d','M19 16 Q21 14 23 15');
-      rbrow.setAttribute('d','M29 15 Q31 14 33 16');
-    } else if (type === 'stop') {
-      mouth.setAttribute('d','M22 28 Q26 26.5 30 28');
-      lbrow.setAttribute('d','M19 14 Q21 16 23 14.5');
-      rbrow.setAttribute('d','M29 14.5 Q31 16 33 14');
-    } else { // neutral
-      mouth.setAttribute('d','M22 27.5 Q26 28.5 30 27.5');
-      lbrow.setAttribute('d','M19 15.5 Q21 14.5 23 15.5');
-      rbrow.setAttribute('d','M29 15.5 Q31 14.5 33 15.5');
-    }
+    const faces = {
+      happy:   { m:'M22 26.5 Q26 29.5 30 26.5', lb:'M19 15.5 Q21 14.5 23 15.5', rb:'M29 15.5 Q31 14.5 33 15.5' },
+      effort:  { m:'M22 27 Q26 28 30 27',        lb:'M19 16 Q21 14 23 15',       rb:'M29 15 Q31 14 33 16' },
+      stop:    { m:'M22 28 Q26 26 30 28',         lb:'M19 14 Q21 17 23 14.5',    rb:'M29 14.5 Q31 17 33 14' },
+      neutral: { m:'M22 27.5 Q26 28.5 30 27.5',  lb:'M19 15.5 Q21 14.5 23 15.5', rb:'M29 15.5 Q31 14.5 33 15.5' },
+    };
+    const f = faces[type] || faces.neutral;
+    mouth.setAttribute('d', f.m);
+    lbrow.setAttribute('d', f.lb);
+    rbrow.setAttribute('d', f.rb);
   };
 
-  resetAnims();
+  // Animate legs walking with CSS keyframes on transform attribute
+  const startWalk = () => {
+    let step = 0;
+    return setInterval(() => {
+      step++;
+      const a = Math.sin(step * 0.4) * 22;
+      setLegT(lleg,  a, LLX, LLY);
+      setLegT(rleg, -a, RLX, RLY);
+    }, 40);
+  };
+
+  let walkInterval = sp._walkInterval || null;
+  const stopWalk = () => {
+    if(walkInterval) clearInterval(walkInterval);
+    walkInterval = null; sp._walkInterval = null;
+    setLegT(lleg, 0, LLX, LLY);
+    setLegT(rleg, 0, RLX, RLY);
+  };
+
+  resetAll();
+  if(walkInterval) clearInterval(walkInterval);
 
   if (state === 'opening') {
-    // Walk in from right + push door
     sp.classList.remove('hidden');
     sp.style.animation = 'personWalkIn 0.55s cubic-bezier(0.4,0,0.2,1) forwards';
     setFace('effort');
-    // Arms: right arm forward pushing
-    if(rarm) rarm.style.transform = 'rotate(-65deg)';
-    if(larm) larm.style.transform = 'rotate(20deg)';
-    // Legs walking
-    if(lleg) lleg.style.animation = 'legWalkL 0.45s ease-in-out infinite';
-    if(rleg) rleg.style.animation = 'legWalkR 0.45s ease-in-out infinite';
+    // Start leg walk loop
+    walkInterval = startWalk(); sp._walkInterval = walkInterval;
+    // Right arm reaches forward to push
+    setArm(rarm, -55, RAX, RAY);
+    setArm(larm,  20, LAX, LAY);
+    // After arriving: push gesture
     setTimeout(() => {
-      if(rarm) rarm.style.animation = 'armPush 0.6s ease-out forwards';
-      if(larm) larm.style.transform = 'rotate(15deg)';
-    }, 400);
+      stopWalk();
+      // Push arm animation: extend then hold
+      let pushStep = 0;
+      const pushAnim = setInterval(() => {
+        pushStep++;
+        const a = -55 - Math.min(pushStep * 3, 20);
+        setArm(rarm, a, RAX, RAY);
+        if(pushStep >= 8) clearInterval(pushAnim);
+      }, 30);
+    }, 500);
 
   } else if (state === 'open') {
     sp.classList.remove('hidden');
+    stopWalk();
     sp.style.animation = 'personBob 2s ease-in-out infinite';
     setFace('happy');
-    // Standing relaxed — arms at sides
-    if(rarm) { rarm.style.animation=''; rarm.style.transform='rotate(-20deg)'; }
-    if(larm) { larm.style.animation=''; larm.style.transform='rotate(20deg)'; }
-    if(lleg) { lleg.style.animation=''; lleg.style.transform='rotate(0deg)'; }
-    if(rleg) { rleg.style.animation=''; rleg.style.transform='rotate(0deg)'; }
+    setArm(larm, 20, LAX, LAY);
+    setArm(rarm,-20, RAX, RAY);
 
   } else if (state === 'closing') {
     sp.classList.remove('hidden');
+    stopWalk();
     setFace('effort');
-    // Right arm pulling door closed
-    if(rarm) { rarm.style.animation = 'armPull 0.8s ease-in-out forwards'; }
-    if(larm) { larm.style.transform = 'rotate(30deg)'; }
-    // Slight lean back as pulling
-    if(body) body.style.transform = 'rotate(-5deg)';
-    if(head) head.style.transform = 'translateX(-2px)';
-    if(lleg) { lleg.style.animation=''; lleg.style.transform='rotate(8deg)'; }
-    if(rleg) { rleg.style.animation=''; rleg.style.transform='rotate(-8deg)'; }
+    // Right arm: swing to pull door — animate with interval
+    let pullStep = 0;
+    const pullAnim = setInterval(() => {
+      pullStep++;
+      const a = -20 + pullStep * 5; // from -20 to +20
+      setArm(rarm, Math.min(a, 25), RAX, RAY);
+      if(pullStep >= 10) clearInterval(pullAnim);
+    }, 50);
+    setArm(larm, 35, LAX, LAY);
+    setLegT(lleg,  10, LLX, LLY);
+    setLegT(rleg, -10, RLX, RLY);
 
   } else if (state === 'stopped') {
     sp.classList.remove('hidden');
-    sp.style.animation = 'personStop 0.4s ease-out forwards';
+    stopWalk();
+    sp.style.animation = 'personStop 0.35s ease-out';
     setFace('stop');
-    // Both arms raised — STOP gesture
-    if(rarm) { rarm.style.animation=''; rarm.style.transform='rotate(-90deg)'; }
-    if(larm) { larm.style.animation=''; larm.style.transform='rotate(90deg)'; }
-    if(body) body.style.transform = 'rotate(0deg)';
-    if(head) head.style.transform = 'translateX(0)';
-    if(lleg) { lleg.style.animation=''; lleg.style.transform='rotate(0deg)'; }
-    if(rleg) { rleg.style.animation=''; rleg.style.transform='rotate(0deg)'; }
-    // Show stop badge
+    // Both arms up — STOP
+    setArm(larm, -90, LAX, LAY);
+    setArm(rarm,  90, RAX, RAY);
+    setLegT(lleg, 0, LLX, LLY);
+    setLegT(rleg, 0, RLX, RLY);
     if(stopB) {
       stopB.style.display = 'block';
-      setTimeout(()=>{ stopB.style.opacity='1'; }, 50);
+      setTimeout(()=>{ stopB.style.opacity='1'; }, 60);
     }
 
   } else {
-    // closed — walk away then hide
-    sp.classList.remove('hidden');
+    // closed → walk away → disappear
+    stopWalk();
     setFace('neutral');
-    if(body) body.style.transform = 'rotate(0deg)';
-    if(head) head.style.transform = 'translateX(0)';
-    if(rarm) { rarm.style.animation=''; rarm.style.transform='rotate(-20deg)'; }
-    if(larm) { larm.style.animation=''; larm.style.transform='rotate(20deg)'; }
-    if(lleg) lleg.style.animation = 'legWalkL 0.4s ease-in-out infinite';
-    if(rleg) rleg.style.animation = 'legWalkR 0.4s ease-in-out infinite';
+    setArm(larm, 20, LAX, LAY);
+    setArm(rarm,-20, RAX, RAY);
+    walkInterval = startWalk(); sp._walkInterval = walkInterval;
     sp.style.animation = 'personWalkOut 0.55s ease-in forwards';
     setTimeout(() => {
+      stopWalk();
       sp.classList.add('hidden');
       sp.style.animation = '';
-      [rarm,larm,lleg,rleg].forEach(el => { if(el) el.style.animation=''; });
     }, 600);
   }
 }
@@ -1468,70 +1496,70 @@ function animateDoor(doorId, pfx, toState) {
   if (dtype === 'sliding') {
     // ── Sliding animation ──
     if (toState === 'opening') {
-      setLbl('moving-lbl','⏳','يفتح...');
+      setLbl('moving-lbl','⏳',tr('doorOpening'));
       panel.style.transform = 'translateX(-82%)';
       setTimeout(()=>{ if(doorStates[uid]==='opening') animateDoor(doorId,pfx,'open'); },1300);
     } else if (toState === 'open') {
-      setLbl('open-lbl','🔓','مفتوح');
+      setLbl('open-lbl','🔓',tr('doorOpen'));
       panel.style.transform = 'translateX(-82%)';
     } else if (toState === 'closing') {
-      setLbl('moving-lbl','⏳','يغلق...');
+      setLbl('moving-lbl','⏳',tr('doorClosing'));
       panel.style.transform = 'translateX(0)';
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
     } else if (toState === 'stopped') {
-      setLbl('moving-lbl','⏸️','موقوف');
+      setLbl('moving-lbl','⏸️',tr('doorStopped'));
       // freeze current position
     } else {
-      setLbl('closed-lbl','🔒','مغلق');
+      setLbl('closed-lbl','🔒',tr('doorClosed'));
       panel.style.transform = 'translateX(0)';
     }
 
   } else if (dtype === 'garage') {
     // ── Garage animation ──
     if (toState === 'opening') {
-      setLbl('moving-lbl','⏳','يفتح...');
+      setLbl('moving-lbl','⏳',tr('doorOpening'));
       panel.style.transform = 'scaleY(0.08)';
       setTimeout(()=>{ if(doorStates[uid]==='opening') animateDoor(doorId,pfx,'open'); },1300);
     } else if (toState === 'open') {
-      setLbl('open-lbl','🔓','مفتوح');
+      setLbl('open-lbl','🔓',tr('doorOpen'));
       panel.style.transform = 'scaleY(0.08)';
     } else if (toState === 'closing') {
-      setLbl('moving-lbl','⏳','يغلق...');
+      setLbl('moving-lbl','⏳',tr('doorClosing'));
       panel.style.transform = 'scaleY(1)';
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
     } else if (toState === 'stopped') {
-      setLbl('moving-lbl','⏸️','موقوف');
+      setLbl('moving-lbl','⏸️',tr('doorStopped'));
       // freeze current position
     } else {
-      setLbl('closed-lbl','🔒','مغلق');
+      setLbl('closed-lbl','🔒',tr('doorClosed'));
       panel.style.transform = 'scaleY(1)';
     }
 
   } else {
     // ── Swing animation (default) ──
     if (toState === 'opening') {
-      setLbl('moving-lbl','⏳','يفتح...');
+      setLbl('moving-lbl','⏳',tr('doorOpening'));
       panel.style.transform='perspective(400px) rotateY(-70deg)';
       if(shadow) shadow.setAttribute('points','33,23 33,209 80,195 80,37');
       animateStickPerson(doorId, pfx, 'opening');
       setTimeout(()=>{ if(doorStates[uid]==='opening') animateDoor(doorId,pfx,'open'); },1300);
     } else if (toState === 'open') {
-      setLbl('open-lbl','🔓','مفتوح');
+      setLbl('open-lbl','🔓',tr('doorOpen'));
       panel.style.transform='perspective(400px) rotateY(-75deg)';
       if(shadow) shadow.setAttribute('points','33,23 33,209 85,200 85,32');
       animateStickPerson(doorId, pfx, 'open');
     } else if (toState === 'closing') {
-      setLbl('moving-lbl','⏳','يغلق...');
+      setLbl('moving-lbl','⏳',tr('doorClosing'));
       panel.style.transform='perspective(400px) rotateY(0deg)';
       if(shadow) shadow.setAttribute('points','33,23 33,209 33,209 33,23');
       animateStickPerson(doorId, pfx, 'closing');
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
     } else if (toState === 'stopped') {
-      setLbl('moving-lbl','⏸️','موقوف');
+      setLbl('moving-lbl','⏸️',tr('doorStopped'));
       animateStickPerson(doorId, pfx, 'stopped');
       // keep current transform — freeze in place
     } else {
-      setLbl('closed-lbl','🔒','مغلق');
+      setLbl('closed-lbl','🔒',tr('doorClosed'));
       panel.style.transform='perspective(400px) rotateY(0deg)';
       if(shadow) shadow.setAttribute('points','33,23 33,209 33,209 33,23');
       animateStickPerson(doorId, pfx, 'closed');
@@ -1695,7 +1723,7 @@ function doLogin(email,pass){
   const u=A.db.users.find(u=>u.email===email&&u.pw===pass);
   if(!u){toast('بيانات خاطئة','error');return;}
   if(u.status==='pending'){toast('حسابك في انتظار موافقة المدير','info');return;}
-  if(u.status==='frozen'){toast('حسابك موقوف','error');return;}
+  if(u.status==='frozen'){toast(tr('frozen')+' — '+tr('notConnected').split('⚠️')[0].trim(),'error');return;}
   A.user=u;
   if(u.role==='super')loadSuper();else if(u.role==='admin')loadAdmin();else loadUser();
 }
@@ -1745,10 +1773,10 @@ function loadUser(){
 }
 function userDoorCard(d,inst){
   return `<div class="door-card">
-    <div class="door-hdr"><div class="door-name">🚪 ${d.name}</div><span id="online-badge-${d.id}" class="${d.active?'badge-on':'badge-off'}">${d.active?'🟢 متصل':'🔴 غير متصل'}</span></div>
+    <div class="door-hdr"><div class="door-name">🚪 ${d.name}</div><span id="online-badge-${d.id}" class="${d.active?'badge-on':'badge-off'}">${d.active?tr('online'):tr('offline')}</span></div>
     <div class="door-btns">
-      <button class="dbtn db-open" id="u-op-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','open','u')"><span class="ic">🟢</span>فتح الباب</button>
-      <button class="dbtn db-close" id="u-cl-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','close','u')"><span class="ic">🔴</span>غلق الباب</button>
+      <button class="dbtn db-open" id="u-op-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','open','u')"><span class="ic">🟢</span>${tr("openDoorBtn")}</button>
+      <button class="dbtn db-close" id="u-cl-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','close','u')"><span class="ic">🔴</span>${tr("closeDoorBtn")}</button>
       <button class="dbtn db-stop" id="u-st-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','stop','u')"><span class="ic">🟡</span>${tr('stop2')}</button>
       <button class="dbtn db-auto" id="u-au-${d.id}" onclick="autoTimer('${d.id}','${inst.id}','u')">
         <div class="cring" id="cr-u-${d.id}"><svg width="38" height="38" viewBox="0 0 38 38"><circle cx="19" cy="19" r="16"/><circle class="cp" id="cp-u-${d.id}" cx="19" cy="19" r="16" style="stroke-dasharray:100;stroke-dashoffset:0"/></svg><div class="cn" id="cn-u-${d.id}">30</div></div>
@@ -2116,10 +2144,10 @@ async function fetchDoorStatus(door, pfx) {
     const badge = document.getElementById(`online-badge-${door.id}`);
     if (badge) {
       if (d.online === true) {
-        badge.textContent = '🟢 متصل';
+        badge.textContent = tr('online');
         badge.className = 'badge-on';
       } else if (d.online === false) {
-        badge.textContent = '🔴 غير متصل';
+        badge.textContent = tr('offline');
         badge.className = 'badge-off';
       }
     }
@@ -2198,13 +2226,13 @@ function logRcEvent(inst, door, action){
 // ════════════════════════════════════════════
 function loadAdmin(){
   const inst=myInst();
-  el('ad-inst-name').textContent=inst?.name||'لوحة التحكم';
+  el('ad-inst-name').textContent=inst?.name||tr('dashboard');
   renderAdminUsers(inst);renderAdminDoors(inst);renderAlerts(inst);renderSch(inst);renderHist(inst);
   renderPerDoorGps(inst);
   renderInstHero(inst, 'admin');
   // Show add/manage door btn only for super admin
   const addWrap = el('add-door-btn-wrap');
-  if(addWrap) addWrap.innerHTML = A.user?.role==='super' ? `<button class="btn-sm" onclick="openModal('m-add-door')">+ إضافة باب</button>` : '';
+  if(addWrap) addWrap.innerHTML = A.user?.role==='super' ? `<button class="btn-sm" onclick="openModal('m-add-door')">${tr('addDoor')}</button>` : '';
   showPage('admin-dash');
 }
 
@@ -2221,9 +2249,9 @@ function renderAdminDoors(inst){
             <span id="online-badge-${d.id}" class="badge-off" style="font-size:.72rem">⏳ جاري...</span>
             ${isSuperCtx?`<span style="background:rgba(129,140,248,.12);color:var(--purple);border:1px solid rgba(129,140,248,.25);border-radius:99px;padding:.15rem .5rem;font-size:.65rem;font-weight:700">${d.type==='sliding'?'↔️ انزلاقي':d.type==='garage'?'🏠 مرآب':'🚪 عادي'}</span>`:''}
           </div>
-          ${isSuperCtx?`<div style="font-size:.72rem;color:var(--text2);margin-top:.2rem">${d.devId?'ID: '+d.devId.slice(0,16)+'…':'⚠️ لم يُضَف Device ID'}</div>`:''}
+          ${isSuperCtx?`<div style="font-size:.72rem;color:var(--text2);margin-top:.2rem">${d.devId?'ID: '+d.devId.slice(0,16)+'…':tr('notConnected')}</div>`:''}
         </div>
-        ${isSuperCtx?`<button class="btn-sm btn-danger" onclick="delDoor('${d.id}')">حذف</button>`:''}
+        ${isSuperCtx?`<button class="btn-sm btn-danger" onclick="delDoor('${d.id}')">${tr("deleteDoor")}</button>`:''}
       </div>
       <div class="door-btns" style="margin-bottom:.75rem">
         <button class="dbtn db-open" id="a-op-${d.id}" onclick="ctrlDoor('${d.id}','${inst.id}','open','a')"><span class="ic">🟢</span>${tr('open')}</button>
@@ -2236,7 +2264,7 @@ function renderAdminDoors(inst){
       </div>
       ${buildDoorSVG(d.id,'a',d.type)}
       <button onclick="showDoorHist('${d.id}','${inst.id}')" style="width:100%;padding:.65rem;margin-top:.5rem;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:12px;color:var(--accent);font-family:Cairo,sans-serif;font-size:.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;transition:all .2s" onmouseover="this.style.background='rgba(59,130,246,.15)'" onmouseout="this.style.background='rgba(59,130,246,.08)'">
-        📋 عرض سجل الباب
+        ${tr("viewLog")}
       </button>
     </div>`).join('');
   // ابدأ الـ polling لكل باب (RC sync)
@@ -2264,7 +2292,7 @@ function renderAdminUsers(inst){
   </div>`).join('');
   el('admin-user-list').innerHTML=rest.map(u=>`<div class="user-item">
     <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}</div></div></div>
-    <span class="bdg ${u.status==='frozen'?'bdg-frozen':'bdg-active'}">${u.status==='frozen'?'موقوف':'نشط'}</span></div>
+    <span class="bdg ${u.status==='frozen'?'bdg-frozen':'bdg-active'}">${u.status==='frozen'?tr('frozen'):tr('active')}</span></div>
     ${u.note ? `<div style="display:flex;align-items:flex-start;gap:.4rem;background:rgba(129,140,248,.07);border:1px solid rgba(129,140,248,.2);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;color:var(--text2);margin-bottom:.5rem"><span style="font-size:.85rem;flex-shrink:0">📝</span><span>${u.note}</span></div>` : ''}
     <div class="ui-actions">
       <button class="btn-sm" onclick="showHist('${u.id}')">📋</button>
@@ -2764,7 +2792,7 @@ function renderInsts(){
         <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem">
           <div style="flex:1;min-width:0">
             <div style="font-size:.82rem;font-weight:700;color:var(--text)">🚪 ${d.name}</div>
-            <div style="font-size:.68rem;color:var(--text2);margin-top:.1rem">${d.devId?'ID: '+d.devId.slice(0,14)+'…':'⚠️ لم يُضَف Device ID'}</div>
+            <div style="font-size:.68rem;color:var(--text2);margin-top:.1rem">${d.devId?'ID: '+d.devId.slice(0,14)+'…':tr('notConnected')}</div>
           </div>
           <button onclick="showDoorHistSuper('${d.id}','${inst.id}')" style="padding:.3rem .5rem;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-family:Cairo,sans-serif;font-size:.72rem;cursor:pointer" title="سجل الباب">📋</button>
           <button onclick="editDoorModal('${d.id}','${inst.id}')" style="padding:.3rem .5rem;background:var(--accent);border:none;border-radius:6px;color:#fff;font-family:Cairo,sans-serif;font-size:.72rem;font-weight:700;cursor:pointer" title="تعديل">✏️</button>
@@ -2781,7 +2809,7 @@ function renderInsts(){
         <div><div class="inst-name">🏫 ${inst.name}</div><div class="inst-meta">${inst.doors.length} باب | GPS: ${inst.gps||30}م</div></div>
         <div style="display:flex;gap:.4rem">
           <button class="btn-sm" onclick="editInstModal('${inst.id}')">✏️ تعديل</button>
-          <button class="btn-sm btn-danger" onclick="delInst('${inst.id}')">حذف</button>
+          <button class="btn-sm btn-danger" onclick="delInst('${inst.id}')">${tr("deleteDoor")}</button>
         </div>
       </div>
       <div class="inst-stats">
@@ -2817,7 +2845,7 @@ function renderAllUsers(){
   el('all-user-list').innerHTML=users.map(u=>{
     const inst=getInst(u.instId);
     const stBdg=u.status==='pending'?'bdg-pend':u.status==='frozen'?'bdg-frozen':u.role==='admin'?'bdg-admin':'bdg-active';
-    const stTxt=u.status==='pending'?'انتظار':u.status==='frozen'?'موقوف':u.role==='admin'?'مدير':'نشط';
+    const stTxt=u.status==='pending'?'انتظار':u.status==='frozen'?tr('frozen'):u.role==='admin'?'مدير':'نشط';
     return `<div class="user-item">
       <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}${inst?' · '+inst.name:''}</div></div></div><span class="bdg ${stBdg}">${stTxt}</span></div>
       <div class="ui-actions">
@@ -3077,8 +3105,12 @@ const TR = {
     lastSeen:'آخر تحديث', distance:'المسافة', institute2:'المؤسسة',
     // واجهة المستخدم
     openDoor:'فتح الباب', closeDoor:'غلق الباب', stopDoor:'إيقاف', autoTimer:'فتح 40ث',
-    doorOpen:'مفتوح', doorClosed:'مغلق', doorMoving:'يتحرك...',
-    online:'🟢 متصل', offline:'🔴 غير متصل', checking:'⏳ جاري...',
+    doorOpen:'مفتوح', doorClosed:'مغلق', doorMoving:'يتحرك...', doorStopped:'⏸️ موقوف',
+    doorOpening:'يفتح...', doorClosing:'يغلق...', doorStopping:'إيقاف...',
+    online:tr('online'), offline:tr('offline'), checking:tr('checking'),
+    addDoor:tr('addDoor'), viewLog:'${tr("viewLog")}', deleteDoor:'حذف',
+    doorAvailable:tr('doorAvailable'), adminRole:'مدير المؤسسة', dashboard:'لوحة التحكم',
+    notConnected:tr('notConnected'), openDoorBtn:'فتح الباب', closeDoorBtn:'غلق الباب',
     // تبويبات
     tabDoors:'🚪 الأبواب', tabUsers:'👥 المستخدمون', tabStats:'📊 الإحصائيات',
     tabAlerts:'🚨 التنبيهات', tabSchedule:'⏰ الجدول', tabSettings:'⚙️ الإعدادات', tabHistory:'📋 السجل',
@@ -3090,7 +3122,7 @@ const TR = {
     failOpen:'فشل في فتح الباب', failClose:'فشل في غلق الباب',
     autoOpened:'✅ تم فتح الباب — سيغلق بعد 40 ثانية',
     autoClosed:'🔒 تم غلق الباب تلقائياً',
-    availableDoors:'الأبواب المتاحة',
+    availableDoors:tr('doorAvailable'),
     // مصادقة
     login:'🔐 دخول', register:'✅ إنشاء الحساب',
     emailLabel:'البريد الإلكتروني', passLabel:'كلمة المرور',
@@ -3108,8 +3140,12 @@ const TR = {
     lastSeen:'Dernière mise à jour', distance:'Distance', institute2:'Établissement',
     // interface
     openDoor:'Ouvrir', closeDoor:'Fermer', stopDoor:'Arrêter', autoTimer:'Auto 40s',
-    doorOpen:'Ouvert', doorClosed:'Fermé', doorMoving:'En mouvement...',
+    doorOpen:'Ouvert', doorClosed:'Fermé', doorMoving:'En mouvement...', doorStopped:'⏸️ Arrêté',
+    doorOpening:'Ouverture...', doorClosing:'Fermeture...', doorStopping:'Arrêt...',
     online:'🟢 En ligne', offline:'🔴 Hors ligne', checking:'⏳ Vérification...',
+    addDoor:'+ Ajouter une porte', viewLog:'📋 Voir le journal', deleteDoor:'Supprimer',
+    doorAvailable:'Portes disponibles', adminRole:'Administrateur', dashboard:'Tableau de bord',
+    notConnected:'⚠️ Device ID manquant', openDoorBtn:'Ouvrir la porte', closeDoorBtn:'Fermer la porte',
     // onglets
     tabDoors:'🚪 Portes', tabUsers:'👥 Utilisateurs', tabStats:'📊 Statistiques',
     tabAlerts:'🚨 Alertes', tabSchedule:'⏰ Planning', tabSettings:'⚙️ Paramètres', tabHistory:'📋 Historique',
@@ -3144,18 +3180,23 @@ function toggleLang(){
 
   // تحديث تابات Admin مباشرة بالـ id
   const tabMap = {
-    'atab-doors':    [tr('tabDoors')],
-    'atab-users':    [tr('tabUsers')],
-    'atab-stats':    [tr('tabStats')],
-    'atab-alerts':   [tr('tabAlerts')],
-    'atab-schedule': [tr('tabSchedule')],
-    'atab-settings': [tr('tabSettings')],
-    'atab-history':  [tr('tabHistory')],
+    'atab-doors':    tr('tabDoors'),
+    'atab-users':    tr('tabUsers'),
+    'atab-stats':    tr('tabStats'),
+    'atab-alerts':   tr('tabAlerts'),
+    'atab-schedule': tr('tabSchedule'),
+    'atab-settings': tr('tabSettings'),
+    'atab-history':  tr('tabHistory'),
   };
-  Object.entries(tabMap).forEach(([id, [txt]]) => {
+  Object.entries(tabMap).forEach(([id, txt]) => {
     const el2 = document.getElementById(id);
     if(el2) el2.textContent = txt;
   });
+  // تحديث role و dashboard title مباشرة
+  const greetEl = document.querySelector('#admin-dash .tb-user-greet');
+  if(greetEl) greetEl.textContent = tr('adminRole');
+  const instEl = document.getElementById('ad-inst-name');
+  if(instEl && !instEl.textContent.trim()) instEl.textContent = tr('dashboard');
 
   // إعادة رسم الداشبورد (يُعيد البناء بـ tr())
   if(A.user){
@@ -3625,7 +3666,7 @@ async function smartLogin(){
     
     if(!u){ toast('البريد أو كلمة المرور غير صحيحة ❌','error'); return; }
     if(u.status==='pending'){ toast('حسابك في انتظار موافقة المدير ⏳','info'); return; }
-    if(u.status==='frozen'){  toast('حسابك موقوف — تواصل مع المدير ❄️','error'); return; }
+    if(u.status==='frozen'){  toast('❄️ ' + tr('frozen') + ' — تواصل مع المدير','error'); return; }
 
     A.user = u;
     // Save credentials for auto-login
