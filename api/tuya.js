@@ -8,13 +8,34 @@ function sign(str) {
   return crypto.createHmac('sha256', SECRET).update(str).digest('hex').toUpperCase();
 }
 
+function sha256(str) {
+  return crypto.createHash('sha256').update(str).digest('hex');
+}
+
 async function getToken() {
   const t = Date.now().toString();
-  const s = sign(CLIENT_ID + t);
-  const res = await fetch(`${BASE}/v1.0/token?grant_type=1`, {
-    headers: { client_id: CLIENT_ID, sign: s, t, sign_method: 'HMAC-SHA256' }
+  const nonce = '';
+  // Token signing: no access_token included
+  // strToSign = METHOD + \n + sha256(body) + \n + headers + \n + url
+  const url = '/v1.0/token?grant_type=1';
+  const strToSign = ['GET', sha256(''), '', url].join('\n');
+  const signStr = CLIENT_ID + t + nonce + strToSign;
+  const s = sign(signStr);
+
+  const res = await fetch(`${BASE}${url}`, {
+    headers: {
+      client_id:   CLIENT_ID,
+      sign:        s,
+      t,
+      nonce,
+      sign_method: 'HMAC-SHA256',
+    }
   });
   const data = await res.json();
+  if (!data.success) {
+    console.error('Token error:', JSON.stringify(data));
+    throw new Error('Token failed: ' + (data.msg || data.code));
+  }
   return data.result?.access_token;
 }
 
@@ -29,24 +50,30 @@ module.exports = async function handler(req, res) {
     if (!devId || !action) return res.status(400).json({ error: 'Missing devId or action' });
 
     const tok = await getToken();
-    if (!tok) return res.status(500).json({ error: 'Token failed' });
 
+    // Map actions to switch_1 commands
     const cmdMap = {
       open:  [{ code: 'switch_1', value: true  }],
       close: [{ code: 'switch_1', value: false }],
       stop:  [{ code: 'switch_1', value: false }],
     };
     const commands = cmdMap[action];
-    if (!commands) return res.status(400).json({ error: 'Unknown action' });
+    if (!commands) return res.status(400).json({ error: 'Unknown action: ' + action });
 
-    const t   = Date.now().toString();
+    const t     = Date.now().toString();
     const nonce = '';
+    const url   = `/v1.0/iot-03/devices/${devId}/commands`;
     const bodyStr  = JSON.stringify({ commands });
-    const bodyHash = crypto.createHash('sha256').update(bodyStr).digest('hex');
-    const url = `/v1.0/iot-03/devices/${devId}/commands`;
+    const bodyHash = sha256(bodyStr);
+
+    // Correct Tuya signing with access_token:
+    // strToSign = METHOD + \n + sha256(body) + \n + headers_str + \n + url
     const strToSign = ['POST', bodyHash, '', url].join('\n');
     const signStr   = CLIENT_ID + tok + t + nonce + strToSign;
     const s = sign(signStr);
+
+    console.log('→ Sending to Tuya:', url, bodyStr);
+    console.log('→ signStr:', signStr);
 
     const r = await fetch(`${BASE}${url}`, {
       method: 'POST',
@@ -63,9 +90,21 @@ module.exports = async function handler(req, res) {
     });
 
     const data = await r.json();
-    return res.status(200).json(data);
+    console.log('← Tuya response:', JSON.stringify(data));
+
+    if (!data.success) {
+      return res.status(200).json({
+        success: false,
+        code: data.code,
+        msg:  data.msg || 'Tuya rejected command',
+        raw:  data
+      });
+    }
+
+    return res.status(200).json({ success: true, result: data.result });
 
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    console.error('Handler error:', e);
+    return res.status(500).json({ success: false, error: e.message });
   }
-}
+};
