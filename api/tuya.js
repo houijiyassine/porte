@@ -81,7 +81,11 @@ module.exports = async function handler(req, res) {
       if (s1 === true  && s2 === false) doorState = 'open';
       if (s1 === false && s2 === true)  doorState = 'close';
 
-      return res.status(200).json({ success: true, doorState, switch_1: s1, switch_2: s2 });
+      // جلب حالة الاتصال (online/offline)
+      const devInfo = await tuyaGet(`/v1.0/iot-03/devices/${devId}`, tok);
+      const online  = devInfo?.result?.online ?? null;
+
+      return res.status(200).json({ success: true, doorState, switch_1: s1, switch_2: s2, online });
     }
 
     // ─── POST: إرسال أمر للجهاز ────────────────────────────────────────
