@@ -1829,7 +1829,7 @@ async function initDB(){
   console.log(`✅ Loaded ${users.length} users, ${institutes.length} institutes from Supabase`);
 
   const mappedInsts = institutes.map(i => ({
-    id: i.id, name: i.name, gps: i.gps||30,
+    id: i.id, name: i.name, code: i.code||null, gps: i.gps||30,
     doors: i.doors||[], schedule: i.schedule||defSch(),
     alerts: i.alerts||[], history: i.history||[]
   }));
