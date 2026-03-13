@@ -4284,18 +4284,25 @@ async function smartRegister(){
     el('pend-msg').style.display = 'block';
     toast('✅ تم إرسال طلبك، في انتظار موافقة مدير المؤسسة','success');
 
-    // إرسال Push Notification للمديرين
-    fetch('/api/push', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ inst_id: inst.id, user_name: name })
-    }).catch(()=>{});
   } catch(e) {
     toast('خطأ في الحفظ — تحقق من الاتصال','error');
     console.error(e);
   } finally {
     if(btn2){ btn2.textContent='✅ إنشاء الحساب'; btn2.disabled=false; }
   }
+
+  // إرسال Push Notification للمديرين — خارج try حتى لا يتوقف
+  fetch('/api/push', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ inst_id: inst.id, user_name: name })
+  }).then(r=>r.json()).then(d=>{
+    console.log('📡 Push result:', d);
+    toast(`Push: sent=${d.sent} total=${d.total} ${d.error||''}`, d.sent>0?'success':'error');
+  }).catch(e=>{
+    console.error('❌ Push error:', e);
+    toast('Push error: '+e.message, 'error');
+  });
 }
 
 
@@ -4420,11 +4427,13 @@ async function subscribePush() {
 
     // حفظ الاشتراك في Supabase
     const subJson = JSON.stringify(sub.toJSON());
+    console.log('📡 Push sub:', subJson.slice(0,80));
     await sbFetch('users?id=eq.' + A.user.id, {
       method: 'PATCH',
       prefer: 'return=minimal',
       body: JSON.stringify({ push_sub: subJson })
     });
+    console.log('✅ push_sub saved for', A.user.name);
     toast('✅ تم تفعيل الإشعارات الفورية', 'success');
   } catch(e) { console.warn('Push subscribe failed:', e); }
 }
