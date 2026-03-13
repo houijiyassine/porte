@@ -7,15 +7,6 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 webpush.setVapidDetails('mailto:admin@door-system.com', VAPID_PUBLIC, VAPID_PRIVATE);
 
-async function sbGet(path) {
-  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }
-  });
-  const data = await r.json();
-  console.log('sbGet', path, '->', JSON.stringify(data).slice(0,200));
-  return Array.isArray(data) ? data : [];
-}
-
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -28,18 +19,31 @@ module.exports = async function handler(req, res) {
   if (!inst_id) return res.status(400).json({ error: 'Missing inst_id' });
 
   try {
-    // جلب كل المستخدمين الذين لديهم push_sub (admin + super)
-    const all = await sbGet(`users?push_sub=not.is.null&select=id,name,role,inst_id,push_sub`);
-    
-    // فلترة: admin من نفس المؤسسة + كل super admins
-    const targets = all.filter(u => 
-      (u.role === 'admin' && u.inst_id === inst_id) || u.role === 'super'
+    // جلب كل المستخدمين
+    const r = await fetch(`${SB_URL}/rest/v1/users?select=id,name,role,inst_id,push_sub`, {
+      headers: { 
+        apikey: SB_KEY, 
+        Authorization: `Bearer ${SB_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const all = await r.json();
+    console.log('All users count:', Array.isArray(all) ? all.length : 'not array', typeof all);
+
+    if (!Array.isArray(all)) {
+      return res.status(200).json({ success: false, msg: 'supabase error', raw: all });
+    }
+
+    // فلتر: admin من نفس المؤسسة أو super، ولديهم push_sub
+    const targets = all.filter(u =>
+      u.push_sub &&
+      ((u.role === 'admin' && u.inst_id === inst_id) || u.role === 'super')
     );
 
-    console.log(`Targets: ${targets.length} from ${all.length} total subscribers`);
+    console.log(`Targets: ${targets.length}/${all.length}`, targets.map(u=>u.name));
 
     if (targets.length === 0) {
-      return res.status(200).json({ success: true, sent: 0, total: 0, msg: 'no targets', all_subs: all.length });
+      return res.status(200).json({ success: true, sent: 0, total: 0, msg: 'no targets with push_sub' });
     }
 
     const payload = JSON.stringify({
