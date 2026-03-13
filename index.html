@@ -3179,12 +3179,51 @@ function renderInsts(){
         <div class="stat-box"><div class="stat-num" style="color:var(--warning)">${users.filter(u=>u.status==='pending').length}</div><div class="stat-lbl">انتظار</div></div>
         <div class="stat-box"><div class="stat-num" style="color:var(--danger)">${inst.alerts?.length||0}</div><div class="stat-lbl">تنبيه</div></div>
       </div>
-      ${inst.doors.length?`<div style="margin-top:.75rem;border-top:1px solid var(--border);padding-top:.75rem"><p style="font-size:.75rem;color:var(--text2);margin-bottom:.5rem;font-weight:700">سجلات الأبواب:</p>${doorsHtml}</div>`:''}
+      ${inst.doors.length?`<div style="margin-top:.75rem;border-top:1px solid var(--border);padding-top:.75rem"><p style="font-size:.75rem;color:var(--text2);margin-bottom:.5rem;font-weight:700">سجلات الأبواب:</p>${doorsHtml}</div>`:``}
+      <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)">
+        <button onclick="spOpenAddDoor('${inst.id}')" style="width:100%;padding:.55rem;background:rgba(37,99,235,.12);border:1px dashed var(--accent);border-radius:10px;color:var(--accent);font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer">
+          🚪 + إضافة باب جديد
+        </button>
+      </div>
     </div>`;
   }).join('')||`<p class="empty">لا توجد مؤسسات</p>`;
 }
 
-function showDoorHistSuper(doorId, instId){
+function spOpenAddDoor(instId){
+  _spAddDoorInstId = instId;
+  const inst = getInst(instId);
+  el('add-door-modal-title').textContent = `🚪 إضافة باب — ${inst?.name||''}`;
+  el('nd-name').value = '';
+  el('nd-devid').value = '';
+  selectDoorType('swing');
+  // نغير زر الإضافة ليستدعي spAddDoor
+  const btn = document.querySelector('#m-add-door button[onclick="addDoor()"]');
+  if(btn) btn.setAttribute('onclick', 'spAddDoor()');
+  openModal('m-add-door');
+}
+
+async function spAddDoor(){
+  const instId = _spAddDoorInstId;
+  const inst = getInst(instId);
+  if(!inst){ toast('خطأ: مؤسسة غير موجودة','error'); return; }
+  const name = v('nd-name');
+  const devId = v('nd-devid');
+  const dtype = document.getElementById('nd-type')?.value || 'swing';
+  if(!name){ toast('يرجى إدخال اسم الباب','error'); return; }
+  inst.doors.push({ id:'door'+Date.now(), name, devId, active:true, type:dtype });
+  await saveInst(inst);
+  closeModal('m-add-door');
+  selectDoorType('swing');
+  // إعادة الزر لحالته الأصلية
+  const btn = document.querySelector('#m-add-door button[onclick="spAddDoor()"]');
+  if(btn) btn.setAttribute('onclick', 'addDoor()');
+  renderInsts();
+  toast('✅ تم إضافة الباب','success');
+}
+
+let _spAddDoorInstId = null;
+
+
   const inst=getInst(instId);
   const door=inst?.doors?.find(d=>d.id===doorId);
   if(!door)return;
