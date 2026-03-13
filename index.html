@@ -541,7 +541,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
           <input type="file" id="av-file" accept="image/*" style="display:none" onchange="previewAv(this)">
         </div>
 
-        <div class="fg"><label>الاسم الكامل</label><input id="r-name" placeholder="محمد أحمد" oninput="updateAvLetter(this.value)"></div>
+        <div class="fg"><label>الاسم الكامل</label><input id="r-name" placeholder="أدخل اسمك الكامل" oninput="updateAvLetter(this.value)"></div>
         <div class="fg"><label>كود المؤسسة <span style="color:var(--text2);font-size:.78rem">(5 أرقام — يمنحك إياه المدير)</span></label><input id="r-inst-code" placeholder="مثال: 12345" maxlength="5" oninput="this.value=this.value.replace(/\D/g,'')"></div>
         <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="r-email" placeholder="example@email.com"></div>
         <div class="fg"><label>كلمة المرور</label><input type="password" id="r-pass" placeholder="••••••••"></div>
@@ -2847,7 +2847,13 @@ async function delU(id){
   renderInsts();
   toast('🗑️ تم حذف المستخدم','success');
 }
-async function delDoor(id){const inst=myInst();inst.doors=inst.doors.filter(d=>d.id!==id);saveInst(inst);renderAdminDoors(inst);toast('تم حذف الباب','success');}
+async function delDoor(id){
+  const inst=myInst()||A.db.institutes.find(i=>i.doors?.find(d=>d.id===id));
+  const door=inst?.doors?.find(d=>d.id===id);
+  if(!confirm(`⚠️ هل أنت متأكد من حذف الباب "${door?.name||id}"؟\nلا يمكن التراجع عن هذا الإجراء.`)) return;
+  inst.doors=inst.doors.filter(d=>d.id!==id);
+  saveInst(inst);renderAdminDoors(inst);toast('تم حذف الباب','success');
+}
 // Track which inst & user we opened the modal for
 let _histCtx = { uid: null, instId: null };
 
@@ -3407,7 +3413,17 @@ function openAlertsModal(){
 }
 
 function approveUsp(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAllUsers();renderInsts();toast('تم قبول المستخدم','success');}}
-async function delInst(id){A.db.institutes=A.db.institutes.filter(i=>i.id!==id);A.db.users=A.db.users.filter(u=>u.instId!==id);sbDelete('institutes','id=eq.'+id);sbDelete('users','inst_id=eq.'+id);renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();toast('تم حذف المؤسسة','success');}
+async function delInst(id){
+  const inst = A.db.institutes.find(i=>i.id===id);
+  if(!inst) return;
+  if(!confirm(`⚠️ هل أنت متأكد من حذف المؤسسة "${inst.name}"؟\nسيتم حذف جميع المستخدمين والأبواب المرتبطة بها.\nلا يمكن التراجع عن هذا الإجراء.`)) return;
+  A.db.institutes=A.db.institutes.filter(i=>i.id!==id);
+  A.db.users=A.db.users.filter(u=>u.instId!==id);
+  sbDelete('institutes','id=eq.'+id);
+  sbDelete('users','inst_id=eq.'+id);
+  renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();
+  toast('تم حذف المؤسسة','success');
+}
 function genInstCode(){
   const code = String(Math.floor(10000+Math.random()*90000));
   const inp = el('ni-code');
