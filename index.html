@@ -3223,7 +3223,7 @@ async function spAddDoor(){
 
 let _spAddDoorInstId = null;
 
-
+function showDoorHistSuper(doorId, instId){
   const inst=getInst(instId);
   const door=inst?.doors?.find(d=>d.id===doorId);
   if(!door)return;
