@@ -130,6 +130,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .door-status-label.open-lbl{color:var(--success);}
 .door-status-label.closed-lbl{color:var(--danger);}
 .door-status-label.moving-lbl{color:var(--warning);}
+.door-status-label.stopped-lbl{color:#a78bfa;}
 
 /* DOOR CARD */
 .door-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.5rem;margin-bottom:1rem;}
@@ -1733,13 +1734,13 @@ function animateDoor(doorId, pfx, toState) {
       animateStickPerson(doorId, pfx, 'closing');
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
     } else if (toState === 'stopped') {
-      setLbl('moving-lbl','⏸️',tr('doorStopped'));
+      setLbl('stopped-lbl','⏸️',tr('doorStopped'));
       const computed = window.getComputedStyle(panel).transform;
+      const curX = new DOMMatrix(computed).m41;
       panel.style.transition = 'none';
-      panel.style.transform = computed;
+      panel.style.transform = curX !== 0 ? computed : 'translateX(-41%)';
       setTimeout(() => { panel.style.transition = ''; }, 50);
       animateStickPerson(doorId, pfx, 'stopped');
-    } else {
       setLbl('closed-lbl','🔒',tr('doorClosed'));
       panel.style.transform = 'translateX(0)';
       animateStickPerson(doorId, pfx, 'closed');
@@ -1759,13 +1760,13 @@ function animateDoor(doorId, pfx, toState) {
       panel.style.transform = 'scaleY(1)';
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
     } else if (toState === 'stopped') {
-      setLbl('moving-lbl','⏸️',tr('doorStopped'));
-      const computed = window.getComputedStyle(panel).transform;
+      setLbl('stopped-lbl','⏸️',tr('doorStopped'));
+      const computed2 = window.getComputedStyle(panel).transform;
+      const mat2 = new DOMMatrix(computed2);
       panel.style.transition = 'none';
-      panel.style.transform = computed;
+      panel.style.transform = (mat2.d !== 1 && mat2.d !== 0) ? computed2 : 'scaleY(0.5)';
       setTimeout(() => { panel.style.transition = ''; }, 50);
-      // freeze current position
-    } else {
+      // freeze garage
       setLbl('closed-lbl','🔒',tr('doorClosed'));
       panel.style.transform = 'scaleY(1)';
     }
@@ -1790,12 +1791,12 @@ function animateDoor(doorId, pfx, toState) {
       animateStickPerson(doorId, pfx, 'closing');
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
     } else if (toState === 'stopped') {
-      setLbl('moving-lbl','⏸️',tr('doorStopped'));
-      // تجميد الباب في مكانه الحالي فوراً
-      const computed = window.getComputedStyle(panel).transform;
+      setLbl('stopped-lbl','⏸️',tr('doorStopped'));
+      const computed3 = window.getComputedStyle(panel).transform;
+      const mat3 = new DOMMatrix(computed3);
       panel.style.transition = 'none';
-      panel.style.transform = computed;
-      // إعادة الـ transition بعد ثانية
+      const isAtRest = Math.abs(mat3.m11 - 1) < 0.05;
+      panel.style.transform = isAtRest ? 'perspective(400px) rotateY(-37deg)' : computed3;
       setTimeout(() => { panel.style.transition = ''; }, 50);
       animateStickPerson(doorId, pfx, 'stopped');
     } else {
@@ -2409,10 +2410,11 @@ async function fetchDoorStatus(door, pfx) {
     if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening') {
       animateDoor(door.id, pfx, 'open');
       rcLogHistory(door, 'open');
-    } else if ((d.doorState === 'close' || d.doorState === 'stopped') &&
-               currentState !== 'closed' && currentState !== 'closing') {
+    } else if (d.doorState === 'close' && currentState !== 'closed' && currentState !== 'closing') {
       animateDoor(door.id, pfx, 'closed');
       rcLogHistory(door, 'close');
+    } else if (d.doorState === 'stopped' && currentState !== 'stopped') {
+      animateDoor(door.id, pfx, 'stopped');
     }
 
     // تحديث شارة online/offline
