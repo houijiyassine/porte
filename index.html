@@ -929,18 +929,34 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
       <button onclick="closeModal('m-door-hist')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.3rem .7rem;cursor:pointer;color:var(--text);font-family:Cairo,sans-serif">✕</button>
     </div>
 
-    <!-- فلتر اليوم -->
-    <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
-      <select id="dh-filter-day" onchange="renderDoorHistFiltered()" style="flex:1;min-width:140px;padding:.65rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:Cairo,sans-serif;font-size:.82rem;outline:none">
-        <option value="">📅 كل الأيام</option>
-      </select>
-      <select id="dh-filter-action" onchange="renderDoorHistFiltered()" style="flex:1;min-width:110px;padding:.65rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:Cairo,sans-serif;font-size:.82rem;outline:none">
+    <!-- فلتر الأحداث + إعادة -->
+    <div style="display:flex;gap:.5rem;margin-bottom:.75rem;align-items:center">
+      <select id="dh-filter-action" onchange="renderDoorHistFiltered()" style="flex:1;padding:.65rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:Cairo,sans-serif;font-size:.82rem;outline:none">
         <option value="">كل الأحداث</option>
         <option value="open">🟢 فتح</option>
         <option value="close">🔴 غلق</option>
         <option value="stop">🟡 إيقاف</option>
       </select>
       <button onclick="clearDoorHistFilters()" style="padding:.55rem .8rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:Cairo,sans-serif;font-size:.78rem;cursor:pointer">🔄 إعادة</button>
+    </div>
+
+    <!-- تقويم بصري -->
+    <div id="dh-cal" style="background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:.75rem;margin-bottom:.75rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+        <button onclick="dhCalNav(-1)" style="background:none;border:none;color:var(--text);font-size:1.3rem;cursor:pointer;padding:.1rem .5rem;line-height:1">‹</button>
+        <span id="dh-cal-title" style="font-weight:700;font-size:.9rem;color:var(--text)"></span>
+        <button onclick="dhCalNav(1)" style="background:none;border:none;color:var(--text);font-size:1.3rem;cursor:pointer;padding:.1rem .5rem;line-height:1">›</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;margin-bottom:3px">
+        <div style="font-size:.62rem;color:var(--text2);padding:.15rem">أح</div>
+        <div style="font-size:.62rem;color:var(--text2);padding:.15rem">إث</div>
+        <div style="font-size:.62rem;color:var(--text2);padding:.15rem">ثل</div>
+        <div style="font-size:.62rem;color:var(--text2);padding:.15rem">أر</div>
+        <div style="font-size:.62rem;color:var(--text2);padding:.15rem">خم</div>
+        <div style="font-size:.62rem;color:var(--text2);padding:.15rem">جم</div>
+        <div style="font-size:.62rem;color:var(--text2);padding:.15rem">سب</div>
+      </div>
+      <div id="dh-cal-days" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center"></div>
     </div>
 
     <!-- عداد النتائج -->
@@ -1715,6 +1731,10 @@ function animateDoor(doorId, pfx, toState) {
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
     } else if (toState === 'stopped') {
       setLbl('moving-lbl','⏸️',tr('doorStopped'));
+      const computed = window.getComputedStyle(panel).transform;
+      panel.style.transition = 'none';
+      panel.style.transform = computed;
+      setTimeout(() => { panel.style.transition = ''; }, 50);
       animateStickPerson(doorId, pfx, 'stopped');
     } else {
       setLbl('closed-lbl','🔒',tr('doorClosed'));
@@ -1737,6 +1757,10 @@ function animateDoor(doorId, pfx, toState) {
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
     } else if (toState === 'stopped') {
       setLbl('moving-lbl','⏸️',tr('doorStopped'));
+      const computed = window.getComputedStyle(panel).transform;
+      panel.style.transition = 'none';
+      panel.style.transform = computed;
+      setTimeout(() => { panel.style.transition = ''; }, 50);
       // freeze current position
     } else {
       setLbl('closed-lbl','🔒',tr('doorClosed'));
@@ -1764,8 +1788,13 @@ function animateDoor(doorId, pfx, toState) {
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
     } else if (toState === 'stopped') {
       setLbl('moving-lbl','⏸️',tr('doorStopped'));
+      // تجميد الباب في مكانه الحالي فوراً
+      const computed = window.getComputedStyle(panel).transform;
+      panel.style.transition = 'none';
+      panel.style.transform = computed;
+      // إعادة الـ transition بعد ثانية
+      setTimeout(() => { panel.style.transition = ''; }, 50);
       animateStickPerson(doorId, pfx, 'stopped');
-      // keep current transform — freeze in place
     } else {
       setLbl('closed-lbl','🔒',tr('doorClosed'));
       panel.style.transform='perspective(400px) rotateY(0deg)';
@@ -1815,7 +1844,7 @@ async function initDB(){
     email: (u.email||'').toLowerCase().trim(),
     pw: (u.pw||'').trim(),
     role: u.role, status: u.status, instId: u.inst_id,
-    avatar: u.avatar, note: u.note, lastLoc: u.last_loc
+    avatar: u.avatar, note: u.note, lastLoc: (()=>{ let l=u.last_loc; if(typeof l==='string'){try{l=JSON.parse(l);}catch(e){l=null;}} return l; })()
   }));
 
   // الحفاظ على super admin دائماً
@@ -2801,21 +2830,112 @@ function histItemWithUser(h) {
   </div>`;
 }
 
-// ── دوال سجل الباب مع فلتر اليوم ──
+// ── دوال سجل الباب مع تقويم بصري ──
+let _dhCalYear = new Date().getFullYear();
+let _dhCalMonth = new Date().getMonth(); // 0-11
+let _dhActiveDays = new Set();
+let _dhSelectedDay = '';
+
 function populateDoorHistDays(inst, door) {
   const h = (inst?.history||[]).filter(x => x.door === door?.name);
-  // استخراج الأيام الفريدة
-  const days = [...new Set(h.map(x => {
-    const parts = (x.time||'').split(' ');
-    return parts[0] || '';
-  }))].filter(Boolean).sort().reverse();
+  _dhActiveDays = new Set(h.map(x => (x.time||'').split(' ')[0]).filter(Boolean));
+  // ابدأ التقويم بأحدث تاريخ موجود
+  if (_dhActiveDays.size > 0) {
+    const latest = [..._dhActiveDays].sort().reverse()[0];
+    const parts = latest.split(/[-\/]/);
+    if (parts.length >= 2) {
+      _dhCalYear  = parseInt(parts[0]) || new Date().getFullYear();
+      _dhCalMonth = (parseInt(parts[1]) - 1) || new Date().getMonth();
+    }
+  }
+  _dhSelectedDay = '';
+  renderDhCal();
+}
 
-  const sel = el('dh-filter-day');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">📅 كل الأيام</option>';
-  days.forEach(d => {
-    sel.innerHTML += `<option value="${d}">${d}</option>`;
-  });
+function renderDhCal() {
+  const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو',
+                  'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const titleEl = el('dh-cal-title');
+  if (titleEl) titleEl.textContent = `${months[_dhCalMonth]} ${_dhCalYear}`;
+
+  const daysEl = el('dh-cal-days');
+  if (!daysEl) return;
+
+  const firstDay = new Date(_dhCalYear, _dhCalMonth, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(_dhCalYear, _dhCalMonth + 1, 0).getDate();
+
+  let html = '';
+  // فراغات قبل اليوم الأول
+  for (let i = 0; i < firstDay; i++) {
+    html += `<div></div>`;
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const mm = String(_dhCalMonth + 1).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    // نجرب كلا الفورماتين
+    const key1 = `${_dhCalYear}/${_dhCalMonth+1}/${d}`;
+    const key2 = `${dd}/${mm}/${_dhCalYear}`;
+    const key3 = `${_dhCalYear}-${mm}-${dd}`;
+    const hasEvent = _dhActiveDays.has(key1) || _dhActiveDays.has(key2) || _dhActiveDays.has(key3)
+      || [..._dhActiveDays].some(k => k.includes(`${_dhCalYear}`) && k.includes(`/${d}`) || k.endsWith(`/${dd}/${_dhCalYear}`) || k === `${dd}/0${_dhCalMonth+1}/${_dhCalYear}` || k === `${d}/0${_dhCalMonth+1}/${_dhCalYear}`);
+    // بحث أبسط
+    const isActive = [..._dhActiveDays].some(k => {
+      const parts = k.split(/[-\/]/);
+      if (parts.length < 3) return false;
+      const y = parts.find(p => p.length === 4);
+      const rest = parts.filter(p => p !== y).map(Number);
+      return parseInt(y) === _dhCalYear && rest.includes(_dhCalMonth+1) && rest.includes(d);
+    });
+    const isSelected = _dhSelectedDay && (() => {
+      const parts = _dhSelectedDay.split(/[-\/]/);
+      if (parts.length < 3) return false;
+      const y = parts.find(p => p.length === 4);
+      const rest = parts.filter(p => p !== y).map(Number);
+      return parseInt(y) === _dhCalYear && rest.includes(_dhCalMonth+1) && rest.includes(d);
+    })();
+
+    const today = new Date();
+    const isToday = today.getFullYear()===_dhCalYear && today.getMonth()===_dhCalMonth && today.getDate()===d;
+
+    let bg = 'transparent'; let color = 'var(--text2)'; let fw = '400'; let border = 'none';
+    if (isSelected) { bg = 'var(--accent)'; color = '#fff'; fw = '700'; }
+    else if (isActive) { bg = 'rgba(37,99,235,0.25)'; color = 'var(--accent)'; fw = '700'; }
+    else if (isToday) { border = '1px solid var(--accent)'; color = 'var(--text)'; }
+
+    const dayKey = [..._dhActiveDays].find(k => {
+      const parts = k.split(/[-\/]/);
+      if (parts.length < 3) return false;
+      const y = parts.find(p => p.length === 4);
+      const rest = parts.filter(p => p !== y).map(Number);
+      return parseInt(y) === _dhCalYear && rest.includes(_dhCalMonth+1) && rest.includes(d);
+    }) || '';
+
+    html += `<div onclick="dhCalSelect('${dayKey}')"
+      style="padding:.3rem .1rem;border-radius:8px;cursor:${isActive||isSelected?'pointer':'default'};
+             background:${bg};color:${color};font-weight:${fw};font-size:.78rem;
+             border:${border};transition:all .15s">
+      ${d}${isActive && !isSelected ? '<div style="width:4px;height:4px;background:var(--accent);border-radius:50%;margin:1px auto 0"></div>' : ''}
+    </div>`;
+  }
+  daysEl.innerHTML = html;
+}
+
+function dhCalNav(dir) {
+  _dhCalMonth += dir;
+  if (_dhCalMonth > 11) { _dhCalMonth = 0; _dhCalYear++; }
+  if (_dhCalMonth < 0)  { _dhCalMonth = 11; _dhCalYear--; }
+  renderDhCal();
+}
+
+function dhCalSelect(dayKey) {
+  if (!dayKey) return;
+  if (_dhSelectedDay === dayKey) {
+    _dhSelectedDay = '';
+  } else {
+    _dhSelectedDay = dayKey;
+  }
+  renderDhCal();
+  renderDoorHistFiltered();
 }
 
 function renderDoorHistFiltered() {
@@ -2824,14 +2944,13 @@ function renderDoorHistFiltered() {
   const door   = inst?.doors?.find(d => d.id === doorId);
   if (!door) return;
 
-  const filterDay    = el('dh-filter-day')?.value    || '';
+  const filterDay    = _dhSelectedDay || '';
   const filterAction = el('dh-filter-action')?.value || '';
 
   let h = (inst?.history||[]).filter(x => x.door === door.name);
-  if (filterDay)    h = h.filter(x => (x.time||'').startsWith(filterDay));
+  if (filterDay) h = h.filter(x => (x.time||'').startsWith(filterDay));
   if (filterAction) h = h.filter(x => x.action === filterAction);
 
-  // عداد النتائج
   const countEl = el('dh-count');
   if (countEl) countEl.textContent = `${h.length} سجل${filterDay ? ' — ' + filterDay : ''}`;
 
@@ -2843,8 +2962,9 @@ function renderDoorHistFiltered() {
 }
 
 function clearDoorHistFilters() {
-  const s1 = el('dh-filter-day');    if(s1) s1.value = '';
+  _dhSelectedDay = '';
   const s2 = el('dh-filter-action'); if(s2) s2.value = '';
+  renderDhCal();
   renderDoorHistFiltered();
 }
 function showDoorHist(doorId, instId){
@@ -3444,8 +3564,32 @@ function populateLocFilter(){
   A.db.institutes.forEach(i => sel.innerHTML += `<option value="${i.id}">${i.name}</option>`);
 }
 
-function refreshLocations(){
-  toast('🔄 جاري تحديث المواقع...','info');
+async function refreshLocations(){
+  const btn = document.querySelector('[onclick="refreshLocations()"]');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ جاري...'; }
+  try {
+    // جلب أحدث بيانات المستخدمين من Supabase
+    const users = await sbGet('users', 'select=id,name,last_loc,inst_id,role');
+    if(users && Array.isArray(users)){
+      users.forEach(u => {
+        const local = A.db.users.find(x => x.id === u.id);
+        if(local && u.last_loc){
+          // last_loc قد يأتي كـ string من Supabase
+          let loc = u.last_loc;
+          if(typeof loc === 'string'){ try{ loc = JSON.parse(loc); }catch(e){} }
+          if(loc && loc.lat && loc.lng){
+            local.lastLoc = loc;
+            if(!A.db.userLocations) A.db.userLocations = {};
+            A.db.userLocations[u.id] = loc;
+          }
+        }
+      });
+    }
+    toast('✅ تم تحديث المواقع','success');
+  } catch(e) {
+    toast('⚠️ خطأ في التحديث','error');
+  }
+  if(btn){ btn.disabled=false; btn.textContent='🔄 تحديث'; }
   renderLocations();
 }
 
@@ -3464,7 +3608,11 @@ function renderLocations(){
     let distM = null, dotClass = 'dot-unknown', statusTxt = 'موقع غير معروف';
 
     if(loc){
-      distM = Math.round(dist(loc.lat, loc.lng, DOOR_LOC.lat, DOOR_LOC.lng));
+      // استخدام موقع GPS الخاص بالمؤسسة بدلاً من DOOR_LOC الثابت
+      const instDoorLoc = inst?.doors?.[0]?.lat && inst?.doors?.[0]?.lng
+        ? { lat: inst.doors[0].lat, lng: inst.doors[0].lng }
+        : (inst?.lat && inst?.lng ? { lat: inst.lat, lng: inst.lng } : DOOR_LOC);
+      distM = Math.round(dist(loc.lat, loc.lng, instDoorLoc.lat, instDoorLoc.lng));
       const radius = inst?.gps || 30;
       if(distM <= radius){ dotClass='dot-near'; statusTxt=`قريب من الباب ✓`; }
       else { dotClass='dot-far'; statusTxt=`بعيد — ${distM}م من الباب`; }
