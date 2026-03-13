@@ -966,7 +966,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div class="fg"><label>اسم المؤسسة</label><input id="ni-name" placeholder="معهد الأمل"></div>
     <div class="fg"><label>بريد المسؤول</label><input type="email" id="ni-email" placeholder="admin@inst.com"></div>
     <div class="fg"><label>كلمة مرور المسؤول</label><input type="password" id="ni-pass" placeholder="••••••••"></div>
-    <div class="fg"><label>إعادة كلة المرور</label><input type="password" id="ni-pass2" placeholder="••••••••"></div>
+    <div class="fg"><label>إعادة كلمة المرور</label><input type="password" id="ni-pass2" placeholder="••••••••"></div>
     <div class="fg">
       <label>كود المؤسسة <span style="color:var(--text2);font-size:.78rem">(5 أرقام — يشاركه المستخدمون)</span></label>
       <div style="display:flex;gap:.5rem;align-items:center">
@@ -974,22 +974,12 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
         <button type="button" onclick="genInstCode()" style="padding:.5rem .75rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:Cairo,sans-serif;font-size:.82rem">🎲 توليد</button>
       </div>
     </div>
-    <div class="fg"><label>نطاق GPS (متر)</label><input type="number" id="ni-gps" value="30" min="5" max="500"></div>
-    <div class="fg"><label>Device ID الباب الرئيسي</label><input id="ni-dev" placeholder="bf7c..."></div>
-    <div style="background:var(--surface2);border-radius:12px;padding:1rem;margin-top:.5rem">
-      <div style="font-weight:700;font-size:.85rem;margin-bottom:.75rem;color:var(--accent)">📍 موقع الباب (اختياري)</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">5rem;color:var(--accent)">📍 موقع الباب (اختياري)</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
-        <div class="fg" style="margin:0"><label style="font-size:.78rem">خط العرض Lat</label><input id="ni-lat" placeholder="36.837534" type="number" step="any"></div>
-        <div class="fg" style="margin:0"><label style="font-size:.78rem">خط الطول Lng</label><input id="ni-lng" placeholder="10.106981" type="number" step="any"></div>
-      </div>
-      <button onclick="useMyLocForInst()" style="margin-top:.6rem;width:100%;padding:.5rem;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer">📡 استخدم موقعي الحالي</button>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal('m-add-inst')">إلغاء</button>
+    <div style="display:flex;gap:.5rem;margin-top:.5rem">
+      <button class="btn-sec" style="flex:1" onclick="closeModal('m-add-inst')">إلغاء</button>
       <button class="btn-pri" style="flex:2;margin-top:0" onclick="addInstitute()">إضافة</button>
     </div>
   </div>
+</div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -3440,11 +3430,9 @@ async function addInstitute(){
   if(A.db.institutes.find(i=>i.code===code)){toast('هذا الكود مستخدم مسبقاً','error');return;}
   if(A.db.users.find(u=>u.email.toLowerCase()===email.toLowerCase())){toast('هذا البريد مسجل مسبقاً','error');return;}
   const iid='inst'+Date.now();
-  const lat=parseFloat(el('ni-lat')?.value)||null;
-  const lng=parseFloat(el('ni-lng')?.value)||null;
   const newInst = {
     id:iid, name, code, gps:gpsVal,
-    doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:dev,active:true,type:'garage',lat,lng}],
+    doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:dev,active:true,type:'garage'}],
     schedule:defSch(), alerts:[], history:[]
   };
   const newAdmin = {id:'u'+Date.now(),name:'مدير '+name,email,pw,role:'admin',status:'active',instId:iid,avatar:null,note:null,lastLoc:null};
