@@ -4289,7 +4289,13 @@ async function smartRegister(){
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ inst_id: inst.id, user_name: name })
-    }).then(r=>r.json()).then(d=>console.log('📡 Push result:', d)).catch(e=>console.error('❌ Push error:', e));
+    }).then(r=>r.json()).then(d=>{
+      console.log('📡 Push result:', d);
+      toast(`Push: sent=${d.sent} total=${d.total} ${d.error||''}`, d.sent>0?'success':'error');
+    }).catch(e=>{
+      console.error('❌ Push error:', e);
+      toast('Push error: '+e.message, 'error');
+    });
   } catch(e) {
     toast('خطأ في الحفظ — تحقق من الاتصال','error');
     console.error(e);
