@@ -3260,7 +3260,7 @@ function renderInsts(){
       </div>`).join('');
     return `<div class="inst-card">
       <div class="inst-hdr">
-        <div><div class="inst-name">🏫 ${inst.name}</div><div class="inst-meta">${inst.doors.length} باب | GPS: ${inst.gps||30}م${inst.code?` | <span style="color:var(--accent);font-weight:700">🔑 الكود: ${inst.code}</span>`:''}</div></div>
+        <div><div class="inst-name">🏫 ${inst.name}</div><div class="inst-meta">${inst.doors.length} باب | GPS: ${inst.gps||30}م${inst.code?` &nbsp;|&nbsp; 🔑 <span style="color:var(--accent);font-weight:700">${inst.code}</span>`:''}</div></div>
         <div style="display:flex;gap:.4rem">
           <button class="btn-sm" onclick="editInstModal('${inst.id}')">✏️ تعديل</button>
           <button class="btn-sm btn-danger" onclick="delInst('${inst.id}')">${tr("deleteDoor")}</button>
