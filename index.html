@@ -1760,13 +1760,11 @@ function animateDoor(doorId, pfx, toState) {
       panel.style.transform = 'scaleY(1)';
       setTimeout(()=>{ if(doorStates[uid]==='closing') animateDoor(doorId,pfx,'closed'); },1300);
     } else if (toState === 'stopped') {
-      setLbl('stopped-lbl','⏸️',tr('doorStopped'));
-      const computed2 = window.getComputedStyle(panel).transform;
-      const mat2 = new DOMMatrix(computed2);
+      setLbl('stopped-lbl','⏸️','⏸️ موقوف');
       panel.style.transition = 'none';
-      panel.style.transform = (mat2.d !== 1 && mat2.d !== 0) ? computed2 : 'scaleY(0.5)';
+      panel.style.transform = 'scaleY(0.5)';
       setTimeout(() => { panel.style.transition = ''; }, 50);
-      // freeze garage
+    } else {
       setLbl('closed-lbl','🔒',tr('doorClosed'));
       panel.style.transform = 'scaleY(1)';
     }
@@ -2401,20 +2399,32 @@ async function fetchDoorStatus(door, pfx) {
   try {
     const r = await fetch(`/api/tuya?devId=${door.devId}`);
     const d = await r.json();
-    if (!d.success) return;
+    if (!d.success) {
+      const badge = document.getElementById(`online-badge-${door.id}`);
+      if (badge) { badge.textContent = tr('offline'); badge.className = 'badge-off'; }
+      return;
+    }
 
     const uid = `${pfx}-${door.id}`;
     const currentState = doorStates[uid];
 
-    // تحديث حالة الباب
-    if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening') {
+    // تحديث حالة الباب — لا نتجاوز stopped إلا إذا تغيرت الحالة فعلاً
+    if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'open');
       rcLogHistory(door, 'open');
-    } else if (d.doorState === 'close' && currentState !== 'closed' && currentState !== 'closing') {
+    } else if (d.doorState === 'close' && currentState !== 'closed' && currentState !== 'closing' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'closed');
       rcLogHistory(door, 'close');
     } else if (d.doorState === 'stopped' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'stopped');
+    } else if (d.doorState === 'open' && currentState === 'stopped') {
+      // RC فتح بعد stop — نحدث
+      animateDoor(door.id, pfx, 'open');
+      rcLogHistory(door, 'open');
+    } else if (d.doorState === 'close' && currentState === 'stopped') {
+      // RC أغلق بعد stop — نحدث
+      animateDoor(door.id, pfx, 'closed');
+      rcLogHistory(door, 'close');
     }
 
     // تحديث شارة online/offline
@@ -2464,7 +2474,14 @@ function startDoorPolling(door, pfx) {
   const key = door.id + '_' + pfx;
   if (_pollIntervals[key]) return;
 
-  // اقرأ الحالة فوراً عند البدء (يحل مشكلة الـ refresh)
+  // إذا لم يُضَف Device ID — نُظهر "غير مربوط" فوراً
+  if (!door.devId) {
+    const badge = document.getElementById(`online-badge-${door.id}`);
+    if (badge) { badge.textContent = tr('notConnected'); badge.className = 'badge-off'; }
+    return;
+  }
+
+  // اقرأ الحالة فوراً عند البدء
   fetchDoorStatus(door, pfx);
 
   _pollIntervals[key] = setInterval(() => fetchDoorStatus(door, pfx), 4000);
