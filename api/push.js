@@ -7,6 +7,14 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 webpush.setVapidDetails('mailto:admin@door-system.com', VAPID_PUBLIC, VAPID_PRIVATE);
 
+async function sbGet(path) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }
+  });
+  const data = await r.json();
+  return Array.isArray(data) ? data : [];
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -18,19 +26,16 @@ module.exports = async function handler(req, res) {
   if (!inst_id) return res.status(400).json({ error: 'Missing inst_id' });
 
   try {
-    // جلب كل المديرين الذين لديهم push_sub
-    const r = await fetch(`${SB_URL}/rest/v1/users?inst_id=eq.${inst_id}&role=eq.admin&push_sub=not.is.null&select=push_sub`, {
-      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }
-    });
-    const admins = await r.json();
+    const admins = await sbGet(`users?inst_id=eq.${inst_id}&role=eq.admin&push_sub=not.is.null&select=push_sub`);
+    const supers = await sbGet(`users?role=eq.super&push_sub=not.is.null&select=push_sub`);
+    const all = [...admins, ...supers];
 
-    // جلب super admins أيضاً
-    const r2 = await fetch(`${SB_URL}/rest/v1/users?role=eq.super&push_sub=not.is.null&select=push_sub`, {
-      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }
-    });
-    const supers = await r2.json();
+    console.log(`Push: found ${all.length} subscribers (${admins.length} admins, ${supers.length} supers)`);
 
-    const all = [...(admins||[]), ...(supers||[])];
+    if (all.length === 0) {
+      return res.status(200).json({ success: true, sent: 0, total: 0, msg: 'no subscribers' });
+    }
+
     const payload = JSON.stringify({
       title: '👤 طلب تسجيل جديد',
       body: `${user_name || 'مستخدم جديد'} يطلب الانضمام`,
@@ -48,7 +53,10 @@ module.exports = async function handler(req, res) {
     );
 
     const sent = results.filter(r => r.status === 'fulfilled').length;
-    return res.status(200).json({ success: true, sent, total: all.length });
+    const errors = results.filter(r => r.status === 'rejected').map(r => r.reason?.message);
+    console.log(`Push sent: ${sent}/${all.length}`, errors);
+
+    return res.status(200).json({ success: true, sent, total: all.length, errors });
   } catch(e) {
     console.error('Push error:', e);
     return res.status(500).json({ success: false, error: e.message });
