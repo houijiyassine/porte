@@ -78,8 +78,10 @@ module.exports = async function handler(req, res) {
       const s2 = data.result?.find(x => x.code === 'switch_2')?.value;
 
       let doorState = 'stopped';
-      if (s1 === true  && s2 === false) doorState = 'open';
-      if (s1 === false && s2 === true)  doorState = 'close';
+      if      (s1 === true  && s2 === false) doorState = 'open';
+      else if (s1 === false && s2 === true)  doorState = 'close';
+      else if (s1 === false && s2 === false) doorState = 'stopped';
+      else if (s1 === true  && s2 === true)  doorState = 'stopped';
 
       // جلب حالة الاتصال (online/offline)
       const devInfo = await tuyaGet(`/v1.0/iot-03/devices/${devId}`, tok);
