@@ -2466,7 +2466,7 @@ function logRcEvent(inst, door, action){
 // ADMIN DASHBOARD
 // ════════════════════════════════════════════
 function loadAdmin(){
-  showPage('admin');
+  showPage('admin-dash');
   const inst=myInst();
   if(el('ad-inst-name')) el('ad-inst-name').textContent=inst?.name||tr('dashboard');
   renderAdminUsers(inst);renderAdminDoors(inst);renderAlerts(inst);renderSch(inst);renderHist(inst);
