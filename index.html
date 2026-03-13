@@ -531,12 +531,6 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
         <button class="auth-back" onclick="showLandLogin()" style="margin-bottom:1rem">← رجوع</button>
         <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:1.25rem">إنشاء حساب جديد</h3>
 
-        <!-- account type selector -->
-        <div style="display:flex;gap:.5rem;margin-bottom:1.25rem;background:var(--surface2);border-radius:12px;padding:.3rem;">
-          <button id="rtype-user" onclick="setRegType('user')" style="flex:1;padding:.6rem;border:none;border-radius:9px;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;background:var(--accent);color:#fff;transition:all .2s">👤 مستخدم</button>
-          <button id="rtype-admin" onclick="setRegType('admin')" style="flex:1;padding:.6rem;border:none;border-radius:9px;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;background:transparent;color:var(--text2);transition:all .2s">🏛️ مدير</button>
-        </div>
-
         <!-- avatar -->
         <div class="avatar-upload-wrap" id="av-wrap">
           <div class="av-circle" id="av-preview" onclick="el('av-file').click()">
@@ -548,10 +542,10 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
         </div>
 
         <div class="fg"><label>الاسم الكامل</label><input id="r-name" placeholder="محمد أحمد" oninput="updateAvLetter(this.value)"></div>
-        <div class="fg" id="inst-sel-grp"><label>المؤسسة</label><select id="r-inst"><option value="">اختر المؤسسة</option></select></div>
-        <div class="fg" id="inst-name-grp" style="display:none"><label>اسم المؤسسة الجديدة</label><input id="r-inst-name" placeholder="معهد حميدة بكير"></div>
+        <div class="fg"><label>كود المؤسسة <span style="color:var(--text2);font-size:.78rem">(5 أرقام — يمنحك إياه المدير)</span></label><input id="r-inst-code" placeholder="مثال: 12345" maxlength="5" oninput="this.value=this.value.replace(/\D/g,'')"></div>
         <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="r-email" placeholder="example@email.com"></div>
         <div class="fg"><label>كلمة المرور</label><input type="password" id="r-pass" placeholder="••••••••"></div>
+        <div class="fg"><label>إعادة كلمة المرور</label><input type="password" id="r-pass2" placeholder="••••••••"></div>
         <button class="btn-pri" onclick="smartRegister()">✅ إنشاء الحساب</button>
         <div class="pending-msg" id="pend-msg">⏳ تم إرسال طلبك، في انتظار موافقة مدير المؤسسة</div>
       </div>
@@ -663,7 +657,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   </div>
   <div class="nav-bar" id="admin-nav-bar">
     <button class="nav-tab active" id="atab-doors" onclick="swTab('admin','doors',this)">🚪 الأبواب</button>
-    <button class="nav-tab" id="atab-users" onclick="swTab('admin','users',this)">👥 المستخدمون</button>
+    <button class="nav-tab" id="atab-users" onclick="swTab('admin','users',this)">👥 المستخدمون <span id="pending-badge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:0 6px;font-size:.7rem;margin-right:2px"></span></button>
     <button class="nav-tab" id="atab-stats" onclick="swTab('admin','stats',this)">📊 الإحصائيات</button>
     <button class="nav-tab" id="atab-alerts" onclick="swTab('admin','alerts',this)">🚨 التنبيهات</button>
     <button class="nav-tab" id="atab-schedule" onclick="swTab('admin','schedule',this)">⏰ الجدول</button>
@@ -764,7 +758,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   </div>
   <div class="nav-bar">
     <button class="nav-tab active" onclick="swTab('super','institutes',this)">🏫 المؤسسات</button>
-    <button class="nav-tab" onclick="swTab('super','all-users',this)">👥 المستخدمون</button>
+    <button class="nav-tab" onclick="swTab('super','all-users',this)">👥 المستخدمون <span id="sp-pending-badge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:0 6px;font-size:.7rem;margin-right:2px"></span></button>
     <button class="nav-tab" onclick="swTab('super','locations',this)">📍 المواقع</button>
     <button class="nav-tab" onclick="swTab('super','sp-stats',this)">📊 الإحصائيات</button>
     <button class="nav-tab" onclick="swTab('super','sp-settings',this)">⚙️ الإعدادات</button>
@@ -970,12 +964,21 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="modal">
     <h3 class="modal-title">إضافة مؤسسة</h3>
     <div class="fg"><label>اسم المؤسسة</label><input id="ni-name" placeholder="معهد الأمل"></div>
-    <div class="fg"><label>بريد المدير</label><input type="email" id="ni-email" placeholder="admin@inst.com"></div>
-    <div class="fg"><label>كلمة مرور المدير</label><input type="password" id="ni-pass" placeholder="••••••••"></div>
+    <div class="fg"><label>بريد المسؤول</label><input type="email" id="ni-email" placeholder="admin@inst.com"></div>
+    <div class="fg"><label>كلمة مرور المسؤول</label><input type="password" id="ni-pass" placeholder="••••••••"></div>
+    <div class="fg"><label>إعادة كلة المرور</label><input type="password" id="ni-pass2" placeholder="••••••••"></div>
+    <div class="fg">
+      <label>كود المؤسسة <span style="color:var(--text2);font-size:.78rem">(5 أرقام — يشاركه المستخدمون)</span></label>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <input id="ni-code" placeholder="مثال: 12345" maxlength="5" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'')">
+        <button type="button" onclick="genInstCode()" style="padding:.5rem .75rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:Cairo,sans-serif;font-size:.82rem">🎲 توليد</button>
+      </div>
+    </div>
     <div class="fg"><label>نطاق GPS (متر)</label><input type="number" id="ni-gps" value="30" min="5" max="500"></div>
     <div class="fg"><label>Device ID الباب الرئيسي</label><input id="ni-dev" placeholder="bf7c..."></div>
     <div style="background:var(--surface2);border-radius:12px;padding:1rem;margin-top:.5rem">
       <div style="font-weight:700;font-size:.85rem;margin-bottom:.75rem;color:var(--accent)">📍 موقع الباب (اختياري)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">5rem;color:var(--accent)">📍 موقع الباب (اختياري)</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
         <div class="fg" style="margin:0"><label style="font-size:.78rem">خط العرض Lat</label><input id="ni-lat" placeholder="36.837534" type="number" step="any"></div>
         <div class="fg" style="margin:0"><label style="font-size:.78rem">خط الطول Lng</label><input id="ni-lng" placeholder="10.106981" type="number" step="any"></div>
@@ -1896,7 +1899,7 @@ async function saveUser(u){
 // Quick save single institute
 async function saveInst(inst){
   await sbUpsert('institutes', {
-    id: inst.id, name: inst.name, gps: inst.gps,
+    id: inst.id, name: inst.name, code: inst.code||null, gps: inst.gps,
     doors: inst.doors, schedule: inst.schedule,
     alerts: inst.alerts, history: inst.history
   });
@@ -2609,6 +2612,9 @@ function renderAdminUsers(inst){
   if(!inst)return;
   const all=A.db.users.filter(u=>u.instId===inst.id&&u.role==='user');
   const pend=all.filter(u=>u.status==='pending'),rest=all.filter(u=>u.status!=='pending');
+  // تحديث badge طلبات التسجيل
+  const badge=el('pending-badge');
+  if(badge){ if(pend.length>0){badge.textContent=pend.length;badge.style.display='inline';}else{badge.style.display='none';} }
   el('pend-section').style.display=pend.length?'block':'none';
   el('pend-list').innerHTML=pend.map(u=>`<div class="user-item">
     <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}</div></div></div><span class="bdg bdg-pend">انتظار</span></div>
@@ -3308,6 +3314,10 @@ function renderAllUsers(){
   const filter=el('sp-inst-filter')?.value||'';
   let users=A.db.users.filter(u=>u.role!=='super');
   if(filter)users=users.filter(u=>u.instId===filter);
+  // تحديث badge طلبات التسجيل في super admin
+  const allPend=A.db.users.filter(u=>u.status==='pending').length;
+  const spBadge=el('sp-pending-badge');
+  if(spBadge){ if(allPend>0){spBadge.textContent=allPend;spBadge.style.display='inline';}else{spBadge.style.display='none';} }
   el('all-user-list').innerHTML=users.map(u=>{
     const inst=getInst(u.instId);
     const stBdg=u.status==='pending'?'bdg-pend':u.status==='frozen'?'bdg-frozen':u.role==='admin'?'bdg-admin':'bdg-active';
@@ -3398,25 +3408,44 @@ function openAlertsModal(){
 
 function approveUsp(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAllUsers();renderInsts();toast('تم قبول المستخدم','success');}}
 async function delInst(id){A.db.institutes=A.db.institutes.filter(i=>i.id!==id);A.db.users=A.db.users.filter(u=>u.instId!==id);sbDelete('institutes','id=eq.'+id);sbDelete('users','inst_id=eq.'+id);renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();toast('تم حذف المؤسسة','success');}
+function genInstCode(){
+  const code = String(Math.floor(10000+Math.random()*90000));
+  const inp = el('ni-code');
+  if(inp){ inp.value = code; }
+}
+
 async function addInstitute(){
-  const name=v('ni-name'),email=v('ni-email'),pw=v('ni-pass'),dev=v('ni-dev');
+  const name=v('ni-name'),email=v('ni-email'),pw=v('ni-pass'),pw2=v('ni-pass2');
+  const code=v('ni-code'),dev=v('ni-dev');
   const gpsVal=parseInt(el('ni-gps').value)||30;
   if(!name||!email||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
+  if(pw !== pw2){toast('كلمتا المرور غير متطابقتين','error');return;}
+  if(!code||code.length!==5||!/^\d{5}$/.test(code)){toast('الكود يجب أن يكون 5 أرقام','error');return;}
+  if(A.db.institutes.find(i=>i.code===code)){toast('هذا الكود مستخدم مسبقاً','error');return;}
+  if(A.db.users.find(u=>u.email.toLowerCase()===email.toLowerCase())){toast('هذا البريد مسجل مسبقاً','error');return;}
   const iid='inst'+Date.now();
-  const newInst = {id:iid,name,gps:gpsVal,doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:dev,active:true}],schedule:defSch(),alerts:[],history:[]};
+  const lat=parseFloat(el('ni-lat')?.value)||null;
+  const lng=parseFloat(el('ni-lng')?.value)||null;
+  const newInst = {
+    id:iid, name, code, gps:gpsVal,
+    doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:dev,active:true,type:'garage',lat,lng}],
+    schedule:defSch(), alerts:[], history:[]
+  };
   const newAdmin = {id:'u'+Date.now(),name:'مدير '+name,email,pw,role:'admin',status:'active',instId:iid,avatar:null,note:null,lastLoc:null};
-  A.db.institutes.push(newInst);
-  A.db.users.push(newAdmin);
   try {
     await saveInst(newInst);
     await saveUser(newAdmin);
-    toast('✅ تم إضافة المؤسسة','success');
+    A.db.institutes.push(newInst);
+    A.db.users.push(newAdmin);
+    toast('✅ تم إضافة المؤسسة — الكود: '+code,'success');
   } catch(e) {
     toast('خطأ في الحفظ: '+e.message,'error');
     console.error(e);
+    return;
   }
   renderInsts();populateSpFilter();renderSpInstGps();closeModal('m-add-inst');
 }
+
 
 // ════════════════════════════════════════════
 // HELPERS
@@ -4162,45 +4191,37 @@ async function smartLogin(){
 }
 
 async function smartRegister(){
-  const name   = (el('r-name')?.value||'').trim();
-  const email  = (el('r-email')?.value||'').trim().toLowerCase();
-  const pass   = el('r-pass')?.value||'';
+  const name  = (el('r-name')?.value||'').trim();
+  const code  = (el('r-inst-code')?.value||'').trim();
+  const email = (el('r-email')?.value||'').trim().toLowerCase();
+  const pass  = el('r-pass')?.value||'';
+  const pass2 = el('r-pass2')?.value||'';
 
   if(!name)  { toast('يرجى إدخال الاسم','error'); return; }
+  if(!code)  { toast('يرجى إدخال كود المؤسسة','error'); return; }
   if(!email) { toast('يرجى إدخال البريد الإلكتروني','error'); return; }
   if(!pass)  { toast('يرجى إدخال كلمة المرور','error'); return; }
+  if(pass !== pass2){ toast('كلمتا المرور غير متطابقتين','error'); return; }
   if(A.db.users.find(u=>u.email.toLowerCase()===email)){ toast('هذا البريد مسجل مسبقاً','error'); return; }
+
+  // البحث عن المؤسسة بالكود
+  const inst = A.db.institutes.find(i=>i.code===code);
+  if(!inst){ toast('❌ كود المؤسسة غير صحيح، تحقق من الكود','error'); return; }
 
   const btn2 = document.querySelector('#land-register .btn-pri');
   if(btn2){ btn2.textContent='⏳ جاري الحفظ...'; btn2.disabled=true; }
 
   try {
-    if(_regType==='admin'){
-      const instName = (el('r-inst-name')?.value||'').trim();
-      if(!instName){ toast('يرجى إدخال اسم المؤسسة','error'); return; }
-      const iid = 'inst_'+Date.now();
-      const newInst = {
-        id:iid, name:instName, gps:30,
-        doors:[{id:'door_'+Date.now(), name:'الباب الرئيسي', devId:'', active:true}],
-        schedule:defSch(), alerts:[], history:[]
-      };
-      const u = {id:'u'+Date.now(),name,email,pw:pass,role:'admin',status:'active',instId:iid,avatar:_avatarB64||null,lastLoc:null,note:null};
-      await saveInst(newInst);
-      await saveUser(u);
-      A.db.institutes.push(newInst);
-      A.db.users.push(u);
-      toast('✅ تم إنشاء حسابك ومؤسستك','success');
-      A.user = u; loadAdmin(); return;
-    }
-
-    // user
-    const instId = el('r-inst')?.value;
-    if(!instId){ toast('يرجى اختيار المؤسسة','error'); return; }
-    const newUser = {id:'u'+Date.now(),name,email,pw:pass,role:'user',status:'pending',instId,avatar:_avatarB64||null,lastLoc:null,note:null};
+    const newUser = {id:'u'+Date.now(),name,email,pw:pass,role:'user',status:'pending',instId:inst.id,avatar:_avatarB64||null,lastLoc:null,note:null};
     await saveUser(newUser);
     A.db.users.push(newUser);
+
+    // إرسال تنبيه للـ admin وsuper admin
+    const alertMsg = `طلب تسجيل جديد: ${name} (${email}) في ${inst.name}`;
+    await logAlert(inst, {name:'نظام التسجيل'}, alertMsg);
+
     el('pend-msg').style.display = 'block';
-    toast('✅ تم إرسال طلب التسجيل','success');
+    toast('✅ تم إرسال طلبك، في انتظار موافقة مدير المؤسسة','success');
   } catch(e) {
     toast('خطأ في الحفظ — تحقق من الاتصال','error');
     console.error(e);
@@ -4208,6 +4229,7 @@ async function smartRegister(){
     if(btn2){ btn2.textContent='✅ إنشاء الحساب'; btn2.disabled=false; }
   }
 }
+
 
 </script>
 
