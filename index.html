@@ -4144,8 +4144,8 @@ function setRegType(type){
   const btnAdmin = el('rtype-admin');
   if(btnUser)  { btnUser.style.background  = type==='user'  ? 'var(--accent)' : 'transparent'; btnUser.style.color  = type==='user'  ? '#fff' : 'var(--text2)'; }
   if(btnAdmin) { btnAdmin.style.background = type==='admin' ? 'var(--accent)' : 'transparent'; btnAdmin.style.color = type==='admin' ? '#fff' : 'var(--text2)'; }
-  el('inst-sel-grp').style.display  = type==='user'  ? 'block' : 'none';
-  el('inst-name-grp').style.display = type==='admin' ? 'block' : 'none';
+  if(el('inst-sel-grp')) el('inst-sel-grp').style.display  = type==='user'  ? 'block' : 'none';
+  if(el('inst-name-grp')) el('inst-name-grp').style.display = type==='admin' ? 'block' : 'none';
   if(type==='user'){
     const s = el('r-inst');
     s.innerHTML = '<option value="">اختر المؤسسة</option>';
@@ -4244,9 +4244,12 @@ async function smartRegister(){
     await saveUser(newUser);
     A.db.users.push(newUser);
 
-    // إرسال تنبيه للـ admin وsuper admin
-    const alertMsg = `طلب تسجيل جديد: ${name} (${email}) في ${inst.name}`;
-    await logAlert(inst, {name:'نظام التسجيل'}, alertMsg);
+    // تسجيل طلب التسجيل في alerts المؤسسة
+    const now = new Date();
+    const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    if(!inst.alerts) inst.alerts = [];
+    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} (${email})`, time:dateStr, type:'register'});
+    await saveInst(inst);
 
     el('pend-msg').style.display = 'block';
     toast('✅ تم إرسال طلبك، في انتظار موافقة مدير المؤسسة','success');
