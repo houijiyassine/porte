@@ -4144,13 +4144,8 @@ function setRegType(type){
   const btnAdmin = el('rtype-admin');
   if(btnUser)  { btnUser.style.background  = type==='user'  ? 'var(--accent)' : 'transparent'; btnUser.style.color  = type==='user'  ? '#fff' : 'var(--text2)'; }
   if(btnAdmin) { btnAdmin.style.background = type==='admin' ? 'var(--accent)' : 'transparent'; btnAdmin.style.color = type==='admin' ? '#fff' : 'var(--text2)'; }
-  if(el('inst-sel-grp')) el('inst-sel-grp').style.display  = type==='user'  ? 'block' : 'none';
+  if(el('inst-sel-grp'))  el('inst-sel-grp').style.display  = type==='user'  ? 'block' : 'none';
   if(el('inst-name-grp')) el('inst-name-grp').style.display = type==='admin' ? 'block' : 'none';
-  if(type==='user'){
-    const s = el('r-inst');
-    s.innerHTML = '<option value="">اختر المؤسسة</option>';
-    A.db.institutes.forEach(i => s.innerHTML += `<option value="${i.id}">${i.name}</option>`);
-  }
 }
 
 let _logoTapCount = 0;
