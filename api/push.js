@@ -12,6 +12,7 @@ async function sbGet(path) {
     headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }
   });
   const data = await r.json();
+  console.log('sbGet', path, '->', JSON.stringify(data).slice(0,200));
   return Array.isArray(data) ? data : [];
 }
 
@@ -23,17 +24,22 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const { inst_id, user_name } = req.body || {};
+  console.log('Push request: inst_id=', inst_id, 'user=', user_name);
   if (!inst_id) return res.status(400).json({ error: 'Missing inst_id' });
 
   try {
-    const admins = await sbGet(`users?inst_id=eq.${inst_id}&role=eq.admin&push_sub=not.is.null&select=push_sub`);
-    const supers = await sbGet(`users?role=eq.super&push_sub=not.is.null&select=push_sub`);
-    const all = [...admins, ...supers];
+    // جلب كل المستخدمين الذين لديهم push_sub (admin + super)
+    const all = await sbGet(`users?push_sub=not.is.null&select=id,name,role,inst_id,push_sub`);
+    
+    // فلترة: admin من نفس المؤسسة + كل super admins
+    const targets = all.filter(u => 
+      (u.role === 'admin' && u.inst_id === inst_id) || u.role === 'super'
+    );
 
-    console.log(`Push: found ${all.length} subscribers (${admins.length} admins, ${supers.length} supers)`);
+    console.log(`Targets: ${targets.length} from ${all.length} total subscribers`);
 
-    if (all.length === 0) {
-      return res.status(200).json({ success: true, sent: 0, total: 0, msg: 'no subscribers' });
+    if (targets.length === 0) {
+      return res.status(200).json({ success: true, sent: 0, total: 0, msg: 'no targets', all_subs: all.length });
     }
 
     const payload = JSON.stringify({
@@ -44,7 +50,7 @@ module.exports = async function handler(req, res) {
     });
 
     const results = await Promise.allSettled(
-      all.map(u => {
+      targets.map(u => {
         try {
           const sub = JSON.parse(u.push_sub);
           return webpush.sendNotification(sub, payload);
@@ -54,9 +60,9 @@ module.exports = async function handler(req, res) {
 
     const sent = results.filter(r => r.status === 'fulfilled').length;
     const errors = results.filter(r => r.status === 'rejected').map(r => r.reason?.message);
-    console.log(`Push sent: ${sent}/${all.length}`, errors);
+    console.log(`Sent: ${sent}/${targets.length}`, errors);
 
-    return res.status(200).json({ success: true, sent, total: all.length, errors });
+    return res.status(200).json({ success: true, sent, total: targets.length, errors });
   } catch(e) {
     console.error('Push error:', e);
     return res.status(500).json({ success: false, error: e.message });
