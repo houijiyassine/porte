@@ -2405,9 +2405,11 @@ async function fetchDoorStatus(door, pfx) {
     // تحديث حالة الباب
     if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening') {
       animateDoor(door.id, pfx, 'open');
+      rcLogHistory(door, 'open');
     } else if ((d.doorState === 'close' || d.doorState === 'stopped') &&
                currentState !== 'closed' && currentState !== 'closing') {
       animateDoor(door.id, pfx, 'closed');
+      rcLogHistory(door, 'close');
     }
 
     // تحديث شارة online/offline
@@ -2422,6 +2424,35 @@ async function fetchDoorStatus(door, pfx) {
       }
     }
   } catch(e) {}
+}
+
+function rcLogHistory(door, action) {
+  // لا نسجل إذا الحالة تغيرت بسببنا نحن (ctrlDoor يسجل بنفسه)
+  // نسجل فقط إذا تغيرت بسبب RC خارجي
+  const inst = (A.db?.institutes||[]).find(i => i.doors?.find(d => d.id === door.id));
+  if (!inst) return;
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2,'0');
+  const mm = String(now.getMonth()+1).padStart(2,'0');
+  const yyyy = now.getFullYear();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const min = String(now.getMinutes()).padStart(2,'0');
+  const timeStr = `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+  const actionLabel = action === 'open' ? 'open' : 'close';
+  if (!inst.history) inst.history = [];
+  // تجنب التكرار — لا نضيف إذا آخر سجل نفس الحدث في نفس الدقيقة
+  const last = inst.history[0];
+  if (last && last.door === door.name && last.action === actionLabel && last.time === timeStr) return;
+  inst.history.unshift({
+    id: 'h' + Date.now(),
+    uid: 'rc',
+    uname: 'جهاز تحكم',
+    via: 'rc',
+    door: door.name,
+    action: actionLabel,
+    time: timeStr
+  });
+  saveInst(inst);
 }
 
 function startDoorPolling(door, pfx) {
@@ -2806,9 +2837,9 @@ function histItemWithUser(h) {
   const cls = h.action === 'open' ? 'h-open' : h.action === 'close' ? 'h-close' : 'h-stop';
   const ic  = h.action === 'open' ? '🟢' : h.action === 'close' ? '🔴' : '🟡';
   const actionColor = h.action === 'open' ? 'var(--success)' : h.action === 'close' ? 'var(--danger)' : 'var(--warning)';
-  const isRC = h.via === 'rc';
+  const isRC = h.via === 'rc' || h.uid === 'rc';
   const byLabel = isRC
-    ? `<span style="background:rgba(139,92,246,.15);color:#a78bfa;border:1px solid rgba(139,92,246,.25);border-radius:6px;padding:.15rem .5rem;font-size:.72rem;font-weight:700">📡 RC</span>`
+    ? `<span style="background:rgba(139,92,246,.15);color:#a78bfa;border:1px solid rgba(139,92,246,.25);border-radius:6px;padding:.15rem .5rem;font-size:.72rem;font-weight:700">📡 جهاز تحكم</span>`
     : `<span style="background:rgba(59,130,246,.1);color:var(--accent);border:1px solid rgba(59,130,246,.2);border-radius:6px;padding:.15rem .5rem;font-size:.72rem;font-weight:700">👤 ${h.uname||'—'}</span>`;
   // parse date/time nicely
   const timeParts = (h.time||'').split(' ');
