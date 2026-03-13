@@ -1089,7 +1089,8 @@ async function sbFetch(path, options={}) {
   });
   if (r.status === 204) return null;
   const json = await r.json();
-  if (!r.ok) throw new Error(json?.message || json?.error || r.status);
+  console.log(`📡 sbFetch ${options.method||'GET'} /${path} → ${r.status}`, json);
+  if (!r.ok) throw new Error(json?.message || json?.hint || json?.error || `HTTP ${r.status}`);
   return json;
 }
 
@@ -3026,9 +3027,9 @@ async function addUser(){
     closeModal('m-add-user');
     toast('✅ تم إضافة المستخدم','success');
   } catch(e) {
-    // إذا فشل الحفظ نزيل المستخدم من الذاكرة
     A.db.users = A.db.users.filter(u=>u.id!==newUser.id);
-    toast('❌ فشل حفظ المستخدم — تحقق من الاتصال','error');
+    console.error('❌ addUser error:', e);
+    toast(`❌ فشل حفظ المستخدم: ${e.message}`,'error');
   }
 }
 async function addDoor(){
