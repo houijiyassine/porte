@@ -2869,15 +2869,25 @@ let _dhSelectedDay = '';
 
 function populateDoorHistDays(inst, door) {
   const h = (inst?.history||[]).filter(x => x.door === door?.name);
+  // التواريخ بفورمات dd/mm/yyyy hh:mm — نأخذ الجزء الأول فقط (dd/mm/yyyy)
   _dhActiveDays = new Set(h.map(x => (x.time||'').split(' ')[0]).filter(Boolean));
+
   // ابدأ التقويم بأحدث تاريخ موجود
   if (_dhActiveDays.size > 0) {
-    const latest = [..._dhActiveDays].sort().reverse()[0];
-    const parts = latest.split(/[-\/]/);
-    if (parts.length >= 2) {
-      _dhCalYear  = parseInt(parts[0]) || new Date().getFullYear();
-      _dhCalMonth = (parseInt(parts[1]) - 1) || new Date().getMonth();
+    // نفرز بترتيب صحيح: نحوّل dd/mm/yyyy إلى yyyy/mm/dd للمقارنة
+    const sorted = [..._dhActiveDays].sort((a,b) => {
+      const toYMD = s => { const p=s.split('/'); return `${p[2]}/${p[1]}/${p[0]}`; };
+      return toYMD(b).localeCompare(toYMD(a));
+    });
+    const latest = sorted[0]; // dd/mm/yyyy
+    const parts = latest.split('/');
+    if (parts.length === 3) {
+      _dhCalYear  = parseInt(parts[2]);  // yyyy
+      _dhCalMonth = parseInt(parts[1]) - 1; // mm → 0-indexed
     }
+  } else {
+    _dhCalYear  = new Date().getFullYear();
+    _dhCalMonth = new Date().getMonth();
   }
   _dhSelectedDay = '';
   renderDhCal();
@@ -2892,59 +2902,41 @@ function renderDhCal() {
   const daysEl = el('dh-cal-days');
   if (!daysEl) return;
 
-  const firstDay = new Date(_dhCalYear, _dhCalMonth, 1).getDay(); // 0=Sun
+  const firstDay = new Date(_dhCalYear, _dhCalMonth, 1).getDay();
   const daysInMonth = new Date(_dhCalYear, _dhCalMonth + 1, 0).getDate();
 
-  let html = '';
-  // فراغات قبل اليوم الأول
-  for (let i = 0; i < firstDay; i++) {
-    html += `<div></div>`;
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    const mm = String(_dhCalMonth + 1).padStart(2, '0');
-    const dd = String(d).padStart(2, '0');
-    // نجرب كلا الفورماتين
-    const key1 = `${_dhCalYear}/${_dhCalMonth+1}/${d}`;
-    const key2 = `${dd}/${mm}/${_dhCalYear}`;
-    const key3 = `${_dhCalYear}-${mm}-${dd}`;
-    const hasEvent = _dhActiveDays.has(key1) || _dhActiveDays.has(key2) || _dhActiveDays.has(key3)
-      || [..._dhActiveDays].some(k => k.includes(`${_dhCalYear}`) && k.includes(`/${d}`) || k.endsWith(`/${dd}/${_dhCalYear}`) || k === `${dd}/0${_dhCalMonth+1}/${_dhCalYear}` || k === `${d}/0${_dhCalMonth+1}/${_dhCalYear}`);
-    // بحث أبسط
-    const isActive = [..._dhActiveDays].some(k => {
-      const parts = k.split(/[-\/]/);
-      if (parts.length < 3) return false;
-      const y = parts.find(p => p.length === 4);
-      const rest = parts.filter(p => p !== y).map(Number);
-      return parseInt(y) === _dhCalYear && rest.includes(_dhCalMonth+1) && rest.includes(d);
-    });
-    const isSelected = _dhSelectedDay && (() => {
-      const parts = _dhSelectedDay.split(/[-\/]/);
-      if (parts.length < 3) return false;
-      const y = parts.find(p => p.length === 4);
-      const rest = parts.filter(p => p !== y).map(Number);
-      return parseInt(y) === _dhCalYear && rest.includes(_dhCalMonth+1) && rest.includes(d);
-    })();
+  // dayKey = dd/mm/yyyy (نفس فورمات السجل)
+  const makeDayKey = (d) => {
+    const dd = String(d).padStart(2,'0');
+    const mm = String(_dhCalMonth+1).padStart(2,'0');
+    return `${dd}/${mm}/${_dhCalYear}`;
+  };
 
+  // فحص إذا اليوم فيه أحداث — نبحث في أول جزء من التاريخ (قبل المسافة)
+  const hasEvents = (d) => {
+    const key = makeDayKey(d);
+    return [..._dhActiveDays].some(k => k.startsWith(key));
+  };
+
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += `<div></div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dayKey = makeDayKey(d);
+    const isActive = hasEvents(d);
+    const isSelected = _dhSelectedDay === dayKey;
     const today = new Date();
     const isToday = today.getFullYear()===_dhCalYear && today.getMonth()===_dhCalMonth && today.getDate()===d;
 
-    let bg = 'transparent'; let color = 'var(--text2)'; let fw = '400'; let border = 'none';
-    if (isSelected) { bg = 'var(--accent)'; color = '#fff'; fw = '700'; }
+    let bg = 'transparent', color = 'var(--text2)', fw = '400', border = 'none';
+    if (isSelected)    { bg = 'var(--accent)'; color = '#fff'; fw = '700'; }
     else if (isActive) { bg = 'rgba(37,99,235,0.25)'; color = 'var(--accent)'; fw = '700'; }
-    else if (isToday) { border = '1px solid var(--accent)'; color = 'var(--text)'; }
+    else if (isToday)  { border = '1px solid var(--accent)'; color = 'var(--text)'; }
 
-    const dayKey = [..._dhActiveDays].find(k => {
-      const parts = k.split(/[-\/]/);
-      if (parts.length < 3) return false;
-      const y = parts.find(p => p.length === 4);
-      const rest = parts.filter(p => p !== y).map(Number);
-      return parseInt(y) === _dhCalYear && rest.includes(_dhCalMonth+1) && rest.includes(d);
-    }) || '';
-
-    html += `<div onclick="dhCalSelect('${dayKey}')"
+    html += `<div onclick="${isActive||isSelected ? `dhCalSelect('${dayKey}')` : ''}"
       style="padding:.3rem .1rem;border-radius:8px;cursor:${isActive||isSelected?'pointer':'default'};
              background:${bg};color:${color};font-weight:${fw};font-size:.78rem;
-             border:${border};transition:all .15s">
+             border:${border};transition:all .15s;text-align:center">
       ${d}${isActive && !isSelected ? '<div style="width:4px;height:4px;background:var(--accent);border-radius:50%;margin:1px auto 0"></div>' : ''}
     </div>`;
   }
