@@ -2581,6 +2581,7 @@ function loadAdmin(){
   renderInstHero(inst, 'admin');
   // polling للمستخدمين المعلقين كل 15 ثانية
   startPendingListener();
+  initPushForAdmin();
   if(window._pendingPoll) clearInterval(window._pendingPoll);
   window._pendingPoll = setInterval(async()=>{
     try {
@@ -3258,7 +3259,8 @@ function loadSuper(){
   showPage('super-dash');
   // polling للمستخدمين المعلقين كل 15 ثانية
   startPendingListener();
-  if(window._pendingPoll) clearInterval(window._pendingPoll);
+  startPendingListener();
+  initPushForAdmin();
   window._pendingPoll = setInterval(async()=>{
     try {
       const fresh = await sbGet('users','select=*');
@@ -4281,6 +4283,13 @@ async function smartRegister(){
 
     el('pend-msg').style.display = 'block';
     toast('✅ تم إرسال طلبك، في انتظار موافقة مدير المؤسسة','success');
+
+    // إرسال Push Notification للمديرين
+    fetch('/api/push', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ inst_id: inst.id, user_name: name })
+    }).catch(()=>{});
   } catch(e) {
     toast('خطأ في الحفظ — تحقق من الاتصال','error');
     console.error(e);
@@ -4292,57 +4301,56 @@ async function smartRegister(){
 
 
 // ════════════════════════════════════════════
-// PUSH NOTIFICATIONS — Supabase Realtime
+// PUSH NOTIFICATIONS — Smart Polling
 // ════════════════════════════════════════════
-let _supaClient = null;
-let _realtimeChannel = null;
-
-function initRealtime() {
-  if(_supaClient) return;
-  try {
-    _supaClient = window.supabase?.createClient(SB_URL, SB_KEY);
-    if(!_supaClient) return;
-  } catch(e){ return; }
-}
+let _notifPoll = null;
+let _lastPendingIds = new Set();
 
 function startPendingListener() {
-  initRealtime();
-  if(!_supaClient) return;
-  if(_realtimeChannel) { _supaClient.removeChannel(_realtimeChannel); }
+  if(_notifPoll) clearInterval(_notifPoll);
 
-  _realtimeChannel = _supaClient
-    .channel('pending-users')
-    .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'users'
-    }, (payload) => {
-      const u = payload.new;
-      if(u.status !== 'pending') return;
+  // نحفظ IDs الحالية كنقطة بداية
+  _lastPendingIds = new Set(
+    A.db.users.filter(u=>u.status==='pending').map(u=>u.id)
+  );
+
+  _notifPoll = setInterval(async () => {
+    try {
       const role = A.user?.role;
       if(!role || (role !== 'admin' && role !== 'super')) return;
-      if(role === 'admin' && u.inst_id !== myInst()?.id) return;
 
-      const inst = A.db.institutes.find(i=>i.id===u.inst_id);
-      showPushNotif(
-        '👤 طلب تسجيل جديد',
-        `${u.name} يطلب الانضمام${inst?' إلى '+inst.name:''}`
-      );
-      // تحديث القائمة
-      A.db.users = A.db.users.filter(x=>x.id!==u.id);
-      A.db.users.push({...u, instId:u.inst_id, lastLoc:null});
-      if(role==='admin') renderAdminUsers(myInst());
-      else { renderAllUsers(); renderInsts(); }
-    })
-    .subscribe();
+      const fresh = await sbGet('users', 'select=id,name,status,inst_id&status=eq.pending');
+      if(!Array.isArray(fresh)) return;
+
+      // نبحث عن مستخدمين جدد لم نرهم من قبل
+      for(const u of fresh) {
+        if(_lastPendingIds.has(u.id)) continue;
+        // مستخدم جديد!
+        if(role === 'admin' && u.inst_id !== myInst()?.id) continue;
+        const inst = A.db.institutes.find(i=>i.id===u.inst_id);
+        showPushNotif(
+          '👤 طلب تسجيل جديد',
+          `${u.name} يطلب الانضمام${inst?' إلى '+inst.name:''}`
+        );
+        _lastPendingIds.add(u.id);
+        // تحديث القائمة الكاملة
+        const allFresh = await sbGet('users','select=*');
+        if(Array.isArray(allFresh)){
+          A.db.users = allFresh.map(x=>({...x,instId:x.inst_id,lastLoc:x.last_loc?tryParse(x.last_loc):null}));
+          if(role==='admin') renderAdminUsers(myInst());
+          else { renderAllUsers(); renderInsts(); }
+        }
+        break;
+      }
+    } catch(e){}
+  }, 5000);
 }
 
 function stopPendingListener() {
-  if(_supaClient && _realtimeChannel) {
-    _supaClient.removeChannel(_realtimeChannel);
-    _realtimeChannel = null;
-  }
+  if(_notifPoll){ clearInterval(_notifPoll); _notifPoll=null; }
 }
+
+function tryParse(s){ try{return JSON.parse(s);}catch(e){return null;} }
 
 let _pnTimer = null;
 function showPushNotif(title, msg) {
@@ -4354,7 +4362,6 @@ function showPushNotif(title, msg) {
   n.style.display = 'flex';
   if(_pnTimer) clearTimeout(_pnTimer);
   _pnTimer = setTimeout(()=> closePushNotif(), 6000);
-  // صوت تنبيه خفيف
   try {
     const ctx = new AudioContext();
     const o = ctx.createOscillator();
@@ -4370,6 +4377,81 @@ function closePushNotif() {
   if(!n) return;
   n.classList.add('hide');
   setTimeout(()=>{ n.style.display='none'; n.classList.remove('hide'); }, 300);
+}
+
+
+// ════════════════════════════════════════════
+// WEB PUSH — إشعارات الهاتف
+// ════════════════════════════════════════════
+const VAPID_PUBLIC_KEY = 'BHPSYKGfHxf1q5y6RBv7_h5KWuYU3OrV0AEdZwHYE3S581kEmL_5MXHVjV1xEe1i07IpfqheYAssVMPmZZdJU2U';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function registerPushSW() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    return reg;
+  } catch(e) { console.warn('SW register failed:', e); }
+}
+
+async function subscribePush() {
+  try {
+    const reg = await registerPushSW();
+    if (!reg) return;
+
+    // طلب إذن الإشعارات
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast('يرجى السماح بالإشعارات للحصول على تنبيهات فورية', 'info'); return; }
+
+    // الاشتراك
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+
+    // حفظ الاشتراك في Supabase
+    const subJson = JSON.stringify(sub.toJSON());
+    await sbFetch('users?id=eq.' + A.user.id, {
+      method: 'PATCH',
+      prefer: 'return=minimal',
+      body: JSON.stringify({ push_sub: subJson })
+    });
+    toast('✅ تم تفعيل الإشعارات الفورية', 'success');
+  } catch(e) { console.warn('Push subscribe failed:', e); }
+}
+
+// تفعيل Push تلقائياً عند دخول admin/super
+async function initPushForAdmin() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') {
+    await subscribePush();
+  } else if (Notification.permission !== 'denied') {
+    // نعرض زر تفعيل
+    showPushEnableBtn();
+  }
+}
+
+function showPushEnableBtn() {
+  // نضيف زر صغير في الـ topbar
+  const existing = el('push-enable-btn');
+  if (existing) return;
+  const btn = document.createElement('button');
+  btn.id = 'push-enable-btn';
+  btn.innerHTML = '🔔 تفعيل الإشعارات';
+  btn.style.cssText = 'position:fixed;bottom:1rem;left:1rem;z-index:9000;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:.6rem 1rem;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)';
+  btn.onclick = async () => { await subscribePush(); btn.remove(); };
+  document.body.appendChild(btn);
+  // يختفي بعد 10 ثوانٍ
+  setTimeout(() => btn.remove(), 10000);
 }
 
 </script>
