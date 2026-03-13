@@ -647,7 +647,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="topbar">
     <div>
       <div class="tb-inst" id="ad-inst-name">لوحة التحكم</div>
-      <div class="tb-user-greet">مدير المؤسسة</div>
+      <div class="tb-user-greet" id="ad-inst-code-lbl">مدير المؤسسة</div>
     </div>
     <div style="display:flex;gap:.5rem;align-items:center">
       <button class="icon-btn" onclick="toggleTheme()" id="theme-btn">🌙</button>
@@ -2544,9 +2544,22 @@ function loadAdmin(){
   showPage('admin-dash');
   const inst=myInst();
   if(el('ad-inst-name')) el('ad-inst-name').textContent=inst?.name||tr('dashboard');
+  if(el('ad-inst-code-lbl')) el('ad-inst-code-lbl').textContent=inst?.code?`مدير المؤسسة | 🔑 الكود: ${inst.code}`:'مدير المؤسسة';
   renderAdminUsers(inst);renderAdminDoors(inst);renderAlerts(inst);renderSch(inst);renderHist(inst);
   renderPerDoorGps(inst);
   renderInstHero(inst, 'admin');
+  // polling للمستخدمين المعلقين كل 15 ثانية
+  if(window._pendingPoll) clearInterval(window._pendingPoll);
+  window._pendingPoll = setInterval(async()=>{
+    try {
+      const fresh = await sbGet('users','select=*');
+      if(!fresh) return;
+      const prevPend = A.db.users.filter(u=>u.instId===myInst()?.id&&u.status==='pending').length;
+      A.db.users = fresh.map(u=>({...u,instId:u.inst_id,lastLoc:u.last_loc?JSON.parse(u.last_loc):null,scheduleMode:u.schedule_mode,note:u.note}));
+      const newPend = A.db.users.filter(u=>u.instId===myInst()?.id&&u.status==='pending').length;
+      if(newPend !== prevPend){ renderAdminUsers(myInst()); }
+    } catch(e){}
+  }, 15000);
   // Show add/manage door btn only for super admin
   const addWrap = el('add-door-btn-wrap');
   if(addWrap) addWrap.innerHTML = A.user?.role==='super' ? `<button class="btn-sm" onclick="openModal('m-add-door')">${tr('addDoor')}</button>` : '';
@@ -3211,6 +3224,18 @@ function loadSuper(){
   renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();
   el('sp-gps-n').textContent=A.db.globalGps||30;
   showPage('super-dash');
+  // polling للمستخدمين المعلقين كل 15 ثانية
+  if(window._pendingPoll) clearInterval(window._pendingPoll);
+  window._pendingPoll = setInterval(async()=>{
+    try {
+      const fresh = await sbGet('users','select=*');
+      if(!fresh) return;
+      const prevPend = A.db.users.filter(u=>u.status==='pending').length;
+      A.db.users = fresh.map(u=>({...u,instId:u.inst_id,lastLoc:u.last_loc?JSON.parse(u.last_loc):null,scheduleMode:u.schedule_mode,note:u.note}));
+      const newPend = A.db.users.filter(u=>u.status==='pending').length;
+      if(newPend !== prevPend){ renderAllUsers(); renderInsts(); }
+    } catch(e){}
+  }, 15000);
 }
 
 function renderInsts(){
@@ -3235,7 +3260,7 @@ function renderInsts(){
       </div>`).join('');
     return `<div class="inst-card">
       <div class="inst-hdr">
-        <div><div class="inst-name">🏫 ${inst.name}</div><div class="inst-meta">${inst.doors.length} باب | GPS: ${inst.gps||30}م</div></div>
+        <div><div class="inst-name">🏫 ${inst.name}</div><div class="inst-meta">${inst.doors.length} باب | GPS: ${inst.gps||30}م${inst.code?` | <span style="color:var(--accent);font-weight:700">🔑 الكود: ${inst.code}</span>`:''}</div></div>
         <div style="display:flex;gap:.4rem">
           <button class="btn-sm" onclick="editInstModal('${inst.id}')">✏️ تعديل</button>
           <button class="btn-sm btn-danger" onclick="delInst('${inst.id}')">${tr("deleteDoor")}</button>
