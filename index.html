@@ -3422,8 +3422,8 @@ function genInstCode(){
 
 async function addInstitute(){
   const name=v('ni-name'),email=v('ni-email'),pw=v('ni-pass'),pw2=v('ni-pass2');
-  const code=v('ni-code'),dev=v('ni-dev');
-  const gpsVal=parseInt(el('ni-gps').value)||30;
+  const code=v('ni-code');
+  if(!name||!email||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
   if(!name||!email||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
   if(pw !== pw2){toast('كلمتا المرور غير متطابقتين','error');return;}
   if(!code||code.length!==5||!/^\d{5}$/.test(code)){toast('الكود يجب أن يكون 5 أرقام','error');return;}
