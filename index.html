@@ -132,6 +132,27 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .door-status-label.moving-lbl{color:var(--warning);}
 .door-status-label.stopped-lbl{color:#a78bfa;}
 
+
+/* ── Push Notification ── */
+#push-notif {
+  position:fixed; top:1rem; left:50%; transform:translateX(-50%);
+  background:var(--surface); border:1px solid var(--accent);
+  border-radius:14px; padding:.85rem 1.25rem;
+  display:flex; align-items:center; gap:.75rem;
+  box-shadow:0 8px 32px rgba(0,0,0,.4);
+  z-index:9999; min-width:280px; max-width:360px;
+  animation: slideDown .35s ease;
+  direction: rtl;
+}
+#push-notif.hide { animation: slideUp .3s ease forwards; }
+@keyframes slideDown { from{opacity:0;top:-.5rem} to{opacity:1;top:1rem} }
+@keyframes slideUp  { from{opacity:1;top:1rem}  to{opacity:0;top:-.5rem} }
+.pn-icon { font-size:1.6rem; flex-shrink:0; }
+.pn-body { flex:1; }
+.pn-title { font-weight:700; font-size:.88rem; color:var(--text); }
+.pn-msg   { font-size:.78rem; color:var(--text2); margin-top:.2rem; }
+.pn-close { background:none; border:none; color:var(--text2); cursor:pointer; font-size:1.1rem; padding:.2rem; }
+
 /* DOOR CARD */
 .door-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.5rem;margin-bottom:1rem;}
 .door-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;}
@@ -505,6 +526,8 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 </style>
 </head>
 <body>
+<!-- Supabase Realtime -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
 <!-- LANDING → direct login -->
 <div id="landing" class="page active">
@@ -983,6 +1006,14 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="push-notif" style="display:none">
+  <span class="pn-icon">🔔</span>
+  <div class="pn-body">
+    <div class="pn-title" id="pn-title"></div>
+    <div class="pn-msg" id="pn-msg"></div>
+  </div>
+  <button class="pn-close" onclick="closePushNotif()">✕</button>
+</div>
 
 <script>
 // ════════════════════════════════════════════
@@ -2549,6 +2580,7 @@ function loadAdmin(){
   renderPerDoorGps(inst);
   renderInstHero(inst, 'admin');
   // polling للمستخدمين المعلقين كل 15 ثانية
+  startPendingListener();
   if(window._pendingPoll) clearInterval(window._pendingPoll);
   window._pendingPoll = setInterval(async()=>{
     try {
@@ -3225,6 +3257,7 @@ function loadSuper(){
   el('sp-gps-n').textContent=A.db.globalGps||30;
   showPage('super-dash');
   // polling للمستخدمين المعلقين كل 15 ثانية
+  startPendingListener();
   if(window._pendingPoll) clearInterval(window._pendingPoll);
   window._pendingPoll = setInterval(async()=>{
     try {
@@ -4256,6 +4289,88 @@ async function smartRegister(){
   }
 }
 
+
+
+// ════════════════════════════════════════════
+// PUSH NOTIFICATIONS — Supabase Realtime
+// ════════════════════════════════════════════
+let _supaClient = null;
+let _realtimeChannel = null;
+
+function initRealtime() {
+  if(_supaClient) return;
+  try {
+    _supaClient = window.supabase?.createClient(SB_URL, SB_KEY);
+    if(!_supaClient) return;
+  } catch(e){ return; }
+}
+
+function startPendingListener() {
+  initRealtime();
+  if(!_supaClient) return;
+  if(_realtimeChannel) { _supaClient.removeChannel(_realtimeChannel); }
+
+  _realtimeChannel = _supaClient
+    .channel('pending-users')
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'users'
+    }, (payload) => {
+      const u = payload.new;
+      if(u.status !== 'pending') return;
+      const role = A.user?.role;
+      if(!role || (role !== 'admin' && role !== 'super')) return;
+      if(role === 'admin' && u.inst_id !== myInst()?.id) return;
+
+      const inst = A.db.institutes.find(i=>i.id===u.inst_id);
+      showPushNotif(
+        '👤 طلب تسجيل جديد',
+        `${u.name} يطلب الانضمام${inst?' إلى '+inst.name:''}`
+      );
+      // تحديث القائمة
+      A.db.users = A.db.users.filter(x=>x.id!==u.id);
+      A.db.users.push({...u, instId:u.inst_id, lastLoc:null});
+      if(role==='admin') renderAdminUsers(myInst());
+      else { renderAllUsers(); renderInsts(); }
+    })
+    .subscribe();
+}
+
+function stopPendingListener() {
+  if(_supaClient && _realtimeChannel) {
+    _supaClient.removeChannel(_realtimeChannel);
+    _realtimeChannel = null;
+  }
+}
+
+let _pnTimer = null;
+function showPushNotif(title, msg) {
+  const n = el('push-notif');
+  if(!n) return;
+  el('pn-title').textContent = title;
+  el('pn-msg').textContent   = msg;
+  n.classList.remove('hide');
+  n.style.display = 'flex';
+  if(_pnTimer) clearTimeout(_pnTimer);
+  _pnTimer = setTimeout(()=> closePushNotif(), 6000);
+  // صوت تنبيه خفيف
+  try {
+    const ctx = new AudioContext();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880; g.gain.value = 0.1;
+    o.start(); o.stop(ctx.currentTime + 0.15);
+  } catch(e){}
+}
+
+function closePushNotif() {
+  const n = el('push-notif');
+  if(!n) return;
+  n.classList.add('hide');
+  setTimeout(()=>{ n.style.display='none'; n.classList.remove('hide'); }, 300);
+}
 
 </script>
 
