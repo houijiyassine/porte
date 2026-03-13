@@ -3424,15 +3424,14 @@ async function addInstitute(){
   const name=v('ni-name'),email=v('ni-email'),pw=v('ni-pass'),pw2=v('ni-pass2');
   const code=v('ni-code');
   if(!name||!email||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
-  if(!name||!email||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
   if(pw !== pw2){toast('كلمتا المرور غير متطابقتين','error');return;}
   if(!code||code.length!==5||!/^\d{5}$/.test(code)){toast('الكود يجب أن يكون 5 أرقام','error');return;}
   if(A.db.institutes.find(i=>i.code===code)){toast('هذا الكود مستخدم مسبقاً','error');return;}
   if(A.db.users.find(u=>u.email.toLowerCase()===email.toLowerCase())){toast('هذا البريد مسجل مسبقاً','error');return;}
   const iid='inst'+Date.now();
   const newInst = {
-    id:iid, name, code, gps:gpsVal,
-    doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:dev,active:true,type:'garage'}],
+    id:iid, name, code, gps:30,
+    doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:'',active:true,type:'garage'}],
     schedule:defSch(), alerts:[], history:[]
   };
   const newAdmin = {id:'u'+Date.now(),name:'مدير '+name,email,pw,role:'admin',status:'active',instId:iid,avatar:null,note:null,lastLoc:null};
