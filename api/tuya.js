@@ -2404,15 +2404,23 @@ async function fetchDoorStatus(door, pfx) {
     const uid = `${pfx}-${door.id}`;
     const currentState = doorStates[uid];
 
-    // تحديث حالة الباب
-    if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening') {
+    // تحديث حالة الباب — لا نتجاوز stopped إلا إذا تغيرت الحالة فعلاً
+    if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'open');
       rcLogHistory(door, 'open');
-    } else if (d.doorState === 'close' && currentState !== 'closed' && currentState !== 'closing') {
+    } else if (d.doorState === 'close' && currentState !== 'closed' && currentState !== 'closing' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'closed');
       rcLogHistory(door, 'close');
     } else if (d.doorState === 'stopped' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'stopped');
+    } else if (d.doorState === 'open' && currentState === 'stopped') {
+      // RC فتح بعد stop — نحدث
+      animateDoor(door.id, pfx, 'open');
+      rcLogHistory(door, 'open');
+    } else if (d.doorState === 'close' && currentState === 'stopped') {
+      // RC أغلق بعد stop — نحدث
+      animateDoor(door.id, pfx, 'closed');
+      rcLogHistory(door, 'close');
     }
 
     // تحديث شارة online/offline
