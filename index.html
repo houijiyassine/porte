@@ -1083,8 +1083,7 @@ async function sbFetch(path, options={}) {
       'apikey': SB_KEY,
       'Authorization': `Bearer ${SB_KEY}`,
       'Content-Type': 'application/json',
-      'Prefer': options.prefer || '',
-      ...options.headers
+      ...(options.headers || {})
     }
   });
   if (r.status === 204) return null;
@@ -2597,11 +2596,11 @@ function renderAdminUsers(inst){
     <span class="bdg ${u.status==='frozen'?'bdg-frozen':'bdg-active'}">${u.status==='frozen'?tr('frozen'):tr('active')}</span></div>
     ${u.note ? `<div style="display:flex;align-items:flex-start;gap:.4rem;background:rgba(129,140,248,.07);border:1px solid rgba(129,140,248,.2);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;color:var(--text2);margin-bottom:.5rem"><span style="font-size:.85rem;flex-shrink:0">📝</span><span>${u.note}</span></div>` : ''}
     <div class="ui-actions">
-      <button class="btn-sm" onclick="showHist('${u.id}')">📋</button>
-      <button class="btn-sm" style="background:rgba(129,140,248,.12);color:var(--purple);border:1px solid rgba(129,140,248,.3)" onclick="openNote('${u.id}')">📝 ${u.note?'✎':'+'}</button>
+      <button class="btn-sm" onclick="showHist('${u.id}')">📋 سجل</button>
+      <button class="btn-sm" style="background:rgba(129,140,248,.12);color:var(--purple);border:1px solid rgba(129,140,248,.3)" onclick="openNote('${u.id}')">📝 ملاحظة</button>
       <button class="btn-sm" style="background:rgba(245,158,11,.1);color:var(--warning);border:1px solid rgba(245,158,11,.3)" onclick="openUserSch('${u.id}')">⏰ جدوله</button>
-      <button class="btn-sm ${u.status==='frozen'?'btn-success':'btn-danger'}" onclick="freezeU('${u.id}')">${u.status==='frozen'?'✅':'❄️'}</button>
-      <button class="btn-sm btn-danger" onclick="delU('${u.id}')">🗑️</button>
+      <button class="btn-sm ${u.status==='frozen'?'btn-success':'btn-danger'}" onclick="freezeU('${u.id}')">${u.status==='frozen'?'✅ تفعيل':'❄️ تجميد'}</button>
+      <button class="btn-sm btn-danger" onclick="delU('${u.id}')">🗑️ حذف</button>
     </div></div>`).join('')||`<p class="empty">لا يوجد مستخدمون</p>`;
 }
 
@@ -2808,7 +2807,17 @@ function histItem(h){ return histItemWithUser(h); }
 // User actions
 async function approveU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAdminUsers(myInst());toast('تم قبول المستخدم','success');}}
 async function freezeU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status=u.status==='frozen'?'active':'frozen';saveUser(u);renderAdminUsers(myInst()||null);renderAllUsers();toast(u.status==='frozen'?'تم تجميد المستخدم':'تم تفعيل المستخدم','info');}}
-async function delU(id){A.db.users=A.db.users.filter(u=>u.id!==id);sbDelete('users','id=eq.'+id);renderAdminUsers(myInst()||null);renderAllUsers();renderInsts();toast('تم الحذف','success');}
+async function delU(id){
+  const u = A.db.users.find(x=>x.id===id);
+  if(!u) return;
+  if(!confirm(`⚠️ هل أنت متأكد من حذف المستخدم "${u.name}"؟\nلا يمكن التراجع عن هذا الإجراء.`)) return;
+  A.db.users=A.db.users.filter(u=>u.id!==id);
+  sbDelete('users','id=eq.'+id);
+  renderAdminUsers(myInst()||null);
+  renderAllUsers();
+  renderInsts();
+  toast('🗑️ تم حذف المستخدم','success');
+}
 async function delDoor(id){const inst=myInst();inst.doors=inst.doors.filter(d=>d.id!==id);saveInst(inst);renderAdminDoors(inst);toast('تم حذف الباب','success');}
 // Track which inst & user we opened the modal for
 let _histCtx = { uid: null, instId: null };
@@ -3006,8 +3015,18 @@ async function addUser(){
   const name=v('nu-name'),email=v('nu-email'),pw=v('nu-pass'),inst=myInst();
   if(!name||!email||!pw){toast('يرجى ملء جميع الحقول','error');return;}
   if(A.db.users.find(u=>u.email===email)){toast('البريد مسجل مسبقاً','error');return;}
-  A.db.users.push({id:'u'+Date.now(),name,email,pw,role:'user',status:'active',instId:inst.id});
-  saveUser(A.db.users[A.db.users.length-1]);renderAdminUsers(inst);closeModal('m-add-user');toast('✅ تم إضافة المستخدم','success');
+  const newUser={id:'u'+Date.now(),name,email,pw,role:'user',status:'active',instId:inst.id};
+  A.db.users.push(newUser);
+  try {
+    await saveUser(newUser);
+    renderAdminUsers(inst);
+    closeModal('m-add-user');
+    toast('✅ تم إضافة المستخدم','success');
+  } catch(e) {
+    // إذا فشل الحفظ نزيل المستخدم من الذاكرة
+    A.db.users = A.db.users.filter(u=>u.id!==newUser.id);
+    toast('❌ فشل حفظ المستخدم — تحقق من الاتصال','error');
+  }
 }
 async function addDoor(){
   const name=v('nd-name'),devId=v('nd-devid'),inst=myInst();
@@ -3274,6 +3293,7 @@ function renderAllUsers(){
       <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}${inst?' · '+inst.name:''}</div></div></div><span class="bdg ${stBdg}">${stTxt}</span></div>
       <div class="ui-actions">
         <button class="btn-sm" onclick="showHist('${u.id}')">📋 سجل</button>
+        <button class="btn-sm" style="background:rgba(129,140,248,.12);color:var(--purple);border:1px solid rgba(129,140,248,.3)" onclick="openNote('${u.id}')">📝 ملاحظة</button>
         ${u.status==='pending'?`<button class="btn-sm" onclick="approveUsp('${u.id}')">✅ قبول</button>`:''}
         ${u.lastLoc?`<a class="btn-sm" href="https://maps.google.com/?q=${u.lastLoc.lat},${u.lastLoc.lng}" target="_blank" style="text-decoration:none">📍 موقع</a>`:''}
         <button class="btn-sm ${u.status==='frozen'?'btn-success':'btn-danger'}" onclick="freezeU('${u.id}')">${u.status==='frozen'?'✅ تفعيل':'❄️ تجميد'}</button>
