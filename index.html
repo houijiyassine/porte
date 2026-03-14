@@ -26,10 +26,10 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .page.active{display:flex;}
 
 /* LANDING */
-#landing{align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,#0a0f1e 70%);padding:2rem;}
-.logo{width:80px;height:80px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:24px;display:flex;align-items:center;justify-content:center;margin:0 auto 2rem;font-size:2rem;box-shadow:0 0 40px rgba(59,130,246,.4);}
-.landing-title{font-size:2rem;font-weight:900;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,#fff,var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.landing-sub{color:var(--text2);text-align:center;margin-bottom:3rem;}
+#landing{align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,#0a0f1e 70%);padding:1rem;}
+.logo{width:64px;height:64px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:1.6rem;box-shadow:0 0 30px rgba(59,130,246,.4);}
+.landing-title{font-size:1.6rem;font-weight:900;text-align:center;margin-bottom:.3rem;background:linear-gradient(135deg,#fff,var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.landing-sub{color:var(--text2);text-align:center;margin-bottom:1rem;font-size:.88rem;}
 .landing-btns{display:flex;flex-direction:column;gap:1rem;max-width:400px;width:100%;}
 .btn-land{padding:1.2rem;border-radius:var(--r);border:none;font-family:'Cairo',sans-serif;font-size:1.1rem;font-weight:700;cursor:pointer;transition:all .3s;display:flex;align-items:center;justify-content:center;gap:.75rem;}
 .bl-admin{background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;box-shadow:0 4px 20px rgba(59,130,246,.4);}
@@ -40,16 +40,16 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 /* AUTH */
 #auth{align-items:center;justify-content:center;padding:2rem;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,#0a0f1e 70%);}
-.auth-box{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:2rem;width:100%;max-width:400px;}
+.auth-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1.25rem;width:100%;max-width:400px;}
 .auth-back{background:none;border:none;color:var(--text2);cursor:pointer;font-family:'Cairo',sans-serif;font-size:.9rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:.5rem;}
 .auth-title{font-size:1.5rem;font-weight:700;margin-bottom:.25rem;}
-.auth-sub{color:var(--text2);font-size:.85rem;margin-bottom:2rem;}
-.fg{margin-bottom:1rem;}
+.auth-sub{color:var(--text2);font-size:.85rem;margin-bottom:1rem;}
+.fg{margin-bottom:.75rem;}
 .fg label{display:block;font-size:.85rem;color:var(--text2);margin-bottom:.5rem;font-weight:600;}
-.fg input,.fg select{width:100%;padding:.875rem 1rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Cairo',sans-serif;font-size:.95rem;outline:none;transition:border-color .3s;}
+.fg input,.fg select{width:100%;padding:.7rem 1rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Cairo',sans-serif;font-size:.95rem;outline:none;transition:border-color .3s;}
 .fg input:focus,.fg select:focus{border-color:var(--accent);}
 .fg input[type="password"]{direction:ltr;text-align:left;}
-.btn-pri{width:100%;padding:1rem;background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;border:none;border-radius:12px;font-family:'Cairo',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:all .3s;margin-top:.5rem;}
+.btn-pri{width:100%;padding:.8rem;background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;border:none;border-radius:12px;font-family:'Cairo',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:all .3s;margin-top:.25rem;}
 .btn-pri:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(59,130,246,.4);}
 .auth-toggle{text-align:center;margin-top:1rem;font-size:.85rem;color:var(--text2);}
 .auth-toggle span{color:var(--accent);cursor:pointer;font-weight:600;}
@@ -133,7 +133,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .door-status-label.moving-lbl{color:var(--warning);}
 .door-status-label.stopped-lbl{color:#a78bfa;}
 
-/* PHONE INPUT — always LTR with flag on left */
+/* PHONE INPUT — always LTR */
 .phone-wrap{display:flex;gap:.5rem;direction:ltr;}
 .phone-prefix{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap;flex-shrink:0;}
 .phone-wrap input{flex:1;text-align:left;direction:ltr;}
@@ -144,10 +144,12 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   font-size: 1.4rem; font-weight: 700;
   background: var(--surface2); border: 2px solid var(--border);
   border-radius: 12px; color: var(--text);
-  transition: border-color .2s;
+  transition: border-color .2s; direction:ltr;
 }
 .otp-inp:focus { border-color: var(--accent); outline: none; }
 .otp-inp.filled { border-color: var(--success); }
+/* OTP row always LTR */
+.otp-row{display:flex;gap:.5rem;justify-content:center;direction:ltr;}
 
 
 /* ── Push Notification ── */
@@ -330,7 +332,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .dot-far{background:var(--warning);}
 .dot-unknown{background:var(--text2);}
 /* THEME/LANG BAR */
-.tl-bar{display:flex;gap:.75rem;justify-content:center;margin-top:1.5rem;}
+.tl-bar{display:flex;gap:.75rem;justify-content:center;margin-top:.75rem;}
 .tl-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:10px;padding:.5rem 1rem;font-family:'Cairo',sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;}
 .tl-btn:hover{border-color:var(--accent);color:var(--accent);}
 /* EXPORT */
@@ -548,12 +550,12 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 <!-- LANDING → direct login -->
 <div id="landing" class="page active">
-  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,var(--bg) 70%);padding:2rem;">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,var(--bg) 70%);padding:1rem .75rem;">
     <div class="logo" id="logo-tap" onclick="logoTap()" style="cursor:pointer">🔐</div>
     <h1 class="landing-title">نظام التحكم في الدخول</h1>
     <p class="landing-sub">نظام ذكي لإدارة أبواب المؤسسات</p>
 
-    <div class="auth-box" style="margin-top:1.5rem">
+    <div class="auth-box" style="margin-top:.75rem">
       <!-- LOGIN FORM -->
       <div id="land-login">
         <div class="fg"><label>رقم الهاتف 📱</label>
@@ -623,7 +625,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
           </div>
 
           <!-- OTP inputs -->
-          <div style="display:flex;gap:.5rem;justify-content:center;margin:1rem 0" id="otp-boxes">
+          <div class="otp-row" id="otp-boxes" style="margin:1rem 0">
             <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="otpInput(this,0)" onkeydown="otpKey(this,0)">
             <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="otpInput(this,1)" onkeydown="otpKey(this,1)">
             <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="otpInput(this,2)" onkeydown="otpKey(this,2)">
@@ -1107,7 +1109,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
       <div style="background:var(--surface2);border:1px solid var(--warning);border-radius:8px;padding:.4rem;margin-bottom:.75rem;font-size:.75rem;color:var(--warning);text-align:center">🧪 الرمز: <strong>0000</strong></div>
       
       <div class="fg"><label>رمز التحقق</label>
-        <div style="display:flex;gap:.4rem;justify-content:center">
+        <div class="otp-row">
           <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="fpOtpInput(this,0)" onkeydown="fpOtpKey(this,0)">
           <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="fpOtpInput(this,1)" onkeydown="fpOtpKey(this,1)">
           <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="fpOtpInput(this,2)" onkeydown="fpOtpKey(this,2)">
@@ -4550,10 +4552,9 @@ async function subscribePush() {
       body: JSON.stringify({ push_sub: subJson })
     });
     console.log('✅ push_sub saved for', A.user.name);
-    // عرض toast فقط إذا كان هذا أول تفعيل
-    if(!localStorage.getItem('push_subscribed_' + A.user.id)) {
+    if(!localStorage.getItem('push_subscribed_'+(A.user?.id||''))){
       toast('✅ تم تفعيل الإشعارات الفورية', 'success');
-      try { localStorage.setItem('push_subscribed_' + A.user.id, '1'); } catch(e){}
+      try{localStorage.setItem('push_subscribed_'+(A.user?.id||''),'1');}catch(e){}
     }
   } catch(e) { console.warn('Push subscribe failed:', e); }
 }
@@ -4561,8 +4562,7 @@ async function subscribePush() {
 // تفعيل Push تلقائياً عند دخول admin/super
 async function initPushForAdmin() {
   if (!('Notification' in window)) return;
-  // إذا سبق الاشتراك لهذا المستخدم — لا نُعيد الاشتراك ولا نُظهر أي شيء
-  try { if(A.user?.id && localStorage.getItem('push_subscribed_' + A.user.id)) return; } catch(e){}
+  try{if(A.user?.id&&localStorage.getItem('push_subscribed_'+A.user.id))return;}catch(e){}
   if (Notification.permission === 'granted') {
     await subscribePush();
   } else if (Notification.permission !== 'denied') {
@@ -4571,7 +4571,7 @@ async function initPushForAdmin() {
 }
 
 function showPushEnableBtn() {
-  try { if(localStorage.getItem('push_btn_dismissed')) return; } catch(e){}
+  try{if(localStorage.getItem('push_btn_dismissed'))return;}catch(e){}
   const existing = el('push-enable-btn');
   if (existing) return;
   const btn = document.createElement('button');
@@ -4580,10 +4580,7 @@ function showPushEnableBtn() {
   btn.style.cssText = 'position:fixed;bottom:1rem;left:1rem;z-index:9000;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:.6rem 1rem;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)';
   btn.onclick = async () => { await subscribePush(); btn.remove(); };
   document.body.appendChild(btn);
-  setTimeout(() => {
-    btn.remove();
-    try { localStorage.setItem('push_btn_dismissed', '1'); } catch(e){}
-  }, 10000);
+  setTimeout(()=>{btn.remove();try{localStorage.setItem('push_btn_dismissed','1');}catch(e){}},10000);
 }
 
 
