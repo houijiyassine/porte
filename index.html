@@ -48,6 +48,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .fg label{display:block;font-size:.85rem;color:var(--text2);margin-bottom:.5rem;font-weight:600;}
 .fg input,.fg select{width:100%;padding:.875rem 1rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Cairo',sans-serif;font-size:.95rem;outline:none;transition:border-color .3s;}
 .fg input:focus,.fg select:focus{border-color:var(--accent);}
+.fg input[type="password"]{direction:ltr;text-align:left;}
 .btn-pri{width:100%;padding:1rem;background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;border:none;border-radius:12px;font-family:'Cairo',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:all .3s;margin-top:.5rem;}
 .btn-pri:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(59,130,246,.4);}
 .auth-toggle{text-align:center;margin-top:1rem;font-size:.85rem;color:var(--text2);}
@@ -136,6 +137,8 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .phone-wrap{display:flex;gap:.5rem;direction:ltr;}
 .phone-prefix{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap;flex-shrink:0;}
 .phone-wrap input{flex:1;text-align:left;direction:ltr;}
+
+/* OTP inputs */
 .otp-inp {
   width: 54px; height: 58px; text-align: center;
   font-size: 1.4rem; font-weight: 700;
@@ -4391,7 +4394,7 @@ async function smartRegister(){
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     if(!inst.alerts) inst.alerts = [];
-    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name}`, time:dateStr, type:'register'});
+    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} ()`, time:dateStr, type:'register'});
     await saveInst(inst);
 
     el('pend-msg').style.display = 'block';
@@ -4547,17 +4550,22 @@ async function subscribePush() {
       body: JSON.stringify({ push_sub: subJson })
     });
     console.log('✅ push_sub saved for', A.user.name);
-    toast('✅ تم تفعيل الإشعارات الفورية', 'success');
+    // عرض toast فقط إذا كان هذا أول تفعيل
+    if(!localStorage.getItem('push_subscribed_' + A.user.id)) {
+      toast('✅ تم تفعيل الإشعارات الفورية', 'success');
+      try { localStorage.setItem('push_subscribed_' + A.user.id, '1'); } catch(e){}
+    }
   } catch(e) { console.warn('Push subscribe failed:', e); }
 }
 
 // تفعيل Push تلقائياً عند دخول admin/super
 async function initPushForAdmin() {
   if (!('Notification' in window)) return;
+  // إذا سبق الاشتراك لهذا المستخدم — لا نُعيد الاشتراك ولا نُظهر أي شيء
+  try { if(A.user?.id && localStorage.getItem('push_subscribed_' + A.user.id)) return; } catch(e){}
   if (Notification.permission === 'granted') {
     await subscribePush();
   } else if (Notification.permission !== 'denied') {
-    // نعرض زر تفعيل
     showPushEnableBtn();
   }
 }
@@ -4570,7 +4578,7 @@ function showPushEnableBtn() {
   btn.id = 'push-enable-btn';
   btn.innerHTML = '🔔 تفعيل الإشعارات';
   btn.style.cssText = 'position:fixed;bottom:1rem;left:1rem;z-index:9000;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:.6rem 1rem;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)';
-  btn.onclick = async () => { await subscribePush(); try{localStorage.setItem('push_btn_dismissed','1');}catch(e){} btn.remove(); };
+  btn.onclick = async () => { await subscribePush(); btn.remove(); };
   document.body.appendChild(btn);
   setTimeout(() => {
     btn.remove();
@@ -4716,7 +4724,7 @@ async function smartRegisterFinish() {
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     if(!inst.alerts) inst.alerts = [];
-    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} (+216${phone})`, time:dateStr, type:'register'});
+    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} ()`, time:dateStr, type:'register'});
     await saveInst(inst);
 
     el('pend-msg').style.display = 'block';
