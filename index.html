@@ -589,7 +589,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
         <div class="fg"><label>رقم الهاتف 📱</label>
             <div class="phone-wrap">
               <div class="phone-prefix">🇹🇳 +216</div>
-              <input id="l-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8);el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')el('l-pass').focus()">
+              <input id="l-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').replace(/^0+/,'').slice(0,8);el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')el('l-pass').focus()">
             </div>
           </div>
         <div class="fg"><label>كلمة المرور</label><input type="password" id="l-pass" placeholder="••••••••" oninput="el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')smartLogin()"></div>
@@ -635,7 +635,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
           <div class="fg"><label>رقم الهاتف 📱</label>
             <div class="phone-wrap">
               <div class="phone-prefix">🇹🇳 +216</div>
-              <input id="r-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+              <input id="r-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').replace(/^0+/,'').slice(0,8)">
             </div>
           </div>
           <div class="fg"><label>كلمة المرور</label><input type="password" id="r-pass" placeholder="••••••••"></div>
@@ -1090,7 +1090,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div class="fg"><label>هاتف المسؤول 📱</label>
       <div class="phone-wrap">
         <div class="phone-prefix">🇹🇳 +216</div>
-        <input type="tel" id="ni-email" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+        <input type="tel" id="ni-email" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').replace(/^0+/,'').slice(0,8)">
       </div>
     </div>
     <div class="fg"><label>كلمة مرور المسؤول</label><input type="password" id="ni-pass" placeholder="••••••••"></div>
@@ -1122,7 +1122,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
       <div class="fg"><label>رقم الهاتف 📱</label>
         <div class="phone-wrap">
           <div class="phone-prefix">🇹🇳 +216</div>
-          <input id="fp-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+          <input id="fp-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').replace(/^0+/,'').slice(0,8)">
         </div>
       </div>
       <div style="background:var(--surface2);border:1px solid var(--warning);border-radius:8px;padding:.5rem;margin-bottom:1rem;font-size:.75rem;color:var(--warning);text-align:center">🧪 وضع الاختبار — الرمز هو: <strong>0000</strong></div>
@@ -2120,8 +2120,7 @@ async function saveDB(){
 
 // Quick save single user
 async function saveUser(u){
-  // تشفير كلمة السر فقط عند الحفظ إذا لم تكن مشفرة بعد
-  const _pwToSave = (u.pw && !isHashed(u.pw)) ? await hashPw(u.pw) : u.pw;
+  const _pwToSave = u.pw;
   const _cleanPhone = (u.phone||'').replace(/\D/g,'').replace(/^0+/,'');
   const _em = u.email||(_cleanPhone?_cleanPhone+'@phone.local':u.id+'@user.local');
   await sbUpsert('users', {
@@ -4091,13 +4090,11 @@ function toast(msg,type='info'){const t=el('toast');t.textContent=msg;t.classNam
   try {
     const saved = localStorage.getItem('dac_saved_creds');
     if(saved) {
-      const {phone, pass, plain} = JSON.parse(saved);
+      const {phone, pass} = JSON.parse(saved);
       const _norm = (p) => (p||'').replace(/\D/g,'').replace(/^0+/,'');
       const u = A.db.users.find(u => {
         const pm = _norm(u.phone) === _norm(phone);
-        const pwm = isHashed(u.pw)
-          ? (u.pw === pass || u.pw === pass)  // pass قد يكون hash بالفعل
-          : ((u.pw||'').trim() === (plain||pass));
+        const pwm = (u.pw||'').trim() === pass;
         return pm && pwm;
       });
       if(u && u.status==='active') {
@@ -4678,13 +4675,11 @@ async function smartLogin(){
   const tryLogin = async () => {
     try { await initDB(); } catch(e) { console.error('initDB error:', e); }
 
-    const passHash = await hashPw(pass);
-    // تطبيع الهاتف: إزالة الأصفار البادئة من الجانبين للمقارنة
+    // تطبيع الهاتف: إزالة الأصفار البادئة من الجانبين
     const normPhone = (p) => (p||'').replace(/\D/g,'').replace(/^0+/,'');
     const u = A.db.users.find(u => {
       const phoneMatch = normPhone(u.phone) === normPhone(phone);
-      // يقبل: plain text (للقدامى) أو hash (للجدد)
-      const pwMatch = isHashed(u.pw) ? u.pw === passHash : (u.pw||'').trim() === pass;
+      const pwMatch = (u.pw||'').trim() === pass;
       return phoneMatch && pwMatch;
     });
 
@@ -4701,7 +4696,7 @@ async function smartLogin(){
     }
     if(u.status==='pending'){
       A.user = u;
-      try { localStorage.setItem('dac_saved_creds', JSON.stringify({phone, pass: await hashPw(pass), plain: pass})); } catch(e){}
+      try { localStorage.setItem('dac_saved_creds', JSON.stringify({phone, pass})); } catch(e){}
       showPendingScreen();
       return;
     }
@@ -4718,9 +4713,7 @@ async function smartLogin(){
     if(u.status!=='active'){  toast('حساب غير مفعّل — تواصل مع المدير','error'); return; }
 
     A.user = u;
-    // احفظ الـ hash في localStorage لاستخدامه في auto-login
-    const hashForStorage = await hashPw(pass);
-    try { localStorage.setItem('dac_saved_creds', JSON.stringify({phone, pass: hashForStorage, plain: pass})); } catch(e){}
+    try { localStorage.setItem('dac_saved_creds', JSON.stringify({phone, pass})); } catch(e){}
     if(u.role==='super') loadSuper();
     else if(u.role==='admin') loadAdmin();
     else loadUser();
@@ -5504,7 +5497,7 @@ async function forgotConfirm() {
       <div class="fg"><label>رقم هاتف المسؤول 📱</label>
         <div class="phone-wrap">
           <div class="phone-prefix">🇹🇳 +216</div>
-          <input type="tel" id="ei-admin-phone" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+          <input type="tel" id="ei-admin-phone" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').replace(/^0+/,'').slice(0,8)">
         </div>
       </div>
       <div class="fg" style="margin-bottom:0">
