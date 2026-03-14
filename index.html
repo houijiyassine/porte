@@ -404,6 +404,23 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 
 
+/* PENDING SCREEN */
+#pending-screen{display:none;position:fixed;inset:0;z-index:9998;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,#0a0f1e 70%);flex-direction:column;align-items:center;justify-content:center;padding:2rem;gap:1.5rem;}
+.pend-icon{width:90px;height:90px;background:linear-gradient(135deg,var(--warning),#f97316);border-radius:28px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;box-shadow:0 0 40px rgba(245,158,11,.4);animation:pendPulse 2s ease-in-out infinite;}
+@keyframes pendPulse{0%,100%{transform:scale(1);box-shadow:0 0 40px rgba(245,158,11,.4);}50%{transform:scale(1.05);box-shadow:0 0 60px rgba(245,158,11,.6);}}
+.pend-title{font-size:1.5rem;font-weight:900;color:#fff;text-align:center;}
+.pend-sub{font-size:.9rem;color:var(--text2);text-align:center;line-height:1.6;max-width:320px;}
+.pend-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1.5rem;width:100%;max-width:360px;display:flex;flex-direction:column;gap:1rem;}
+.perm-row{display:flex;align-items:center;gap:1rem;padding:.75rem;background:var(--surface2);border-radius:12px;border:1px solid var(--border);}
+.perm-icon{font-size:1.8rem;flex-shrink:0;}
+.perm-info{flex:1;}
+.perm-title{font-size:.9rem;font-weight:700;color:var(--text);}
+.perm-status{font-size:.75rem;margin-top:.2rem;}
+.perm-btn{padding:.5rem 1rem;border-radius:8px;border:none;font-family:Cairo,sans-serif;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap;}
+.perm-granted{background:rgba(16,185,129,.15);color:var(--success);border:1px solid rgba(16,185,129,.3);}
+.perm-denied{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3);}
+.perm-pending-btn{background:var(--accent);color:#fff;}
+
 /* HERO ANIMATION */
 @keyframes heroIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 .inst-hero{animation:heroIn .4s ease both;}
@@ -975,6 +992,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div class="fg"><label>الاسم</label><input id="nu-name" placeholder="محمد أحمد"></div>
     <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="nu-email" placeholder="email@example.com"></div>
     <div class="fg"><label>كلمة المرور المؤقتة</label><input id="nu-pass"></div>
+    <div class="fg"><label>تاريخ انتهاء الصلاحية <span style="color:var(--text2);font-size:.75rem">(اختياري)</span></label><input type="date" id="nu-expire" style="color-scheme:dark"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('m-add-user')">إلغاء</button>
       <button class="btn-pri" style="flex:2;margin-top:0" onclick="addUser()">إضافة</button>
@@ -1137,6 +1155,45 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   </div>
 </div>
 
+<!-- PENDING SCREEN -->
+<div id="pending-screen">
+  <div class="pend-icon">⏳</div>
+  <div class="pend-title">في انتظار الموافقة</div>
+  <div class="pend-sub">تم إرسال طلبك بنجاح!<br>سيتم إشعارك فور موافقة مسؤول المؤسسة</div>
+  <div class="pend-card">
+    <p style="font-size:.82rem;color:var(--text2);text-align:center;margin-bottom:.25rem">للحصول على إشعار فور قبولك — فعّل الأذونات التالية:</p>
+    <!-- الإشعارات -->
+    <div class="perm-row" id="perm-notif-row">
+      <span class="perm-icon">🔔</span>
+      <div class="perm-info">
+        <div class="perm-title">الإشعارات</div>
+        <div class="perm-status" id="perm-notif-status" style="color:var(--text2)">غير مفعّل</div>
+      </div>
+      <button class="perm-btn perm-pending-btn" id="perm-notif-btn" onclick="requestPermNotif()">تفعيل</button>
+    </div>
+    <!-- الموقع -->
+    <div class="perm-row" id="perm-loc-row">
+      <span class="perm-icon">📍</span>
+      <div class="perm-info">
+        <div class="perm-title">الموقع الجغرافي</div>
+        <div class="perm-status" id="perm-loc-status" style="color:var(--text2)">غير مفعّل</div>
+      </div>
+      <button class="perm-btn perm-pending-btn" id="perm-loc-btn" onclick="requestPermLoc()">تفعيل</button>
+    </div>
+    <!-- PWA -->
+    <div class="perm-row" id="perm-pwa-row" style="display:none">
+      <span class="perm-icon">🏠</span>
+      <div class="perm-info">
+        <div class="perm-title">إضافة للشاشة الرئيسية</div>
+        <div class="perm-status" style="color:var(--text2);font-size:.72rem">للحصول على إشعارات حتى بعد إغلاق المتصفح</div>
+      </div>
+      <button class="perm-btn perm-pending-btn" id="perm-pwa-btn" onclick="requestPWAInstall()">تثبيت</button>
+    </div>
+  </div>
+  <button onclick="checkPendingStatus()" style="background:none;border:1px solid var(--border);border-radius:10px;padding:.6rem 1.5rem;color:var(--text2);font-family:Cairo,sans-serif;font-size:.85rem;cursor:pointer">🔄 التحقق من الحالة</button>
+  <button onclick="logout()" style="background:none;border:none;color:var(--text2);font-family:Cairo,sans-serif;font-size:.82rem;cursor:pointer;margin-top:-.5rem">← تسجيل الخروج</button>
+</div>
+
 <div class="toast" id="toast"></div>
 <div id="push-notif" style="display:none">
   <span class="pn-icon">🔔</span>
@@ -1288,6 +1345,18 @@ async function sbUpsert(table, data) {
     body: JSON.stringify(data)
   });
 }
+// ════════════════════════════════════════════
+// SHA-256 PASSWORD HASHING
+// ════════════════════════════════════════════
+async function hashPw(pw){
+  if(!pw) return '';
+  // إذا كانت بالفعل hash (64 حرف hex) — لا تُعيد تشفيرها
+  if(/^[a-f0-9]{64}$/.test(pw)) return pw;
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function isHashed(pw){ return /^[a-f0-9]{64}$/.test(pw||''); }
+
 // ════════════════════════════════════════════
 // CONFIG
 // ════════════════════════════════════════════
@@ -1997,8 +2066,9 @@ async function initDB(){
     gpsForAdmin: i.gps_for_admin === true,
     doors: (i.doors||[]).map(d => ({
       ...d,
-      gpsForUsers: d.gpsForUsers !== false,  // default: مفعّل
-      gpsForAdmin: d.gpsForAdmin === true,    // default: معطّل
+      gpsForUsers: d.gpsForUsers !== false,
+      gpsForAdmin: d.gpsForAdmin === true,
+      schedule: d.schedule || null,  // جدول الباب المستقل
     })),
     schedule: i.schedule||defSch(),
     alerts: i.alerts||[], history: i.history||[]
@@ -2010,6 +2080,7 @@ async function initDB(){
     phone: (u.phone||'').replace(/\D/g,''),
     pw: (u.pw||'').trim(),
     role: u.role, status: u.status, instId: u.inst_id,
+    expireDate: u.expire_date||null,
     avatar: u.avatar, note: u.note, lastLoc: (()=>{ let l=u.last_loc; if(typeof l==='string'){try{l=JSON.parse(l);}catch(e){l=null;}} return l; })()
   }));
 
@@ -2049,10 +2120,13 @@ async function saveDB(){
 
 // Quick save single user
 async function saveUser(u){
+  // تشفير كلمة السر إذا لم تكن مشفرة
+  if(u.pw && !isHashed(u.pw)) u.pw = await hashPw(u.pw);
   const _cleanPhone = (u.phone||'').replace(/\D/g,'').replace(/^0+/,'');
   const _em = u.email||(_cleanPhone?_cleanPhone+'@phone.local':u.id+'@user.local');
   await sbUpsert('users', {
     id: u.id, name: u.name, email: _em, pw: u.pw,
+    expire_date: u.expireDate||null,
     phone: u.phone||null,
     role: u.role, status: u.status, inst_id: u.instId||null,
     avatar: u.avatar||null, note: u.note||null, last_loc: u.lastLoc||null,
@@ -2176,6 +2250,23 @@ function doRegister(email,pass){
   A.db.users.push({id:'u'+Date.now(),name,email,pw:pass,role:'user',status:'pending',instId});
   el('pend-msg').style.display='block';toast('تم إرسال طلبك بنجاح','success');
 }
+async function sendApprovalPush(u){
+  if(!u?.push_sub) return;
+  try {
+    await fetch('/api/push', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        inst_id: u.instId,
+        user_name: u.name,
+        custom_title: '✅ تم قبول طلبك!',
+        custom_body: 'مرحباً بك! يمكنك الآن الدخول إلى التطبيق',
+        target_user_id: u.id
+      })
+    });
+  } catch(e){ console.warn('Approval push failed:', e); }
+}
+
 function logout(){
   Object.values(A.timers).forEach(t=>clearInterval(t.iv));
   // إيقاف كل الـ polling عند الخروج
@@ -2191,6 +2282,12 @@ function logout(){
 // USER DASHBOARD
 // ════════════════════════════════════════════
 function loadUser(){
+  // إذا المستخدم pending → شاشة الانتظار
+  if(A.user?.status === 'pending'){
+    showPendingScreen();
+    requestFirstOpenPermissions();
+    return;
+  }
   showPage('user-dash');
   const inst=myInst();
   if(el('u-inst-name')) el('u-inst-name').textContent=inst?.name||'المؤسسة';
@@ -2463,7 +2560,19 @@ async function ctrlDoor(doorId,instId,action,pfx){
       const dl=getDoorLoc(inst);
       if(dl&&(dl.lat||dl.lng)&&!A.geoOk){toast(`❌ يجب أن تكون قريباً من الباب (${radius}م)`,'error');logAlert(inst,door,'خارج النطاق الجغرافي');return;}
     }
-    if(pfx==='u'&&!A.timeOk&&action!=='stop'){toast('❌ خارج أوقات الدخول المسموحة','error');logAlert(inst,door,'خارج وقت العمل');return;}
+    if(pfx==='u'&&action!=='stop'){
+      // تحقق من جدول الباب إذا كان له جدول مستقل، وإلا جدول المؤسسة
+      const doorSch = door?.schedule;
+      if(doorSch){
+        const now2=new Date(),dn2=DAYS[now2.getDay()],s2=doorSch[dn2];
+        if(!s2||!s2.on){toast('❌ هذا الباب مغلق اليوم','error');logAlert(inst,door,'خارج وقت الباب');return;}
+        const [fh2,fm2]=s2.from.split(':').map(Number),[th2,tm2]=s2.to.split(':').map(Number);
+        const nm2=now2.getHours()*60+now2.getMinutes();
+        if(nm2<(fh2*60+fm2)||nm2>(th2*60+tm2)){toast('❌ خارج وقت هذا الباب','error');logAlert(inst,door,'خارج وقت الباب');return;}
+      } else if(!A.timeOk){
+        toast('❌ خارج أوقات الدخول المسموحة','error');logAlert(inst,door,'خارج وقت العمل');return;
+      }
+    }
   }
   const btns=['op','cl','st','au'].map(x=>el(`${pfx}-${x}-${doorId}`));
   btns.forEach(b=>b&&(b.disabled=true));
@@ -2643,6 +2752,34 @@ function rcLogHistory(door, action) {
     time: timeStr
   });
   saveInst(inst);
+  // إرسال push إذا مفعّل للمسؤول/سوبر
+  notifyRcEvent(inst, door, actionLabel);
+}
+
+async function notifyRcEvent(inst, door, action){
+  // لكل admin/super لديه push_sub ومفعّل إشعار RC لهذا الباب
+  try {
+    const targets = A.db.users.filter(u =>
+      (u.role==='admin'&&u.instId===inst.id) || u.role==='super'
+    );
+    for(const u of targets){
+      const settingKey = `rc_notif_${door.id}_${u.id}`;
+      const enabled = localStorage.getItem(settingKey);
+      // افتراضي: ON للمسؤول، ON للسوبر — إلا إذا وضع OFF
+      if(enabled === 'off') continue;
+      if(!u.push_sub) continue;
+      await fetch('/api/push', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          inst_id: inst.id,
+          user_name: u.name,
+          custom_title: `🚪 ${action==='open'?'فتح':'غلق'} الباب`,
+          custom_body: `${door.name} — ${action==='open'?'تم الفتح':'تم الغلق'} عبر جهاز التحكم`,
+          target_user_id: u.id
+        })
+      }).catch(()=>{});
+    }
+  } catch(e){}
 }
 
 function startDoorPolling(door, pfx) {
@@ -2724,6 +2861,7 @@ function logRcEvent(inst, door, action){
 // ════════════════════════════════════════════
 function loadAdmin(){
   showPage('admin-dash');
+  requestFirstOpenPermissions();
   const inst=myInst();
   if(el('ad-inst-name')) el('ad-inst-name').textContent=inst?.name||tr('dashboard');
   if(el('ad-inst-code-lbl')) el('ad-inst-code-lbl').textContent=inst?.code?`مدير المؤسسة | 🔑 الكود: ${inst.code}`:'مدير المؤسسة';
@@ -2777,9 +2915,25 @@ function renderAdminDoors(inst){
         </button>
       </div>
       ${buildDoorSVG(d.id,'a',d.type)}
-      <button onclick="showDoorHist('${d.id}','${inst.id}')" style="width:100%;padding:.65rem;margin-top:.5rem;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:12px;color:var(--accent);font-family:Cairo,sans-serif;font-size:.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;transition:all .2s" onmouseover="this.style.background='rgba(59,130,246,.15)'" onmouseout="this.style.background='rgba(59,130,246,.08)'">
-        ${tr("viewLog")}
-      </button>
+      <div style="display:flex;gap:.5rem;margin-top:.5rem">
+        <button onclick="showDoorHist('${d.id}','${inst.id}')" style="flex:1;padding:.65rem;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:12px;color:var(--accent);font-family:Cairo,sans-serif;font-size:.85rem;font-weight:700;cursor:pointer">
+          ${tr("viewLog")}
+        </button>
+        <button onclick="openDoorSchedule('${d.id}','${inst.id}')" style="flex:1;padding:.65rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:12px;color:var(--warning);font-family:Cairo,sans-serif;font-size:.85rem;font-weight:700;cursor:pointer">
+          ⏰ جدول الباب
+        </button>
+      </div>
+      <!-- RC Notification toggle -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .75rem;background:var(--surface2);border-radius:10px;margin-top:.5rem;border:1px solid var(--border)">
+        <div>
+          <div style="font-size:.78rem;font-weight:700;color:var(--text)">📡 إشعار جهاز التحكم (RC)</div>
+          <div style="font-size:.68rem;color:var(--text2);margin-top:.1rem">تلقّي إشعار عند فتح/غلق الباب من RC</div>
+        </div>
+        <label class="mini-tog">
+          <input type="checkbox" id="rc-tog-${d.id}" ${getRcNotifSetting(d.id)?'checked':''} onchange="setRcNotifSetting('${d.id}',this.checked)">
+          <span class="mini-tog-sl"></span>
+        </label>
+      </div>
     </div>`).join('');
   // ابدأ الـ polling لكل باب (RC sync)
   inst.doors.forEach(d=>{ if(d.devId) stopDoorPolling(d.id,'a'); startDoorPolling(d,'a'); });
@@ -3021,7 +3175,16 @@ function renderHistFiltered(){
 function histItem(h){ return histItemWithUser(h); }
 
 // User actions
-async function approveU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAdminUsers(myInst());toast('تم قبول المستخدم','success');}}
+async function approveU(id){
+  const u=A.db.users.find(x=>x.id===id);
+  if(!u) return;
+  u.status='active';
+  await saveUser(u);
+  renderAdminUsers(myInst());
+  toast('✅ تم قبول المستخدم','success');
+  // إرسال Push للمستخدم
+  sendApprovalPush(u);
+}
 async function freezeU(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status=u.status==='frozen'?'active':'frozen';saveUser(u);renderAdminUsers(myInst()||null);renderAllUsers();toast(u.status==='frozen'?'تم تجميد المستخدم':'تم تفعيل المستخدم','info');}}
 async function delU(id){
   const u = A.db.users.find(x=>x.id===id);
@@ -3359,6 +3522,78 @@ async function renderSpInstGps(){
   A.db.institutes.forEach(i=>{ if(!A._instSteps) A._instSteps={}; A._instSteps[i.id]=1; });
 }
 
+function openDoorSchedule(doorId, instId){
+  const inst = getInst(instId);
+  const door = inst?.doors?.find(d=>d.id===doorId);
+  if(!door) return;
+  el('door-sch-id').value = doorId;
+  el('door-sch-inst-id').value = instId;
+  el('door-sch-name').textContent = door.name;
+  const useInst = !door.schedule;
+  el('door-sch-use-inst').checked = useInst;
+  renderDoorSchGrid(door, useInst);
+  openModal('m-door-sch');
+}
+
+function renderDoorSchGrid(door, disabled){
+  const inst = getInst(el('door-sch-inst-id').value);
+  const sch = door.schedule || inst?.schedule || {};
+  el('door-sch-grid').innerHTML = DAYS.map(d=>{
+    const s = sch[d] || {on:false,from:'08:00',to:'17:00'};
+    return `<div class="sch-day" style="${disabled?'opacity:.5;pointer-events:none':''}">
+      <div class="day-lbl">${d}</div>
+      <label class="tog"><input type="checkbox" id="dsc-${d}" ${s.on?'checked':''}><span class="tog-sl"></span></label>
+      <div class="time-wrap">
+        <input type="time" class="time-inp" id="dsf-${d}" value="${s.from}">
+        <span style="color:var(--text2);font-size:.8rem">إلى</span>
+        <input type="time" class="time-inp" id="dst-${d}" value="${s.to}">
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDoorSchMode(){
+  const doorId = el('door-sch-id').value;
+  const instId = el('door-sch-inst-id').value;
+  const inst = getInst(instId);
+  const door = inst?.doors?.find(d=>d.id===doorId);
+  renderDoorSchGrid(door, el('door-sch-use-inst').checked);
+}
+
+async function saveDoorSchedule(){
+  const doorId = el('door-sch-id').value;
+  const instId = el('door-sch-inst-id').value;
+  const inst = getInst(instId);
+  const door = inst?.doors?.find(d=>d.id===doorId);
+  if(!door) return;
+  const useInst = el('door-sch-use-inst').checked;
+  if(useInst){
+    door.schedule = null;
+  } else {
+    door.schedule = {};
+    DAYS.forEach(d=>{
+      door.schedule[d]={
+        on: el(`dsc-${d}`)?.checked||false,
+        from: el(`dsf-${d}`)?.value||'08:00',
+        to: el(`dst-${d}`)?.value||'17:00'
+      };
+    });
+  }
+  await saveInst(inst);
+  closeModal('m-door-sch');
+  toast(`✅ تم حفظ جدول ${door.name}`,'success');
+}
+
+function getRcNotifSetting(doorId){
+  const key = `rc_notif_${doorId}_${A.user?.id||''}`;
+  return localStorage.getItem(key) !== 'off';
+}
+function setRcNotifSetting(doorId, enabled){
+  const key = `rc_notif_${doorId}_${A.user?.id||''}`;
+  localStorage.setItem(key, enabled ? 'on' : 'off');
+  toast(enabled ? '✅ سيصلك إشعار عند استخدام RC' : '🔕 لن يصلك إشعار RC', 'info');
+}
+
 async function toggleDoorGps(doorId, instId, type, enabled){
   const inst = getInst(instId);
   const door = inst?.doors?.find(d => d.id === doorId);
@@ -3420,6 +3655,7 @@ async function saveDoorLoc(instId){
 // ════════════════════════════════════════════
 function loadSuper(){
   if(!A.db.userLocations) A.db.userLocations = {};
+  requestFirstOpenPermissions();
   renderInsts();renderAllUsers();populateSpFilter();renderSpInstGps();
   el('sp-gps-n').textContent=A.db.globalGps||30;
   showPage('super-dash');
@@ -3650,7 +3886,15 @@ function openAlertsModal(){
   openModal('m-all-alerts');
 }
 
-function approveUsp(id){const u=A.db.users.find(u=>u.id===id);if(u){u.status='active';saveUser(u);renderAllUsers();renderInsts();toast('تم قبول المستخدم','success');}}
+async function approveUsp(id){
+  const u=A.db.users.find(x=>x.id===id);
+  if(!u) return;
+  u.status='active';
+  await saveUser(u);
+  renderAllUsers();renderInsts();
+  toast('✅ تم قبول المستخدم','success');
+  sendApprovalPush(u);
+}
 async function delInst(id){
   const inst = A.db.institutes.find(i=>i.id===id);
   if(!inst) return;
@@ -4427,11 +4671,13 @@ async function smartLogin(){
   const tryLogin = async () => {
     try { await initDB(); } catch(e) { console.error('initDB error:', e); }
 
-    // مقارنة phone + pw
-    const u = A.db.users.find(u =>
-      (u.phone||'').replace(/\D/g,'') === phone &&
-      (u.pw||'').trim() === pass
-    );
+    const passHash = await hashPw(pass);
+    // مقارنة phone + pw (يقبل plain text للمستخدمين القدامى وhash للجدد)
+    const u = A.db.users.find(u => {
+      const phoneMatch = (u.phone||'').replace(/\D/g,'') === phone;
+      const pwMatch = isHashed(u.pw) ? u.pw === passHash : (u.pw||'').trim() === pass;
+      return phoneMatch && pwMatch;
+    });
 
     btn.textContent = '🔐 دخول';
     btn.disabled = false;
@@ -4445,6 +4691,15 @@ async function smartLogin(){
       return;
     }
     if(u.status==='pending'){ toast('حسابك في انتظار موافقة المدير ⏳','info'); return; }
+    // تحقق من تاريخ انتهاء الصلاحية
+    if(u.expireDate){
+      const exp = new Date(u.expireDate);
+      if(!isNaN(exp) && exp < new Date()){
+        u.status = 'frozen';
+        saveUser(u);
+        toast('❌ انتهت صلاحية حسابك — تواصل مع المدير','error'); return;
+      }
+    }
     if(u.status==='frozen'){  toast('❄️ حسابك موقوف — تواصل مع المدير','error'); return; }
     if(u.status!=='active'){  toast('حساب غير مفعّل — تواصل مع المدير','error'); return; }
 
@@ -4596,6 +4851,167 @@ function closePushNotif() {
   setTimeout(()=>{ n.style.display='none'; n.classList.remove('hide'); }, 300);
 }
 
+
+// ════════════════════════════════════════════
+// PENDING SCREEN — شاشة الانتظار
+// ════════════════════════════════════════════
+let _pwaPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _pwaPrompt = e;
+  const row = el('perm-pwa-row');
+  if(row) row.style.display = 'flex';
+});
+
+function showPendingScreen(){
+  // أخفِ كل الصفحات وأظهر شاشة الانتظار
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const ps = el('pending-screen');
+  if(ps) ps.style.display = 'flex';
+  updatePermUI();
+  // ابدأ polling للتحقق من تغيير الحالة
+  startPendingStatusPoll();
+}
+
+function hidePendingScreen(){
+  const ps = el('pending-screen');
+  if(ps) ps.style.display = 'none';
+}
+
+function updatePermUI(){
+  // إشعارات
+  const notifGranted = 'Notification' in window && Notification.permission === 'granted';
+  const notifDenied  = 'Notification' in window && Notification.permission === 'denied';
+  const ns = el('perm-notif-status'), nb = el('perm-notif-btn');
+  if(ns) { ns.textContent = notifGranted ? '✅ مفعّل' : notifDenied ? '❌ محظور من الإعدادات' : 'غير مفعّل'; ns.style.color = notifGranted ? 'var(--success)' : notifDenied ? 'var(--danger)' : 'var(--text2)'; }
+  if(nb) { nb.textContent = notifGranted ? '✅ مفعّل' : 'تفعيل'; nb.className = 'perm-btn ' + (notifGranted ? 'perm-granted' : 'perm-pending-btn'); nb.disabled = notifGranted; }
+
+  // موقع
+  const ls = el('perm-loc-status'), lb = el('perm-loc-btn');
+  const locKey = 'perm_loc_' + (A.user?.id||'');
+  const locGranted = localStorage.getItem(locKey) === 'granted';
+  if(ls) { ls.textContent = locGranted ? '✅ مفعّل' : 'غير مفعّل'; ls.style.color = locGranted ? 'var(--success)' : 'var(--text2)'; }
+  if(lb) { lb.textContent = locGranted ? '✅ مفعّل' : 'تفعيل'; lb.className = 'perm-btn ' + (locGranted ? 'perm-granted' : 'perm-pending-btn'); lb.disabled = locGranted; }
+}
+
+async function requestPermNotif(){
+  if(!('Notification' in window)){ toast('المتصفح لا يدعم الإشعارات','error'); return; }
+  const perm = await Notification.requestPermission();
+  if(perm === 'granted'){
+    await subscribePush(true);
+    toast('✅ تم تفعيل الإشعارات','success');
+  } else {
+    toast('⚠️ لم يتم السماح بالإشعارات — يمكن تفعيلها من إعدادات المتصفح','info');
+  }
+  updatePermUI();
+}
+
+function requestPermLoc(){
+  if(!navigator.geolocation){ toast('GPS غير متاح','error'); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const key = 'perm_loc_' + (A.user?.id||'');
+      localStorage.setItem(key, 'granted');
+      toast('✅ تم تفعيل الموقع','success');
+      updatePermUI();
+    },
+    err => {
+      toast('⚠️ لم يتم السماح بالموقع','info');
+      updatePermUI();
+    },
+    { enableHighAccuracy:true, timeout:8000 }
+  );
+}
+
+async function requestPWAInstall(){
+  if(_pwaPrompt){
+    _pwaPrompt.prompt();
+    const result = await _pwaPrompt.userChoice;
+    if(result.outcome === 'accepted'){
+      toast('✅ تم تثبيت التطبيق','success');
+      el('perm-pwa-row').style.display = 'none';
+    }
+    _pwaPrompt = null;
+  } else {
+    toast('افتح قائمة المتصفح واضغط "إضافة إلى الشاشة الرئيسية"','info');
+  }
+}
+
+let _pendingPollInterval = null;
+function startPendingStatusPoll(){
+  stopPendingStatusPoll();
+  _pendingPollInterval = setInterval(checkPendingStatus, 10000);
+}
+function stopPendingStatusPoll(){
+  if(_pendingPollInterval){ clearInterval(_pendingPollInterval); _pendingPollInterval = null; }
+}
+
+async function checkPendingStatus(){
+  if(!A.user) return;
+  try {
+    const fresh = await sbGet('users', `select=id,status&id=eq.${A.user.id}`);
+    if(!fresh?.length) return;
+    const newStatus = fresh[0].status;
+    if(newStatus === 'active' && A.user.status === 'pending'){
+      // تم القبول!
+      A.user.status = 'active';
+      const localU = A.db.users.find(u=>u.id===A.user.id);
+      if(localU) localU.status = 'active';
+      stopPendingStatusPoll();
+      hidePendingScreen();
+      // أظهر رسالة ترحيب
+      showApprovalCelebration();
+    }
+  } catch(e){}
+}
+
+function showApprovalCelebration(){
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <div style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;padding:2rem">
+      <div style="font-size:4rem;animation:pendPulse 1s ease-in-out 3">🎉</div>
+      <div style="font-size:1.6rem;font-weight:900;color:#fff;text-align:center">تم قبول طلبك!</div>
+      <div style="font-size:.95rem;color:#94a3b8;text-align:center">مرحباً بك في ${myInst()?.name||'المؤسسة'}</div>
+      <button onclick="this.parentElement.parentElement.remove();loadUser();" style="padding:1rem 2rem;background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;border:none;border-radius:14px;font-family:Cairo,sans-serif;font-size:1rem;font-weight:700;cursor:pointer;margin-top:.5rem">
+        🚀 ادخل الآن
+      </button>
+    </div>`;
+  document.body.appendChild(div);
+}
+
+// ════════════════════════════════════════════
+// FIRST-OPEN PERMISSIONS — لكل مستخدم ومسؤول
+// ════════════════════════════════════════════
+async function requestFirstOpenPermissions(){
+  const uid = A.user?.id || 'guest';
+  const notifKey = 'perm_notif_asked_' + uid;
+  const locKey   = 'perm_loc_asked_'   + uid;
+
+  // طلب الإشعارات إذا لم يوافق بعد
+  if('Notification' in window && Notification.permission === 'default' && !localStorage.getItem(notifKey)){
+    localStorage.setItem(notifKey, '1');
+    await Notification.requestPermission();
+    if(Notification.permission === 'granted') await subscribePush(true);
+  } else if(Notification.permission === 'granted' && !localStorage.getItem('push_done_'+uid)){
+    await subscribePush(true);
+  }
+
+  // طلب الموقع إذا لم يوافق بعد
+  if(navigator.geolocation && !localStorage.getItem(locKey)){
+    localStorage.setItem(locKey, '1');
+    navigator.geolocation.getCurrentPosition(
+      pos => { localStorage.setItem('perm_loc_'+uid, 'granted'); },
+      err => {},
+      { enableHighAccuracy:true, timeout:8000 }
+    );
+  }
+
+  // PWA install prompt
+  if(_pwaPrompt && !localStorage.getItem('pwa_asked_'+uid)){
+    localStorage.setItem('pwa_asked_'+uid, '1');
+    setTimeout(()=>{ if(_pwaPrompt) _pwaPrompt.prompt(); }, 2000);
+  }
+}
 
 // ════════════════════════════════════════════
 // WEB PUSH — إشعارات الهاتف
@@ -4972,6 +5388,26 @@ async function forgotConfirm() {
 }
 
 </script>
+
+<!-- DOOR SCHEDULE MODAL -->
+<div class="modal-ov" id="m-door-sch">
+  <div class="modal" style="max-height:90vh;overflow-y:auto">
+    <h3 class="modal-title">⏰ جدول الباب — <span id="door-sch-name"></span></h3>
+    <input type="hidden" id="door-sch-id">
+    <input type="hidden" id="door-sch-inst-id">
+    <div style="background:var(--surface2);border-radius:10px;padding:.75rem;margin-bottom:.75rem">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
+        <input type="checkbox" id="door-sch-use-inst" onchange="toggleDoorSchMode()" style="width:16px;height:16px">
+        <span>استخدم جدول المؤسسة (الافتراضي)</span>
+      </label>
+    </div>
+    <div id="door-sch-grid"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('m-door-sch')">إلغاء</button>
+      <button class="btn-pri" style="flex:2;margin-top:0" onclick="saveDoorSchedule()">💾 حفظ الجدول</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-ov" id="m-all-alerts">
   <div class="modal" style="max-height:85vh;overflow-y:auto">
