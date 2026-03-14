@@ -3751,6 +3751,13 @@ function editInstModal(instId){
   el('ei-dev').value = door?.devId || '';
   el('ei-lat').value = door?.lat || '';
   el('ei-lng').value = door?.lng || '';
+  // تحميل بيانات المسؤول
+  const admin = A.db.users.find(u => u.instId === instId && u.role === 'admin');
+  if(el('ei-admin-phone')) el('ei-admin-phone').value = admin?.phone || '';
+  if(el('ei-admin-pass'))  el('ei-admin-pass').value  = '';
+  if(el('ei-admin-info'))  el('ei-admin-info').textContent = admin
+    ? `👤 ${admin.name}  📱 +216${admin.phone||'—'}`
+    : 'لا يوجد مسؤول مرتبط بهذه المؤسسة';
   openModal('m-edit-inst');
 }
 
@@ -3769,10 +3776,25 @@ async function saveEditInst(){
     inst.doors[0].lng = lng;
   }
   await saveInst(inst);
+  // حفظ بيانات المسؤول
+  const newPhone = (el('ei-admin-phone')?.value||'').replace(/\D/g,'');
+  const newPass  = (el('ei-admin-pass')?.value||'').trim();
+  const admin = A.db.users.find(u => u.instId === instId && u.role === 'admin');
+  if(admin && (newPhone || newPass)){
+    if(newPhone){
+      const conflict = A.db.users.find(u => u.id !== admin.id && (u.phone||'').replace(/\D/g,'') === newPhone);
+      if(conflict){ toast(`⚠️ الهاتف مستخدم من: ${conflict.name}`,'error'); return; }
+      admin.phone = newPhone;
+    }
+    if(newPass) admin.pw = newPass;
+    await saveUser(admin);
+    toast(`✅ تم تعديل المؤسسة وبيانات المسؤول`,'success');
+  } else {
+    toast('✅ تم تعديل المؤسسة','success');
+  }
   renderInsts();
   renderSpInstGps();
   closeModal('m-edit-inst');
-  toast('✅ تم تعديل المؤسسة','success');
 }
 
 function useMyLocForEdit(){
@@ -5016,6 +5038,20 @@ async function forgotConfirm() {
     <input type="hidden" id="ei-id">
     <div class="fg"><label>اسم المؤسسة</label><input id="ei-name" placeholder="معهد الأمل"></div>
     <div class="fg"><label>نطاق GPS (متر)</label><input type="number" id="ei-gps" value="30" min="5" max="500"></div>
+    <!-- بيانات المسؤول -->
+    <div style="background:var(--surface2);border-radius:12px;padding:1rem;margin-top:.5rem;border:1px solid var(--border)">
+      <div style="font-weight:700;font-size:.85rem;margin-bottom:.75rem;color:var(--accent)">👤 المسؤول</div>
+      <div id="ei-admin-info" style="font-size:.78rem;color:var(--text2);margin-bottom:.75rem;padding:.4rem .6rem;background:var(--bg);border-radius:8px"></div>
+      <div class="fg"><label>رقم هاتف المسؤول 📱</label>
+        <div class="phone-wrap">
+          <div class="phone-prefix">🇹🇳 +216</div>
+          <input type="tel" id="ei-admin-phone" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:0"><label>كلمة سر جديدة <span style="color:var(--text2);font-size:.75rem">(اتركها فارغة للإبقاء على القديمة)</span></label>
+        <input type="password" id="ei-admin-pass" placeholder="••••••••">
+      </div>
+    </div>
     <div style="background:var(--surface2);border-radius:12px;padding:1rem;margin-top:.5rem">
       <div style="font-weight:700;font-size:.85rem;margin-bottom:.75rem;color:var(--accent)">🚪 الباب الرئيسي</div>
       <div class="fg"><label>اسم الباب</label><input id="ei-door-name" placeholder="الباب الرئيسي"></div>
