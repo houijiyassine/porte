@@ -26,10 +26,10 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .page.active{display:flex;}
 
 /* LANDING */
-#landing{align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,#0a0f1e 70%);padding:1rem;}
-.logo{width:64px;height:64px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:1.6rem;box-shadow:0 0 40px rgba(59,130,246,.4);}
-.landing-title{font-size:1.6rem;font-weight:900;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,#fff,var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.landing-sub{color:var(--text2);text-align:center;margin-bottom:1rem;font-size:.88rem;}
+#landing{align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,#0a0f1e 70%);padding:2rem;}
+.logo{width:80px;height:80px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:24px;display:flex;align-items:center;justify-content:center;margin:0 auto 2rem;font-size:2rem;box-shadow:0 0 40px rgba(59,130,246,.4);}
+.landing-title{font-size:2rem;font-weight:900;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,#fff,var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.landing-sub{color:var(--text2);text-align:center;margin-bottom:3rem;}
 .landing-btns{display:flex;flex-direction:column;gap:1rem;max-width:400px;width:100%;}
 .btn-land{padding:1.2rem;border-radius:var(--r);border:none;font-family:'Cairo',sans-serif;font-size:1.1rem;font-weight:700;cursor:pointer;transition:all .3s;display:flex;align-items:center;justify-content:center;gap:.75rem;}
 .bl-admin{background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;box-shadow:0 4px 20px rgba(59,130,246,.4);}
@@ -40,15 +40,14 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 /* AUTH */
 #auth{align-items:center;justify-content:center;padding:2rem;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,#0a0f1e 70%);}
-.auth-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1.25rem;width:100%;max-width:400px;}
+.auth-box{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:2rem;width:100%;max-width:400px;}
 .auth-back{background:none;border:none;color:var(--text2);cursor:pointer;font-family:'Cairo',sans-serif;font-size:.9rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:.5rem;}
 .auth-title{font-size:1.5rem;font-weight:700;margin-bottom:.25rem;}
-.auth-sub{color:var(--text2);font-size:.85rem;margin-bottom:1rem;}
-.fg{margin-bottom:.75rem;}
+.auth-sub{color:var(--text2);font-size:.85rem;margin-bottom:2rem;}
+.fg{margin-bottom:1rem;}
 .fg label{display:block;font-size:.85rem;color:var(--text2);margin-bottom:.5rem;font-weight:600;}
 .fg input,.fg select{width:100%;padding:.875rem 1rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Cairo',sans-serif;font-size:.95rem;outline:none;transition:border-color .3s;}
 .fg input:focus,.fg select:focus{border-color:var(--accent);}
-.fg input[type="password"]{direction:ltr;text-align:left;}
 .btn-pri{width:100%;padding:1rem;background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;border:none;border-radius:12px;font-family:'Cairo',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:all .3s;margin-top:.5rem;}
 .btn-pri:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(59,130,246,.4);}
 .auth-toggle{text-align:center;margin-top:1rem;font-size:.85rem;color:var(--text2);}
@@ -148,7 +147,6 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 }
 .otp-inp:focus { border-color: var(--accent); outline: none; }
 .otp-inp.filled { border-color: var(--success); }
-.otp-row{display:flex;gap:.5rem;justify-content:center;direction:ltr;margin:1rem 0;}
 
 
 /* ── Push Notification ── */
@@ -285,9 +283,9 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 /* MODAL */
 .modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center;padding:1.5rem;}
 .modal-ov.active{display:flex;}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1.25rem;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:2rem;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;}
 .modal-title{font-size:1.2rem;font-weight:700;margin-bottom:1.5rem;}
-.modal-actions{display:flex;gap:.75rem;margin-top:.75rem;}
+.modal-actions{display:flex;gap:.75rem;margin-top:1.5rem;}
 .btn-cancel{flex:1;padding:.875rem;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:12px;font-family:'Cairo',sans-serif;font-size:.9rem;font-weight:600;cursor:pointer;}
 
 /* TOAST */
@@ -549,18 +547,18 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 <!-- LANDING → direct login -->
 <div id="landing" class="page active">
-  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,var(--bg) 70%);padding:1rem .75rem;">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,var(--bg) 70%);padding:2rem;">
     <div class="logo" id="logo-tap" onclick="logoTap()" style="cursor:pointer">🔐</div>
     <h1 class="landing-title">نظام التحكم في الدخول</h1>
     <p class="landing-sub">نظام ذكي لإدارة أبواب المؤسسات</p>
 
-    <div class="auth-box" style="margin-top:.75rem">
+    <div class="auth-box" style="margin-top:1.5rem">
       <!-- LOGIN FORM -->
       <div id="land-login">
         <div class="fg"><label>رقم الهاتف 📱</label>
-            <div class="phone-wrap">
-              <div class="phone-prefix">🇹🇳 +216</div>
-              <input id="l-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8);el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')el('l-pass').focus()">
+            <div style="display:flex;gap:.5rem">
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap">🇹🇳 +216</div>
+              <input id="l-phone" type="tel" placeholder="XX XXX XXX" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8);el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')el('l-pass').focus()">
             </div>
           </div>
         <div class="fg"><label>كلمة المرور</label><input type="password" id="l-pass" placeholder="••••••••" oninput="el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')smartLogin()"></div>
@@ -569,7 +567,13 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
           <button onclick="showForgotPass()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-family:Cairo,sans-serif;font-size:.82rem">🔑 نسيت كلمة المرور؟</button>
         </div>
         <div id="login-error-msg" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:.6rem .9rem;font-size:.8rem;color:#ef4444;margin-top:.5rem;text-align:center"></div>
-        <div class="auth-toggle" style="margin-top:.75rem">ليس لديك حساب؟ <span onclick="showLandRegister()">إنشاء حساب</span></div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:.5rem">
+          <span style="font-size:.75rem;color:var(--text2)">🔒 بيانات دخولك ستُحفظ تلقائياً في جهازك</span>
+        </div>
+        <div style="text-align:center;margin-top:.5rem">
+            <span onclick="showForgotPass()" style="color:var(--accent);font-size:.78rem;cursor:pointer">🔑 نسيت كلمة المرور؟</span>
+          </div>
+          <div class="auth-toggle" style="margin-top:.75rem">ليس لديك حساب؟ <span onclick="showLandRegister()">إنشاء حساب</span></div>
       </div>
 
       <!-- REGISTER FORM -->
@@ -604,9 +608,9 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
           <div class="fg"><label>الاسم الكامل</label><input id="r-name" placeholder="أدخل اسمك الكامل" oninput="updateAvLetter(this.value)"></div>
           <div class="fg"><label>كود المؤسسة <span style="color:var(--text2);font-size:.78rem">(5 أرقام — يمنحك إياه المدير)</span></label><input id="r-inst-code" placeholder="مثال: 12345" maxlength="5" oninput="this.value=this.value.replace(/\D/g,'')"></div>
           <div class="fg"><label>رقم الهاتف 📱</label>
-            <div class="phone-wrap">
-              <div class="phone-prefix">🇹🇳 +216</div>
-              <input id="r-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+            <div style="display:flex;gap:.5rem">
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap">🇹🇳 +216</div>
+              <input id="r-phone" type="tel" placeholder="XX XXX XXX" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
             </div>
           </div>
           <div class="fg"><label>كلمة المرور</label><input type="password" id="r-pass" placeholder="••••••••"></div>
@@ -624,7 +628,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
           </div>
 
           <!-- OTP inputs -->
-          <div class="otp-row" id="otp-boxes">
+          <div style="display:flex;gap:.5rem;justify-content:center;margin:1rem 0" id="otp-boxes">
             <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="otpInput(this,0)" onkeydown="otpKey(this,0)">
             <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="otpInput(this,1)" onkeydown="otpKey(this,1)">
             <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="otpInput(this,2)" onkeydown="otpKey(this,2)">
@@ -961,12 +965,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="modal">
     <h3 class="modal-title">إضافة مستخدم</h3>
     <div class="fg"><label>الاسم</label><input id="nu-name" placeholder="محمد أحمد"></div>
-    <div class="fg"><label>رقم الهاتف 📱</label>
-      <div class="phone-wrap">
-        <div class="phone-prefix">🇹🇳 +216</div>
-        <input type="tel" id="nu-email" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
-      </div>
-    </div>
+    <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="nu-email" placeholder="email@example.com"></div>
     <div class="fg"><label>كلمة المرور المؤقتة</label><input id="nu-pass"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('m-add-user')">إلغاء</button>
@@ -1062,12 +1061,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="modal">
     <h3 class="modal-title">إضافة مؤسسة</h3>
     <div class="fg"><label>اسم المؤسسة</label><input id="ni-name" placeholder="معهد الأمل"></div>
-    <div class="fg"><label>هاتف المسؤول 📱</label>
-      <div class="phone-wrap">
-        <div class="phone-prefix">🇹🇳 +216</div>
-        <input type="tel" id="ni-email" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
-      </div>
-    </div>
+    <div class="fg"><label>بريد المسؤول</label><input type="email" id="ni-email" placeholder="admin@inst.com"></div>
     <div class="fg"><label>كلمة مرور المسؤول</label><input type="password" id="ni-pass" placeholder="••••••••"></div>
     <div class="fg"><label>إعادة كلمة المرور</label><input type="password" id="ni-pass2" placeholder="••••••••"></div>
     <div class="fg">
@@ -1095,9 +1089,9 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div id="forgot-step1">
       <p style="color:var(--text2);font-size:.85rem;margin-bottom:1rem;text-align:center">أدخل رقم هاتفك وسيصلك رمز التحقق</p>
       <div class="fg"><label>رقم الهاتف 📱</label>
-        <div class="phone-wrap">
-          <div class="phone-prefix">🇹🇳 +216</div>
-          <input id="fp-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+        <div style="display:flex;gap:.5rem">
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap">🇹🇳 +216</div>
+          <input id="fp-phone" type="tel" placeholder="XX XXX XXX" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
         </div>
       </div>
       <div style="background:var(--surface2);border:1px solid var(--warning);border-radius:8px;padding:.5rem;margin-bottom:1rem;font-size:.75rem;color:var(--warning);text-align:center">🧪 وضع الاختبار — الرمز هو: <strong>0000</strong></div>
@@ -1113,7 +1107,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
       <div style="background:var(--surface2);border:1px solid var(--warning);border-radius:8px;padding:.4rem;margin-bottom:.75rem;font-size:.75rem;color:var(--warning);text-align:center">🧪 الرمز: <strong>0000</strong></div>
       
       <div class="fg"><label>رمز التحقق</label>
-        <div class="otp-row">
+        <div style="display:flex;gap:.4rem;justify-content:center">
           <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="fpOtpInput(this,0)" onkeydown="fpOtpKey(this,0)">
           <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="fpOtpInput(this,1)" onkeydown="fpOtpKey(this,1)">
           <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="fpOtpInput(this,2)" onkeydown="fpOtpKey(this,2)">
@@ -2026,7 +2020,7 @@ async function saveDB(){
   // Save users
   for(const u of A.db.users){
     await sbUpsert('users', {
-      id: u.id, name: u.name, email: u.email||(u.phone?u.phone+'@phone.local':u.id+'@user.local'), pw: u.pw,
+      id: u.id, name: u.name, email: u.email, pw: u.pw,
       role: u.role, status: u.status, inst_id: u.instId||null,
       avatar: u.avatar||null, note: u.note||null, last_loc: u.lastLoc||null
     });
@@ -2035,9 +2029,8 @@ async function saveDB(){
 
 // Quick save single user
 async function saveUser(u){
-  const _email = u.email || (u.phone ? u.phone.replace(/\D/g,'')+'@phone.local' : u.id+'@user.local');
   await sbUpsert('users', {
-    id: u.id, name: u.name, email: _email, pw: u.pw,
+    id: u.id, name: u.name, email: u.email||null, pw: u.pw,
     phone: u.phone||null,
     role: u.role, status: u.status, inst_id: u.instId||null,
     avatar: u.avatar||null, note: u.note||null, last_loc: u.lastLoc||null,
@@ -2138,7 +2131,7 @@ function handleAuth(){
   A.mode==='login'?doLogin(email,pass):doRegister(email,pass);
 }
 function doLogin(email,pass){
-  const u=A.db.users.find(u=>((u.phone||'').replace(/\D/g,'')===(email||'').replace(/\D/g,'')||u.email===email)&&u.pw===pass);
+  const u=A.db.users.find(u=>u.email===email&&u.pw===pass);
   if(!u){toast('بيانات خاطئة','error');return;}
   if(u.status==='pending'){toast('حسابك في انتظار موافقة المدير','info');return;}
   if(u.status==='frozen'){toast(tr('frozen')+' — '+tr('notConnected').split('⚠️')[0].trim(),'error');return;}
@@ -2147,16 +2140,16 @@ function doLogin(email,pass){
 }
 function doRegister(email,pass){
   const name=v('r-name');if(!name){toast('يرجى إدخال الاسم','error');return;}
-  // email dup check removed — phone used instead
+  if(A.db.users.find(u=>u.email===email)){toast('البريد مسجل مسبقاً','error');return;}
   if(A.utype==='admin'){
     const instName=v('r-inst-name');if(!instName){toast('يرجى إدخال اسم المؤسسة','error');return;}
     const iid='inst_'+Date.now();
     A.db.institutes.push({id:iid,name:instName,gps:30,doors:[{id:'door_'+Date.now(),name:'الباب الرئيسي',devId:'',active:true}],schedule:defSch(),alerts:[],history:[]});
-    const u={id:'u'+Date.now(),name,pw:pass,role:'admin',status:'active',instId:iid};
+    const u={id:'u'+Date.now(),name,email,pw:pass,role:'admin',status:'active',instId:iid};
     A.db.users.push(u);saveUser(u);A.user=u;loadAdmin();return;
   }
   const instId=el('r-inst').value;if(!instId){toast('يرجى اختيار المؤسسة','error');return;}
-  A.db.users.push({id:'u'+Date.now(),name,pw:pass,role:'user',status:'pending',instId});
+  A.db.users.push({id:'u'+Date.now(),name,email,pw:pass,role:'user',status:'pending',instId});
   el('pend-msg').style.display='block';toast('تم إرسال طلبك بنجاح','success');
 }
 function logout(){
@@ -2166,7 +2159,7 @@ function logout(){
   A.timers={};A.user=null;
   showPage('landing');
   showLandLogin();
-  if(el('l-phone')) el('l-phone').value='';
+  if(el('l-email')) el('l-email').value='';
   if(el('l-pass'))  el('l-pass').value='';
 }
 
@@ -2781,11 +2774,11 @@ function renderAdminUsers(inst){
   if(badge){ if(pend.length>0){badge.textContent=pend.length;badge.style.display='inline';}else{badge.style.display='none';} }
   el('pend-section').style.display=pend.length?'block':'none';
   el('pend-list').innerHTML=pend.map(u=>`<div class="user-item">
-    <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">📱 ${u.phone ? '+216'+u.phone : '—'}</div></div></div><span class="bdg bdg-pend">انتظار</span></div>
+    <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}</div></div></div><span class="bdg bdg-pend">انتظار</span></div>
     <div class="ui-actions"><button class="btn-sm" onclick="approveU('${u.id}')">✅ قبول</button><button class="btn-sm btn-danger" onclick="delU('${u.id}')">❌ رفض</button></div>
   </div>`).join('');
   el('admin-user-list').innerHTML=rest.map(u=>`<div class="user-item">
-    <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">📱 ${u.phone ? '+216'+u.phone : '—'}</div></div></div>
+    <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}</div></div></div>
     <span class="bdg ${u.status==='frozen'?'bdg-frozen':'bdg-active'}">${u.status==='frozen'?tr('frozen'):tr('active')}</span></div>
     ${u.note ? `<div style="display:flex;align-items:flex-start;gap:.4rem;background:rgba(129,140,248,.07);border:1px solid rgba(129,140,248,.2);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;color:var(--text2);margin-bottom:.5rem"><span style="font-size:.85rem;flex-shrink:0">📝</span><span>${u.note}</span></div>` : ''}
     <div class="ui-actions">
@@ -3211,10 +3204,10 @@ function showDoorHist(doorId, instId){
 }
 
 async function addUser(){
-  const name=v('nu-name'),phone=v('nu-email').replace(/\D/g,''),pw=v('nu-pass'),inst=myInst();
-  if(!name||!phone||!pw){toast('يرجى ملء جميع الحقول','error');return;}
-  if(A.db.users.find(u=>(u.phone||'').replace(/\D/g,'')===phone)){toast('رقم الهاتف مسجل مسبقاً','error');return;}
-  const newUser={id:'u'+Date.now(),name,phone,pw,role:'user',status:'active',instId:inst.id};
+  const name=v('nu-name'),email=v('nu-email'),pw=v('nu-pass'),inst=myInst();
+  if(!name||!email||!pw){toast('يرجى ملء جميع الحقول','error');return;}
+  if(A.db.users.find(u=>u.email===email)){toast('البريد مسجل مسبقاً','error');return;}
+  const newUser={id:'u'+Date.now(),name,email,pw,role:'user',status:'active',instId:inst.id};
   A.db.users.push(newUser);
   try {
     await saveUser(newUser);
@@ -3507,7 +3500,7 @@ function renderAllUsers(){
     const stBdg=u.status==='pending'?'bdg-pend':u.status==='frozen'?'bdg-frozen':u.role==='admin'?'bdg-admin':'bdg-active';
     const stTxt=u.status==='pending'?'انتظار':u.status==='frozen'?tr('frozen'):u.role==='admin'?'مدير':'نشط';
     return `<div class="user-item">
-      <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">📱 ${u.phone ? '+216'+u.phone : '—'}${inst?' · '+inst.name:''}</div></div></div><span class="bdg ${stBdg}">${stTxt}</span></div>
+      <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}${inst?' · '+inst.name:''}</div></div></div><span class="bdg ${stBdg}">${stTxt}</span></div>
       <div class="ui-actions">
         <button class="btn-sm" onclick="showHist('${u.id}')">📋 سجل</button>
         <button class="btn-sm" style="background:rgba(129,140,248,.12);color:var(--purple);border:1px solid rgba(129,140,248,.3)" onclick="openNote('${u.id}')">📝 ملاحظة</button>
@@ -3609,20 +3602,20 @@ function genInstCode(){
 }
 
 async function addInstitute(){
-  const name=v('ni-name'),phone=v('ni-email').replace(/\D/g,''),pw=v('ni-pass'),pw2=v('ni-pass2');
+  const name=v('ni-name'),email=v('ni-email'),pw=v('ni-pass'),pw2=v('ni-pass2');
   const code=v('ni-code');
-  if(!name||!phone||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
+  if(!name||!email||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
   if(pw !== pw2){toast('كلمتا المرور غير متطابقتين','error');return;}
   if(!code||code.length!==5||!/^\d{5}$/.test(code)){toast('الكود يجب أن يكون 5 أرقام','error');return;}
   if(A.db.institutes.find(i=>i.code===code)){toast('هذا الكود مستخدم مسبقاً','error');return;}
-  if(A.db.users.find(u=>(u.phone||'').replace(/\D/g,'')===phone)){toast('هذا الهاتف مسجل مسبقاً','error');return;}
+  if(A.db.users.find(u=>u.email.toLowerCase()===email.toLowerCase())){toast('هذا البريد مسجل مسبقاً','error');return;}
   const iid='inst'+Date.now();
   const newInst = {
     id:iid, name, code, gps:30,
     doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:'',active:true,type:'garage'}],
     schedule:defSch(), alerts:[], history:[]
   };
-  const newAdmin = {id:'u'+Date.now(),name:'مدير '+name,phone,pw,role:'admin',status:'active',instId:iid,avatar:null,note:null,lastLoc:null};
+  const newAdmin = {id:'u'+Date.now(),name:'مدير '+name,email,pw,role:'admin',status:'active',instId:iid,avatar:null,note:null,lastLoc:null};
   try {
     await saveInst(newInst);
     await saveUser(newAdmin);
@@ -3692,6 +3685,15 @@ function editInstModal(instId){
   el('ei-dev').value = door?.devId || '';
   el('ei-lat').value = door?.lat || '';
   el('ei-lng').value = door?.lng || '';
+  // تحميل هاتف المسؤول الحالي
+  const admin = A.db.users.find(u => u.instId === instId && u.role === 'admin');
+  const phoneEl = el('ei-admin-phone');
+  const nameLbl = el('ei-admin-name-lbl');
+  if(phoneEl) phoneEl.value = admin?.phone || '';
+  if(nameLbl){
+    if(admin){ nameLbl.textContent = '👤 المسؤول الحالي: ' + admin.name; nameLbl.style.display='block'; }
+    else { nameLbl.style.display='none'; }
+  }
   openModal('m-edit-inst');
 }
 
@@ -3710,10 +3712,29 @@ async function saveEditInst(){
     inst.doors[0].lng = lng;
   }
   await saveInst(inst);
+  // حفظ هاتف المسؤول الجديد
+  const newPhone = el('ei-admin-phone')?.value?.replace(/\D/g,'') || '';
+  if(newPhone) {
+    const admin = A.db.users.find(u => u.instId === instId && u.role === 'admin');
+    if(admin) {
+      // تحقق أن الهاتف غير مستخدم من مستخدم آخر
+      const conflict = A.db.users.find(u => u.id !== admin.id && (u.phone||'').replace(/\D/g,'') === newPhone);
+      if(conflict){
+        toast('⚠️ رقم الهاتف مستخدم من قِبَل: ' + conflict.name, 'error');
+        return;
+      }
+      admin.phone = newPhone;
+      await saveUser(admin);
+      toast('✅ تم تعديل المؤسسة وهاتف المسؤول', 'success');
+    } else {
+      toast('✅ تم تعديل المؤسسة — لا يوجد مسؤول مرتبط', 'info');
+    }
+  } else {
+    toast('✅ تم تعديل المؤسسة', 'success');
+  }
   renderInsts();
   renderSpInstGps();
   closeModal('m-edit-inst');
-  toast('✅ تم تعديل المؤسسة','success');
 }
 
 function useMyLocForEdit(){
@@ -4086,7 +4107,7 @@ function exportPDF(){
   const lbl={open:'فتح',close:'غلق',stop:'إيقاف'};
   const rows = h.map(x=>`<tr><td>${x.uname}</td><td>${x.door}</td><td>${lbl[x.action]||x.action}</td><td>${x.time}</td></tr>`).join('');
   const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
-  <style>body{font-family:Arial;direction:rtl;padding:1rem;}h1{color:#1e3a5f;font-size:1.3rem;margin-bottom:1rem;}
+  <style>body{font-family:Arial;direction:rtl;padding:2rem;}h1{color:#1e3a5f;font-size:1.3rem;margin-bottom:1rem;}
   table{width:100%;border-collapse:collapse;font-size:.9rem;}th{background:#1e3a5f;color:#fff;padding:.6rem;text-align:right;}
   td{padding:.5rem;border-bottom:1px solid #e2e8f0;}tr:nth-child(even){background:#f8fafc;}
 /* ── USER DOOR CARD — FULL LAYOUT ── */
@@ -4288,7 +4309,7 @@ let _regType = 'user'; // 'user' or 'admin'
 function showLandLogin(){
   el('land-login').style.display = 'block';
   el('land-register').style.display = 'none';
-  el('l-phone')?.focus();
+  el('l-email').focus();
 }
 
 function showLandRegister(){
@@ -4319,7 +4340,7 @@ function logoTap(){
     // عرض قائمة المستخدمين للـ debug (للمطور فقط)
     if(A.db?.users?.length){
       const info = A.db.users.slice(0,10).map(u=>
-        `${u.phone||u.email||u.id} | ${u.pw ? '🔑 لديه كلمة سر' : '❌ بدون pw'} | ${u.role} | ${u.status}`
+        `${u.email} | ${u.pw ? '🔑 لديه كلمة سر' : '❌ بدون pw'} | ${u.role} | ${u.status}`
       ).join('\n');
       alert('👥 مستخدمو قاعدة البيانات:\n\n' + info);
     } else {
@@ -4374,14 +4395,16 @@ async function smartLogin(){
 async function smartRegister(){
   const name  = (el('r-name')?.value||'').trim();
   const code  = (el('r-inst-code')?.value||'').trim();
-  const email = ''; // unused — phone used instead
+  const email = (el('r-email')?.value||'').trim().toLowerCase();
   const pass  = el('r-pass')?.value||'';
   const pass2 = el('r-pass2')?.value||'';
 
   if(!name)  { toast('يرجى إدخال الاسم','error'); return; }
   if(!code)  { toast('يرجى إدخال كود المؤسسة','error'); return; }
+  if(!email) { toast('يرجى إدخال البريد الإلكتروني','error'); return; }
   if(!pass)  { toast('يرجى إدخال كلمة المرور','error'); return; }
   if(pass !== pass2){ toast('كلمتا المرور غير متطابقتين','error'); return; }
+  if(A.db.users.find(u=>u.email.toLowerCase()===email)){ toast('هذا البريد مسجل مسبقاً','error'); return; }
 
   // البحث عن المؤسسة بالكود
   const inst = A.db.institutes.find(i=>i.code===code);
@@ -4391,7 +4414,7 @@ async function smartRegister(){
   if(btn2){ btn2.textContent='⏳ جاري الحفظ...'; btn2.disabled=true; }
 
   try {
-    const newUser = {id:'u'+Date.now(),name,pw:pass,role:'user',status:'pending',instId:inst.id,avatar:_avatarB64||null,lastLoc:null,note:null};
+    const newUser = {id:'u'+Date.now(),name,email,pw:pass,role:'user',status:'pending',instId:inst.id,avatar:_avatarB64||null,lastLoc:null,note:null};
     await saveUser(newUser);
     A.db.users.push(newUser);
 
@@ -4399,7 +4422,7 @@ async function smartRegister(){
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     if(!inst.alerts) inst.alerts = [];
-    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} ()`, time:dateStr, type:'register'});
+    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} (${email})`, time:dateStr, type:'register'});
     await saveInst(inst);
 
     el('pend-msg').style.display = 'block';
@@ -4555,20 +4578,17 @@ async function subscribePush() {
       body: JSON.stringify({ push_sub: subJson })
     });
     console.log('✅ push_sub saved for', A.user.name);
-    if(!localStorage.getItem('push_subscribed_'+(A.user?.id||''))){
-      toast('✅ تم تفعيل الإشعارات الفورية','success');
-      try{localStorage.setItem('push_subscribed_'+(A.user?.id||''),'1');}catch(e){}
-    }
+    toast('✅ تم تفعيل الإشعارات الفورية', 'success');
   } catch(e) { console.warn('Push subscribe failed:', e); }
 }
 
 // تفعيل Push تلقائياً عند دخول admin/super
 async function initPushForAdmin() {
   if (!('Notification' in window)) return;
-  try{if(A.user?.id&&localStorage.getItem('push_subscribed_'+A.user.id))return;}catch(e){}
   if (Notification.permission === 'granted') {
     await subscribePush();
   } else if (Notification.permission !== 'denied') {
+    // نعرض زر تفعيل
     showPushEnableBtn();
   }
 }
@@ -4715,7 +4735,7 @@ async function smartRegisterFinish() {
   const { name, phone, pass, inst } = _regData;
   try {
     const newUser = {
-      id:'u'+Date.now(), name, phone,
+      id:'u'+Date.now(), name, email: null, phone,
       pw:pass, role:'user', status:'pending', instId:inst.id,
       avatar:_regData.avatar||null, lastLoc:null, note:null
     };
@@ -4725,7 +4745,7 @@ async function smartRegisterFinish() {
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     if(!inst.alerts) inst.alerts = [];
-    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} ()`, time:dateStr, type:'register'});
+    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} (${email})`, time:dateStr, type:'register'});
     await saveInst(inst);
 
     el('pend-msg').style.display = 'block';
@@ -4950,6 +4970,14 @@ async function forgotConfirm() {
     <input type="hidden" id="ei-id">
     <div class="fg"><label>اسم المؤسسة</label><input id="ei-name" placeholder="معهد الأمل"></div>
     <div class="fg"><label>نطاق GPS (متر)</label><input type="number" id="ei-gps" value="30" min="5" max="500"></div>
+    <div class="fg">
+      <label>📱 هاتف المسؤول</label>
+      <div class="phone-wrap">
+        <div class="phone-prefix">🇹🇳 +216</div>
+        <input type="tel" id="ei-admin-phone" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+      </div>
+      <div id="ei-admin-name-lbl" style="font-size:.75rem;color:var(--text2);margin-top:.35rem;padding:.3rem .5rem;background:var(--surface2);border-radius:6px;display:none"></div>
+    </div>
     <div style="background:var(--surface2);border-radius:12px;padding:1rem;margin-top:.5rem">
       <div style="font-weight:700;font-size:.85rem;margin-bottom:.75rem;color:var(--accent)">🚪 الباب الرئيسي</div>
       <div class="fg"><label>اسم الباب</label><input id="ei-door-name" placeholder="الباب الرئيسي"></div>
