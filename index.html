@@ -274,6 +274,18 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 /* INSTITUTES */
 .inst-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;margin-bottom:.75rem;}
+/* GPS inline toggle in inst-card */
+.gps-inline-row{display:flex;align-items:center;justify-content:space-between;padding:.5rem .65rem;border-radius:8px;background:var(--bg);border:1px solid var(--border);}
+.gps-inline-lbl{font-size:.78rem;font-weight:700;color:var(--text2);}
+.gps-inline-lbl span{font-size:.68rem;display:block;margin-top:.1rem;}
+.mini-tog{position:relative;width:42px;height:22px;flex-shrink:0;}
+.mini-tog input{opacity:0;width:0;height:0;}
+.mini-tog-sl{position:absolute;inset:0;background:var(--surface2);border-radius:99px;cursor:pointer;transition:.25s;border:1px solid var(--border);}
+.mini-tog-sl:before{content:'';position:absolute;width:16px;height:16px;background:var(--text2);border-radius:50%;top:2px;left:2px;transition:.25s;}
+.mini-tog input:checked+.mini-tog-sl{background:var(--success);border-color:var(--success);}
+.mini-tog input:checked+.mini-tog-sl:before{transform:translateX(20px);background:#fff;}
+.mini-tog input:not(:checked)+.mini-tog-sl{background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.4);}
+.mini-tog input:not(:checked)+.mini-tog-sl:before{background:var(--danger);}
 .inst-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem;}
 .inst-name{font-size:1rem;font-weight:700;}
 .inst-meta{font-size:.8rem;color:var(--text2);margin-top:.2rem;}
@@ -1981,6 +1993,8 @@ async function initDB(){
 
   const mappedInsts = institutes.map(i => ({
     id: i.id, name: i.name, code: i.code||null, gps: i.gps||30,
+    gpsForUsers: i.gps_for_users !== false,
+    gpsForAdmin: i.gps_for_admin === true,
     doors: i.doors||[], schedule: i.schedule||defSch(),
     alerts: i.alerts||[], history: i.history||[]
   }));
@@ -2044,6 +2058,8 @@ async function saveUser(u){
 async function saveInst(inst){
   await sbUpsert('institutes', {
     id: inst.id, name: inst.name, code: inst.code||null, gps: inst.gps,
+    gps_for_users: inst.gpsForUsers !== false,
+    gps_for_admin: inst.gpsForAdmin === true,
     doors: inst.doors, schedule: inst.schedule,
     alerts: inst.alerts, history: inst.history
   });
@@ -2275,7 +2291,13 @@ function checkGeo(inst, ctx) {
   const door = inst?.doors?.[0];
   const radius = door?.gps || inst?.gps || 30;
   const doorLoc = getDoorLoc(inst);
-  
+  const role = A.user?.role;
+  // تحقق من إعداد GPS حسب الدور
+  const gpsEnabled = role==='admin' ? inst?.gpsForAdmin===true : inst?.gpsForUsers!==false;
+  if (!gpsEnabled) {
+    if (ctx === 'user') { A.geoOk = true; setGeoUI(true, '🟢 الوصول مسموح', role==='admin'?'شرط الموقع غير مفعّل للمسؤول':'شرط الموقع غير مفعّل لهذه المؤسسة'); }
+    return;
+  }
   // If no door location set → bypass GPS check completely
   if (!doorLoc) {
     if (ctx === 'user') { A.geoOk = true; setGeoUI(true, '🟢 الوصول مسموح', 'لم يُحدَّد موقع الباب — لا قيد جغرافي'); }
@@ -2422,20 +2444,15 @@ async function ctrlDoor(doorId,instId,action,pfx){
   if(navigator.vibrate) navigator.vibrate(action==='stop' ? 30 : 60);
   const inst=getInst(instId),door=inst.doors.find(d=>d.id===doorId),radius=inst.gps||30;
   if(action==='close'&&A.timers[doorId]){clearInterval(A.timers[doorId].iv);delete A.timers[doorId];resetAutoBtn(doorId,pfx);}
-  if(pfx==='u'){
-    // Re-check for fake GPS at moment of action
-    if(A.geoPos){
-      const freshCheck=detectFakeGps(A.geoPos);
-      if(freshCheck.fake){
-        toast('🚫 موقع GPS مزيف — لا يمكن فتح الباب','error');
-        showFakeGpsWarning(freshCheck.reason);
-        logAlert(inst,door,'محاولة بموقع GPS مزيف: '+freshCheck.reason);
-        return;
-      }
+  if(pfx==='u'||pfx==='a'){
+    const _role=A.user?.role;
+    const _gpsOn=_role==='admin'?inst?.gpsForAdmin===true:inst?.gpsForUsers!==false;
+    if(_gpsOn){
+      if(A.geoPos){const fc=detectFakeGps(A.geoPos);if(fc.fake){toast('🚫 موقع GPS مزيف — لا يمكن فتح الباب','error');showFakeGpsWarning(fc.reason);logAlert(inst,door,'محاولة بموقع GPS مزيف: '+fc.reason);return;}}
+      const dl=getDoorLoc(inst);
+      if(dl&&(dl.lat||dl.lng)&&!A.geoOk){toast(`❌ يجب أن تكون قريباً من الباب (${radius}م)`,'error');logAlert(inst,door,'خارج النطاق الجغرافي');return;}
     }
-    const dl=getDoorLoc(inst);
-    if(dl && (dl.lat||dl.lng) && !A.geoOk){toast(`❌ يجب أن تكون قريباً من الباب (${radius}م)`,'error');logAlert(inst,door,'خارج النطاق الجغرافي');return;}
-    if(!A.timeOk&&action!=='stop'){toast('❌ خارج أوقات الدخول المسموحة','error');logAlert(inst,door,'خارج وقت العمل');return;}
+    if(pfx==='u'&&!A.timeOk&&action!=='stop'){toast('❌ خارج أوقات الدخول المسموحة','error');logAlert(inst,door,'خارج وقت العمل');return;}
   }
   const btns=['op','cl','st','au'].map(x=>el(`${pfx}-${x}-${doorId}`));
   btns.forEach(b=>b&&(b.disabled=true));
@@ -3429,6 +3446,23 @@ function renderInsts(){
         <div class="stat-box"><div class="stat-num" style="color:var(--warning)">${users.filter(u=>u.status==='pending').length}</div><div class="stat-lbl">انتظار</div></div>
         <div class="stat-box"><div class="stat-num" style="color:var(--danger)">${inst.alerts?.length||0}</div><div class="stat-lbl">تنبيه</div></div>
       </div>
+      <!-- GPS Toggles -->
+      <div style="display:flex;gap:.5rem;margin-top:.65rem">
+        <div class="gps-inline-row" style="flex:1">
+          <div class="gps-inline-lbl">📍 GPS المستخدمين<span>${inst.gpsForUsers!==false?'<span style=\'color:var(--success)\'>مفعّل ✓</span>':'<span style=\'color:var(--danger)\'>معطّل ✗</span>'}</span></div>
+          <label class="mini-tog">
+            <input type="checkbox" ${inst.gpsForUsers!==false?'checked':''} onchange="toggleGpsSetting('${inst.id}','users',this.checked)">
+            <span class="mini-tog-sl"></span>
+          </label>
+        </div>
+        <div class="gps-inline-row" style="flex:1">
+          <div class="gps-inline-lbl">🏛️ GPS المسؤول<span>${inst.gpsForAdmin===true?'<span style=\'color:var(--success)\'>مفعّل ✓</span>':'<span style=\'color:var(--text2)\'>معطّل</span>'}</span></div>
+          <label class="mini-tog">
+            <input type="checkbox" ${inst.gpsForAdmin===true?'checked':''} onchange="toggleGpsSetting('${inst.id}','admin',this.checked)">
+            <span class="mini-tog-sl"></span>
+          </label>
+        </div>
+      </div>
       ${inst.doors.length?`<div style="margin-top:.75rem;border-top:1px solid var(--border);padding-top:.75rem"><p style="font-size:.75rem;color:var(--text2);margin-bottom:.5rem;font-weight:700">سجلات الأبواب:</p>${doorsHtml}</div>`:``}
       <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)">
         <button onclick="spOpenAddDoor('${inst.id}')" style="width:100%;padding:.55rem;background:rgba(37,99,235,.12);border:1px dashed var(--accent);border-radius:10px;color:var(--accent);font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer">
@@ -3613,7 +3647,7 @@ async function addInstitute(){
   if(A.db.users.find(u=>(u.phone||'').replace(/\D/g,'')===phone)){toast('هذا الهاتف مسجل مسبقاً','error');return;}
   const iid='inst'+Date.now();
   const newInst = {
-    id:iid, name, code, gps:30,
+    id:iid, name, code, gps:30, gpsForUsers:true, gpsForAdmin:false,
     doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:'',active:true,type:'garage'}],
     schedule:defSch(), alerts:[], history:[]
   };
