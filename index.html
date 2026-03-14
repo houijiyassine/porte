@@ -2948,6 +2948,48 @@ function buildSlidingDoorIcon(){
   </svg>`;
 }
 
+function openExpireModal(uid){
+  const u = A.db.users.find(x=>x.id===uid);
+  if(!u) return;
+  el('expire-uid').value = uid;
+  el('expire-user-info').textContent = `👤 ${u.name}  📱 +216${u.phone||'—'}`;
+  el('expire-date-inp').value = u.expireDate || '';
+  updateExpirePreview();
+  openModal('m-expire');
+}
+
+function updateExpirePreview(){
+  const val = el('expire-date-inp')?.value;
+  const prev = el('expire-preview');
+  if(!prev) return;
+  if(!val){ prev.innerHTML = '<span style="color:var(--text2)">بدون تقييد زمني</span>'; return; }
+  prev.innerHTML = expireBadge(val);
+}
+
+async function saveExpireDate(){
+  const uid = el('expire-uid').value;
+  const u = A.db.users.find(x=>x.id===uid);
+  if(!u) return;
+  const newDate = el('expire-date-inp')?.value || null;
+  u.expireDate = newDate;
+  await saveUser(u);
+  closeModal('m-expire');
+  // إعادة رسم القوائم
+  if(A.user?.role==='admin') renderAdminUsers(myInst());
+  else renderAllUsers();
+  toast(newDate ? `✅ تم تحديد انتهاء الصلاحية: ${newDate}` : '✅ تم إلغاء تقييد الصلاحية','success');
+}
+
+function expireBadge(expireDate){
+  if(!expireDate) return '';
+  const exp = new Date(expireDate);
+  const now = new Date();
+  const days = Math.ceil((exp - now) / (1000*60*60*24));
+  if(days < 0) return `<span style="background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:.15rem .5rem;font-size:.7rem;font-weight:700">⏰ منتهي منذ ${Math.abs(days)} يوم</span>`;
+  if(days <= 7) return `<span style="background:rgba(245,158,11,.15);color:var(--warning);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:.15rem .5rem;font-size:.7rem;font-weight:700">⚠️ ينتهي بعد ${days} يوم</span>`;
+  return `<span style="background:rgba(16,185,129,.08);color:var(--success);border:1px solid rgba(16,185,129,.2);border-radius:6px;padding:.15rem .5rem;font-size:.7rem">📅 ${expireDate}</span>`;
+}
+
 function renderAdminUsers(inst){
   if(!inst)return;
   const all=A.db.users.filter(u=>u.instId===inst.id&&u.role==='user');
@@ -2964,10 +3006,12 @@ function renderAdminUsers(inst){
     <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}</div></div></div>
     <span class="bdg ${u.status==='frozen'?'bdg-frozen':'bdg-active'}">${u.status==='frozen'?tr('frozen'):tr('active')}</span></div>
     ${u.note ? `<div style="display:flex;align-items:flex-start;gap:.4rem;background:rgba(129,140,248,.07);border:1px solid rgba(129,140,248,.2);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;color:var(--text2);margin-bottom:.5rem"><span style="font-size:.85rem;flex-shrink:0">📝</span><span>${u.note}</span></div>` : ''}
+    ${u.expireDate?`<div style="margin-bottom:.4rem">${expireBadge(u.expireDate)}</div>`:''}
     <div class="ui-actions">
       <button class="btn-sm" onclick="showHist('${u.id}')">📋 سجل</button>
       <button class="btn-sm" style="background:rgba(129,140,248,.12);color:var(--purple);border:1px solid rgba(129,140,248,.3)" onclick="openNote('${u.id}')">📝 ملاحظة</button>
       <button class="btn-sm" style="background:rgba(245,158,11,.1);color:var(--warning);border:1px solid rgba(245,158,11,.3)" onclick="openUserSch('${u.id}')">⏰ جدوله</button>
+      <button class="btn-sm" style="background:rgba(6,182,212,.1);color:var(--accent2);border:1px solid rgba(6,182,212,.3)" onclick="openExpireModal('${u.id}')">📅 الصلاحية</button>
       <button class="btn-sm ${u.status==='frozen'?'btn-success':'btn-danger'}" onclick="freezeU('${u.id}')">${u.status==='frozen'?'✅ تفعيل':'❄️ تجميد'}</button>
       <button class="btn-sm btn-danger" onclick="delU('${u.id}')">🗑️ حذف</button>
     </div></div>`).join('')||`<p class="empty">لا يوجد مستخدمون</p>`;
@@ -3803,9 +3847,11 @@ function renderAllUsers(){
     const stTxt=u.status==='pending'?'انتظار':u.status==='frozen'?tr('frozen'):u.role==='admin'?'مدير':'نشط';
     return `<div class="user-item">
       <div class="ui-hdr"><div class="ui-info"><div class="mini-av">${u.name[0]}</div><div><div class="ui-name">${u.name}</div><div class="ui-email">${u.email}${inst?' · '+inst.name:''}</div></div></div><span class="bdg ${stBdg}">${stTxt}</span></div>
+      ${u.expireDate?`<div style="margin:.3rem 0">${expireBadge(u.expireDate)}</div>`:''}
       <div class="ui-actions">
         <button class="btn-sm" onclick="showHist('${u.id}')">📋 سجل</button>
         <button class="btn-sm" style="background:rgba(129,140,248,.12);color:var(--purple);border:1px solid rgba(129,140,248,.3)" onclick="openNote('${u.id}')">📝 ملاحظة</button>
+        <button class="btn-sm" style="background:rgba(6,182,212,.1);color:var(--accent2);border:1px solid rgba(6,182,212,.3)" onclick="openExpireModal('${u.id}')">📅 الصلاحية</button>
         ${u.status==='pending'?`<button class="btn-sm" onclick="approveUsp('${u.id}')">✅ قبول</button>`:''}
         ${u.lastLoc?`<a class="btn-sm" href="https://maps.google.com/?q=${u.lastLoc.lat},${u.lastLoc.lng}" target="_blank" style="text-decoration:none">📍 موقع</a>`:''}
         <button class="btn-sm ${u.status==='frozen'?'btn-success':'btn-danger'}" onclick="freezeU('${u.id}')">${u.status==='frozen'?'✅ تفعيل':'❄️ تجميد'}</button>
@@ -5405,6 +5451,24 @@ async function forgotConfirm() {
 </script>
 
 <!-- DOOR SCHEDULE MODAL -->
+<!-- EXPIRE DATE MODAL -->
+<div class="modal-ov" id="m-expire">
+  <div class="modal">
+    <h3 class="modal-title">📅 تاريخ انتهاء الصلاحية</h3>
+    <input type="hidden" id="expire-uid">
+    <div id="expire-user-info" style="font-size:.85rem;color:var(--text2);margin-bottom:1rem;padding:.5rem .75rem;background:var(--surface2);border-radius:8px"></div>
+    <div class="fg">
+      <label>تاريخ الانتهاء <span style="color:var(--text2);font-size:.75rem">(اتركه فارغاً لإلغاء التقييد)</span></label>
+      <input type="date" id="expire-date-inp" oninput="updateExpirePreview()" style="color-scheme:dark;width:100%;padding:.875rem 1rem;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Cairo,sans-serif;font-size:.95rem;outline:none">
+    </div>
+    <div id="expire-preview" style="margin-top:.5rem;font-size:.82rem;min-height:1.5rem"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('m-expire')">إلغاء</button>
+      <button class="btn-pri" style="flex:2;margin-top:0" onclick="saveExpireDate()">💾 حفظ</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-ov" id="m-door-sch">
   <div class="modal" style="max-height:90vh;overflow-y:auto">
     <h3 class="modal-title">⏰ جدول الباب — <span id="door-sch-name"></span></h3>
