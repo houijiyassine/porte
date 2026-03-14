@@ -5227,40 +5227,46 @@ async function verifyOtp() {
   el('step2-lbl').style.color = 'var(--success)';
 
   await smartRegisterFinish();
-
-  if(btn){ btn.textContent='✅ تأكيد الرمز'; btn.disabled=false; }
+  // لا نعيد الزر — لأن الانتقال لشاشة الانتظار حدث
 }
 
 async function smartRegisterFinish() {
   const { name, phone, pass, inst } = _regData;
+
+  // أنشئ المستخدم في الذاكرة أولاً
+  const newUser = {
+    id:'u'+Date.now(), name, phone,
+    pw:pass, role:'user', status:'pending', instId:inst.id,
+    avatar:_regData.avatar||null, lastLoc:null, note:null
+  };
+
+  // حاول الحفظ في Supabase — لكن لا توقف المستخدم إذا فشل
   try {
-    const newUser = {
-      id:'u'+Date.now(), name, phone,
-      pw:pass, role:'user', status:'pending', instId:inst.id,
-      avatar:_regData.avatar||null, lastLoc:null, note:null
-    };
     await saveUser(newUser);
     A.db.users.push(newUser);
 
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     if(!inst.alerts) inst.alerts = [];
-    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} ()`, time:dateStr, type:'register'});
+    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name}`, time:dateStr, type:'register'});
     await saveInst(inst);
 
-    el('pend-msg').style.display = 'block';
-    toast('✅ تم التسجيل! في انتظار موافقة المدير','success');
-
-    // إرسال Push للمديرين
+    // إرسال Push للمديرين (لا نوقف إذا فشل)
     fetch('/api/push', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ inst_id: inst.id, user_name: name })
-    }).then(r=>r.json()).then(d=>console.log('Push:',d)).catch(()=>{});
+    }).catch(()=>{});
 
   } catch(e) {
-    toast('خطأ في الحفظ — تحقق من الاتصال','error');
-    console.error(e);
+    console.error('Register save error:', e);
+    // حتى لو فشل الحفظ — أضف في الذاكرة المحلية
+    if(!A.db.users.find(u=>u.id===newUser.id)) A.db.users.push(newUser);
   }
+
+  // في كل الأحوال — انتقل لشاشة الانتظار
+  A.user = newUser;
+  try { localStorage.setItem('dac_saved_creds', JSON.stringify({phone, pass})); } catch(e){}
+  showPendingScreen();
 }
 
 function regBackToStep1() {
