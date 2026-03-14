@@ -3754,9 +3754,9 @@ function editInstModal(instId){
   // تحميل بيانات المسؤول
   const admin = A.db.users.find(u => u.instId === instId && u.role === 'admin');
   if(el('ei-admin-phone')) el('ei-admin-phone').value = admin?.phone || '';
-  if(el('ei-admin-pass'))  el('ei-admin-pass').value  = '';
+  if(el('ei-admin-pass'))  el('ei-admin-pass').value  = admin?.pw || '';
   if(el('ei-admin-info'))  el('ei-admin-info').textContent = admin
-    ? `👤 ${admin.name}  📱 +216${admin.phone||'—'}`
+    ? `👤 ${admin.name}`
     : 'لا يوجد مسؤول مرتبط بهذه المؤسسة';
   openModal('m-edit-inst');
 }
@@ -3766,21 +3766,13 @@ async function saveEditInst(){
   const inst = getInst(instId);
   if(!inst) return;
   inst.name = el('ei-name').value.trim() || inst.name;
-  inst.gps = parseInt(el('ei-gps').value) || 30;
-  if(inst.doors?.length){
-    inst.doors[0].name = el('ei-door-name').value.trim() || inst.doors[0].name;
-    inst.doors[0].devId = el('ei-dev').value.trim();
-    const lat = parseFloat(el('ei-lat').value) || null;
-    const lng = parseFloat(el('ei-lng').value) || null;
-    inst.doors[0].lat = lat;
-    inst.doors[0].lng = lng;
-  }
+  // gps/door fields removed from this modal
   await saveInst(inst);
   // حفظ بيانات المسؤول
   const newPhone = (el('ei-admin-phone')?.value||'').replace(/\D/g,'');
   const newPass  = (el('ei-admin-pass')?.value||'').trim();
   const admin = A.db.users.find(u => u.instId === instId && u.role === 'admin');
-  if(admin && (newPhone || newPass)){
+  if(admin){
     if(newPhone){
       const conflict = A.db.users.find(u => u.id !== admin.id && (u.phone||'').replace(/\D/g,'') === newPhone);
       if(conflict){ toast(`⚠️ الهاتف مستخدم من: ${conflict.name}`,'error'); return; }
@@ -3788,10 +3780,8 @@ async function saveEditInst(){
     }
     if(newPass) admin.pw = newPass;
     await saveUser(admin);
-    toast(`✅ تم تعديل المؤسسة وبيانات المسؤول`,'success');
-  } else {
-    toast('✅ تم تعديل المؤسسة','success');
   }
+  toast('✅ تم تعديل المؤسسة','success');
   renderInsts();
   renderSpInstGps();
   closeModal('m-edit-inst');
@@ -5037,7 +5027,6 @@ async function forgotConfirm() {
     <h3 class="modal-title">✏️ تعديل المؤسسة</h3>
     <input type="hidden" id="ei-id">
     <div class="fg"><label>اسم المؤسسة</label><input id="ei-name" placeholder="معهد الأمل"></div>
-    <div class="fg"><label>نطاق GPS (متر)</label><input type="number" id="ei-gps" value="30" min="5" max="500"></div>
     <!-- بيانات المسؤول -->
     <div style="background:var(--surface2);border-radius:12px;padding:1rem;margin-top:.5rem;border:1px solid var(--border)">
       <div style="font-weight:700;font-size:.85rem;margin-bottom:.75rem;color:var(--accent)">👤 المسؤول</div>
@@ -5048,19 +5037,13 @@ async function forgotConfirm() {
           <input type="tel" id="ei-admin-phone" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
         </div>
       </div>
-      <div class="fg" style="margin-bottom:0"><label>كلمة سر جديدة <span style="color:var(--text2);font-size:.75rem">(اتركها فارغة للإبقاء على القديمة)</span></label>
+      <div class="fg" style="margin-bottom:0">
+        <label style="display:flex;align-items:center;justify-content:space-between">
+          <span>كلمة السر</span>
+          <button type="button" onclick="togglePassVisibility('ei-admin-pass','ei-pass-eye')" style="background:none;border:none;cursor:pointer;font-size:.85rem;color:var(--text2);font-family:Cairo,sans-serif" id="ei-pass-eye">👁️ إظهار</button>
+        </label>
         <input type="password" id="ei-admin-pass" placeholder="••••••••">
       </div>
-    </div>
-    <div style="background:var(--surface2);border-radius:12px;padding:1rem;margin-top:.5rem">
-      <div style="font-weight:700;font-size:.85rem;margin-bottom:.75rem;color:var(--accent)">🚪 الباب الرئيسي</div>
-      <div class="fg"><label>اسم الباب</label><input id="ei-door-name" placeholder="الباب الرئيسي"></div>
-      <div class="fg"><label>Device ID</label><input id="ei-dev" placeholder="bf7c670914391fc80cwayk"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.5rem">
-        <div class="fg" style="margin:0"><label style="font-size:.78rem">Lat</label><input id="ei-lat" placeholder="36.837534" type="number" step="any"></div>
-        <div class="fg" style="margin:0"><label style="font-size:.78rem">Lng</label><input id="ei-lng" placeholder="10.106981" type="number" step="any"></div>
-      </div>
-      <button onclick="useMyLocForEdit()" style="margin-top:.6rem;width:100%;padding:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-family:Cairo,sans-serif;font-size:.82rem;cursor:pointer;color:var(--text)">📡 استخدم موقعي الحالي</button>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('m-edit-inst')">إلغاء</button>
