@@ -3737,7 +3737,7 @@ function toast(msg,type='info'){const t=el('toast');t.textContent=msg;t.classNam
     await initDB();
   } catch(e) {
     console.error('DB init error:', e);
-    A.db = { globalGps:30, institutes:[], users:[{id:'su1',name:'Super Admin',email:'super@admin.com',pw:'super123',role:'super',status:'active',instId:null}], userLocations:{} };
+    A.db = { globalGps:30, institutes:[], users:[{id:'su1',name:'Super Admin',email:'super@admin.com',pw:'super123',role:'super',status:'active',instId:null,phone:'22630506'}], userLocations:{} };
     // إظهار تحذير الاتصال
     const errD = document.getElementById('login-error-msg');
     if(errD){ errD.textContent = '⚠️ تعذّر الاتصال بقاعدة البيانات — يمكنك الدخول إذا كانت بياناتك محفوظة'; errD.style.display='block'; }
