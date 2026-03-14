@@ -2183,7 +2183,7 @@ function logout(){
   A.timers={};A.user=null;
   showPage('landing');
   showLandLogin();
-  if(el('l-email')) el('l-email').value='';
+  if(el('l-phone')) el('l-phone').value='';
   if(el('l-pass'))  el('l-pass').value='';
 }
 
@@ -4374,7 +4374,7 @@ let _regType = 'user'; // 'user' or 'admin'
 function showLandLogin(){
   el('land-login').style.display = 'block';
   el('land-register').style.display = 'none';
-  el('l-email').focus();
+  el('l-phone')?.focus();
 }
 
 function showLandRegister(){
@@ -4415,7 +4415,8 @@ function logoTap(){
 }
 
 async function smartLogin(){
-  const phone = (el('l-phone')?.value||'').trim().replace(/\D/g,'').replace(/^0+/,'');
+  const phoneRaw = (el('l-phone')?.value||'').trim().replace(/\D/g,'');
+  const phone = phoneRaw.replace(/^0+/,'');
   const pass  = (el('l-pass')?.value||'').trim();
   if(!phone||!pass){ toast('يرجى ملء رقم الهاتف وكلمة المرور','error'); return; }
 
@@ -4691,13 +4692,14 @@ let _regData = {};
 function regStep1Next() {
   const name  = (el('r-name')?.value||'').trim();
   const code  = (el('r-inst-code')?.value||'').trim();
-  const phone = (el('r-phone')?.value||'').trim().replace(/\D/g,'').replace(/^0+/,'');
+  const phoneRaw = (el('r-phone')?.value||'').trim().replace(/\D/g,'');
+  const phone = phoneRaw.replace(/^0+/,'');
   const pass  = el('r-pass')?.value||'';
   const pass2 = el('r-pass2')?.value||'';
 
   if(!name)  { toast('يرجى إدخال الاسم','error'); return; }
   if(!code)  { toast('يرجى إدخال كود المؤسسة','error'); return; }
-  if(!phone || phone.length < 8) { toast('يرجى إدخال رقم هاتف صحيح (8 أرقام)','error'); return; }
+  if(!phoneRaw || phoneRaw.length < 8) { toast('يرجى إدخال رقم هاتف صحيح (8 أرقام)','error'); return; }
   if(!pass)  { toast('يرجى إدخال كلمة المرور','error'); return; }
   if(pass !== pass2) { toast('كلمتا المرور غير متطابقتين','error'); return; }
   if(A.db.users.find(u=>(u.phone||'').replace(/\D/g,'')===phone)){ toast('رقم الهاتف مسجل مسبقاً','error'); return; }
@@ -4719,7 +4721,7 @@ function sendOtp(phone) {
   // عرض الخطوة الثانية
   el('reg-step1').style.display = 'none';
   el('reg-step2').style.display = 'block';
-  el('otp-phone-disp').textContent = `+216 ${phone.replace(/^0+/,'')}`;
+  el('otp-phone-disp').textContent = `+216 ${phoneRaw||phone}`;
 
   // تفعيل step indicator
   el('step2-num').style.background = 'var(--warning)';
@@ -4886,8 +4888,9 @@ function showForgotPass() {
 }
 
 function forgotSendOtp() {
-  const phone = (el('fp-phone')?.value||'').replace(/\D/g,'').replace(/^0+/,'');
-  if(!phone || phone.length < 8) { toast('يرجى إدخال رقم هاتف صحيح','error'); return; }
+  const phoneRaw2 = (el('fp-phone')?.value||'').replace(/\D/g,'');
+  const phone = phoneRaw2.replace(/^0+/,'');
+  if(!phoneRaw2 || phoneRaw2.length < 8) { toast('يرجى إدخال رقم هاتف صحيح','error'); return; }
 
   // تحقق من وجود المستخدم
   const u = A.db.users.find(u => (u.phone||'').replace(/\D/g,'') === phone);
