@@ -3788,6 +3788,19 @@ async function saveEditInst(){
   closeModal('m-edit-inst');
 }
 
+function togglePassVisibility(inputId, btnId){
+  const inp = el(inputId);
+  const btn = el(btnId);
+  if(!inp) return;
+  if(inp.type === 'password'){
+    inp.type = 'text';
+    if(btn) btn.textContent = '🙈 إخفاء';
+  } else {
+    inp.type = 'password';
+    if(btn) btn.textContent = '👁️ إظهار';
+  }
+}
+
 function useMyLocForEdit(){
   if(!navigator.geolocation){ toast('GPS غير متاح','error'); return; }
   navigator.geolocation.getCurrentPosition(pos=>{
