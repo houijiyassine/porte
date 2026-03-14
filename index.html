@@ -132,6 +132,17 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .door-status-label.moving-lbl{color:var(--warning);}
 .door-status-label.stopped-lbl{color:#a78bfa;}
 
+/* OTP inputs */
+.otp-inp {
+  width: 54px; height: 58px; text-align: center;
+  font-size: 1.4rem; font-weight: 700;
+  background: var(--surface2); border: 2px solid var(--border);
+  border-radius: 12px; color: var(--text);
+  transition: border-color .2s;
+}
+.otp-inp:focus { border-color: var(--accent); outline: none; }
+.otp-inp.filled { border-color: var(--success); }
+
 
 /* ── Push Notification ── */
 #push-notif {
@@ -539,14 +550,25 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div class="auth-box" style="margin-top:1.5rem">
       <!-- LOGIN FORM -->
       <div id="land-login">
-        <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="l-email" placeholder="example@email.com" oninput="el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')el('l-pass').focus()"></div>
+        <div class="fg"><label>رقم الهاتف 📱</label>
+            <div style="display:flex;gap:.5rem">
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap">🇹🇳 +216</div>
+              <input id="l-phone" type="tel" placeholder="XX XXX XXX" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8);el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')el('l-pass').focus()">
+            </div>
+          </div>
         <div class="fg"><label>كلمة المرور</label><input type="password" id="l-pass" placeholder="••••••••" oninput="el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')smartLogin()"></div>
         <button class="btn-pri" onclick="smartLogin()" id="l-btn">🔐 دخول</button>
+        <div style="text-align:center;margin-top:.75rem">
+          <button onclick="showForgotPass()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-family:Cairo,sans-serif;font-size:.82rem">🔑 نسيت كلمة المرور؟</button>
+        </div>
         <div id="login-error-msg" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:.6rem .9rem;font-size:.8rem;color:#ef4444;margin-top:.5rem;text-align:center"></div>
         <div style="display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:.5rem">
           <span style="font-size:.75rem;color:var(--text2)">🔒 بيانات دخولك ستُحفظ تلقائياً في جهازك</span>
         </div>
-        <div class="auth-toggle" style="margin-top:1rem">ليس لديك حساب؟ <span onclick="showLandRegister()">إنشاء حساب</span></div>
+        <div style="text-align:center;margin-top:.5rem">
+            <span onclick="showForgotPass()" style="color:var(--accent);font-size:.78rem;cursor:pointer">🔑 نسيت كلمة المرور؟</span>
+          </div>
+          <div class="auth-toggle" style="margin-top:.75rem">ليس لديك حساب؟ <span onclick="showLandRegister()">إنشاء حساب</span></div>
       </div>
 
       <!-- REGISTER FORM -->
@@ -554,23 +576,70 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
         <button class="auth-back" onclick="showLandLogin()" style="margin-bottom:1rem">← رجوع</button>
         <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:1.25rem">إنشاء حساب جديد</h3>
 
-        <!-- avatar -->
-        <div class="avatar-upload-wrap" id="av-wrap">
-          <div class="av-circle" id="av-preview" onclick="el('av-file').click()">
-            <span id="av-letter">م</span>
-            <div class="av-overlay">📷 تغيير</div>
+        <!-- Steps -->
+        <div style="display:flex;align-items:center;justify-content:center;gap:.4rem;margin-bottom:1.5rem">
+          <div id="reg-step-1-ind" style="display:flex;align-items:center;gap:.3rem">
+            <div style="width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700">1</div>
+            <span style="font-size:.78rem;color:var(--accent)">المعلومات</span>
           </div>
-          <button class="av-upload-lbl" onclick="el('av-file').click()" type="button">📷 إضافة صورة (اختياري)</button>
-          <input type="file" id="av-file" accept="image/*" style="display:none" onchange="previewAv(this)">
+          <div style="flex:1;height:2px;background:var(--border);max-width:40px"></div>
+          <div id="reg-step-2-ind" style="display:flex;align-items:center;gap:.3rem">
+            <div id="step2-num" style="width:26px;height:26px;border-radius:50%;background:var(--border);color:var(--text2);display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700">2</div>
+            <span id="step2-lbl" style="font-size:.78rem;color:var(--text2)">التحقق</span>
+          </div>
         </div>
 
-        <div class="fg"><label>الاسم الكامل</label><input id="r-name" placeholder="أدخل اسمك الكامل" oninput="updateAvLetter(this.value)"></div>
-        <div class="fg"><label>كود المؤسسة <span style="color:var(--text2);font-size:.78rem">(5 أرقام — يمنحك إياه المدير)</span></label><input id="r-inst-code" placeholder="مثال: 12345" maxlength="5" oninput="this.value=this.value.replace(/\D/g,'')"></div>
-        <div class="fg"><label>البريد الإلكتروني</label><input type="email" id="r-email" placeholder="example@email.com"></div>
-        <div class="fg"><label>كلمة المرور</label><input type="password" id="r-pass" placeholder="••••••••"></div>
-        <div class="fg"><label>إعادة كلمة المرور</label><input type="password" id="r-pass2" placeholder="••••••••"></div>
-        <button class="btn-pri" onclick="smartRegister()">✅ إنشاء الحساب</button>
-        <div class="pending-msg" id="pend-msg">⏳ تم إرسال طلبك، في انتظار موافقة مدير المؤسسة</div>
+        <!-- STEP 1: المعلومات -->
+        <div id="reg-step1">
+          <!-- avatar -->
+          <div class="avatar-upload-wrap" id="av-wrap">
+            <div class="av-circle" id="av-preview" onclick="el('av-file').click()">
+              <span id="av-letter">م</span>
+              <div class="av-overlay">📷 تغيير</div>
+            </div>
+            <button class="av-upload-lbl" onclick="el('av-file').click()" type="button">📷 إضافة صورة (اختياري)</button>
+            <input type="file" id="av-file" accept="image/*" style="display:none" onchange="previewAv(this)">
+          </div>
+          <div class="fg"><label>الاسم الكامل</label><input id="r-name" placeholder="أدخل اسمك الكامل" oninput="updateAvLetter(this.value)"></div>
+          <div class="fg"><label>كود المؤسسة <span style="color:var(--text2);font-size:.78rem">(5 أرقام — يمنحك إياه المدير)</span></label><input id="r-inst-code" placeholder="مثال: 12345" maxlength="5" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+          <div class="fg"><label>رقم الهاتف 📱</label>
+            <div style="display:flex;gap:.5rem">
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap">🇹🇳 +216</div>
+              <input id="r-phone" type="tel" placeholder="XX XXX XXX" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+            </div>
+          </div>
+          <div class="fg"><label>كلمة المرور</label><input type="password" id="r-pass" placeholder="••••••••"></div>
+          <div class="fg"><label>إعادة كلمة المرور</label><input type="password" id="r-pass2" placeholder="••••••••"></div>
+          <button class="btn-pri" onclick="regStep1Next()">التالي ←</button>
+        </div>
+
+        <!-- STEP 2: OTP -->
+        <div id="reg-step2" style="display:none">
+          <div style="text-align:center;margin-bottom:1.2rem">
+            <div style="font-size:2.5rem">📱</div>
+            <div style="color:var(--text);font-weight:700;margin:.5rem 0">تحقق من هاتفك</div>
+            <div style="color:var(--text2);font-size:.82rem">أُرسل رمز التحقق إلى<br><span id="otp-phone-disp" style="color:var(--accent);font-weight:700"></span></div>
+            <div style="background:var(--surface2);border:1px solid var(--warning);border-radius:8px;padding:.5rem;margin-top:.75rem;font-size:.75rem;color:var(--warning)">🧪 وضع الاختبار — الرمز هو: <strong>0000</strong></div>
+          </div>
+
+          <!-- OTP inputs -->
+          <div style="display:flex;gap:.5rem;justify-content:center;margin:1rem 0" id="otp-boxes">
+            <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="otpInput(this,0)" onkeydown="otpKey(this,0)">
+            <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="otpInput(this,1)" onkeydown="otpKey(this,1)">
+            <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="otpInput(this,2)" onkeydown="otpKey(this,2)">
+            <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="otpInput(this,3)" onkeydown="otpKey(this,3)">
+          </div>
+
+          <div style="text-align:center;color:var(--text2);font-size:.78rem;margin-bottom:1rem">
+            لم يصلك الرمز؟ <button onclick="resendOtp()" id="resend-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-family:Cairo,sans-serif;font-size:.78rem;font-weight:700" disabled>إعادة الإرسال</button>
+            <span id="otp-timer" style="color:var(--warning);font-weight:700"></span>
+          </div>
+
+          <button class="btn-pri" id="otp-verify-btn" onclick="verifyOtp()">✅ تأكيد الرمز</button>
+          <button onclick="regBackToStep1()" style="width:100%;margin-top:.5rem;background:none;border:1px solid var(--border);border-radius:10px;padding:.7rem;color:var(--text2);cursor:pointer;font-family:Cairo,sans-serif;font-size:.85rem">← رجوع</button>
+
+          <div class="pending-msg" id="pend-msg" style="display:none">⏳ تم إرسال طلبك، في انتظار موافقة مدير المؤسسة</div>
+        </div>
       </div>
     </div>
 
@@ -1003,6 +1072,51 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     </div>
   </div>
 </div>
+</div>
+
+
+<!-- Forgot Password Modal -->
+<div class="modal-ov" id="m-forgot">
+  <div class="modal">
+    <h3 class="modal-title">🔑 نسيت كلمة المرور</h3>
+    
+    <!-- Step 1: رقم الهاتف -->
+    <div id="forgot-step1">
+      <p style="color:var(--text2);font-size:.85rem;margin-bottom:1rem;text-align:center">أدخل رقم هاتفك وسيصلك رمز التحقق</p>
+      <div class="fg"><label>رقم الهاتف 📱</label>
+        <div style="display:flex;gap:.5rem">
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap">🇹🇳 +216</div>
+          <input id="fp-phone" type="tel" placeholder="XX XXX XXX" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+        </div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--warning);border-radius:8px;padding:.5rem;margin-bottom:1rem;font-size:.75rem;color:var(--warning);text-align:center">🧪 وضع الاختبار — الرمز هو: <strong>0000</strong></div>
+      <div style="display:flex;gap:.5rem;margin-top:.5rem">
+        <button class="btn-sec" style="flex:1" onclick="closeModal('m-forgot')">إلغاء</button>
+        <button class="btn-pri" style="flex:2;margin-top:0" onclick="forgotSendOtp()">📱 إرسال الرمز</button>
+      </div>
+    </div>
+
+    <!-- Step 2: OTP + كلمة مرور جديدة -->
+    <div id="forgot-step2" style="display:none">
+      <p style="color:var(--text2);font-size:.82rem;margin-bottom:.75rem;text-align:center">أُرسل الرمز إلى <span id="fp-phone-disp" style="color:var(--accent);font-weight:700"></span></p>
+      <div style="background:var(--surface2);border:1px solid var(--warning);border-radius:8px;padding:.4rem;margin-bottom:.75rem;font-size:.75rem;color:var(--warning);text-align:center">🧪 الرمز: <strong>0000</strong></div>
+      
+      <div class="fg"><label>رمز التحقق</label>
+        <div style="display:flex;gap:.4rem;justify-content:center">
+          <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="fpOtpInput(this,0)" onkeydown="fpOtpKey(this,0)">
+          <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="fpOtpInput(this,1)" onkeydown="fpOtpKey(this,1)">
+          <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="fpOtpInput(this,2)" onkeydown="fpOtpKey(this,2)">
+          <input class="otp-inp" type="text" maxlength="1" inputmode="numeric" oninput="fpOtpInput(this,3)" onkeydown="fpOtpKey(this,3)">
+        </div>
+      </div>
+      <div class="fg"><label>كلمة المرور الجديدة</label><input type="password" id="fp-pass1" placeholder="••••••••"></div>
+      <div class="fg"><label>إعادة كلمة المرور</label><input type="password" id="fp-pass2" placeholder="••••••••"></div>
+      <div style="display:flex;gap:.5rem;margin-top:.5rem">
+        <button class="btn-sec" style="flex:1" onclick="forgotBackStep1()">← رجوع</button>
+        <button class="btn-pri" style="flex:2;margin-top:0" id="fp-confirm-btn" onclick="forgotConfirm()">✅ تغيير كلمة المرور</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1868,6 +1982,7 @@ async function initDB(){
   const mappedUsers = users.map(u => ({
     id: u.id, name: u.name,
     email: (u.email||'').toLowerCase().trim(),
+    phone: (u.phone||'').replace(/\D/g,''),
     pw: (u.pw||'').trim(),
     role: u.role, status: u.status, instId: u.inst_id,
     avatar: u.avatar, note: u.note, lastLoc: (()=>{ let l=u.last_loc; if(typeof l==='string'){try{l=JSON.parse(l);}catch(e){l=null;}} return l; })()
@@ -1910,7 +2025,8 @@ async function saveDB(){
 // Quick save single user
 async function saveUser(u){
   await sbUpsert('users', {
-    id: u.id, name: u.name, email: u.email, pw: u.pw,
+    id: u.id, name: u.name, email: u.email||null, pw: u.pw,
+    phone: u.phone||null,
     role: u.role, status: u.status, inst_id: u.instId||null,
     avatar: u.avatar||null, note: u.note||null, last_loc: u.lastLoc||null,
     schedule: u.schedule||null, schedule_mode: u.scheduleMode||'inst'
@@ -3633,8 +3749,8 @@ function toast(msg,type='info'){const t=el('toast');t.textContent=msg;t.classNam
   try {
     const saved = localStorage.getItem('dac_saved_creds');
     if(saved) {
-      const {email, pass} = JSON.parse(saved);
-      const u = A.db.users.find(u => u.email.toLowerCase()===email.toLowerCase() && u.pw===pass);
+      const {phone, pass} = JSON.parse(saved);
+      const u = A.db.users.find(u => (u.phone||'').replace(/\D/g,'') === (phone||'').replace(/\D/g,'') && u.pw===pass);
       if(u && u.status==='active') {
         A.user = u;
         // Show splash briefly then go to dashboard
@@ -4201,25 +4317,20 @@ function logoTap(){
 }
 
 async function smartLogin(){
-  const email = (el('l-email')?.value||'').trim().toLowerCase();
+  const phone = (el('l-phone')?.value||'').trim().replace(/\D/g,'');
   const pass  = (el('l-pass')?.value||'').trim();
-  if(!email||!pass){ toast('يرجى ملء البريد وكلمة المرور','error'); return; }
+  if(!phone||!pass){ toast('يرجى ملء رقم الهاتف وكلمة المرور','error'); return; }
 
   const btn = el('l-btn');
   btn.textContent = '⏳ جاري التحقق...';
   btn.disabled = true;
 
   const tryLogin = async () => {
-    // دائماً حمّل آخر بيانات من Supabase أولاً
-    try {
-      await initDB();
-    } catch(e) {
-      console.error('initDB error:', e);
-    }
+    try { await initDB(); } catch(e) { console.error('initDB error:', e); }
 
-    // مقارنة email + pw (trim + lowercase)
+    // مقارنة phone + pw
     const u = A.db.users.find(u =>
-      u.email?.toLowerCase().trim() === email &&
+      (u.phone||'').replace(/\D/g,'') === phone &&
       (u.pw||'').trim() === pass
     );
 
@@ -4227,8 +4338,8 @@ async function smartLogin(){
     btn.disabled = false;
 
     if(!u){
-      const emailExists = A.db.users.find(x => x.email?.toLowerCase().trim()===email);
-      const msg = emailExists ? 'كلمة المرور غير صحيحة ❌' : 'البريد الإلكتروني غير مسجل ❌';
+      const phoneExists = A.db.users.find(x => (x.phone||'').replace(/\D/g,'')===phone);
+      const msg = phoneExists ? 'كلمة المرور غير صحيحة ❌' : 'رقم الهاتف غير مسجل ❌';
       toast(msg,'error');
       const errDiv = el('login-error-msg');
       if(errDiv){ errDiv.textContent = msg; errDiv.style.display='block'; }
@@ -4239,7 +4350,7 @@ async function smartLogin(){
     if(u.status!=='active'){  toast('حساب غير مفعّل — تواصل مع المدير','error'); return; }
 
     A.user = u;
-    try { localStorage.setItem('dac_saved_creds', JSON.stringify({email, pass})); } catch(e){}
+    try { localStorage.setItem('dac_saved_creds', JSON.stringify({phone, pass})); } catch(e){}
     if(u.role==='super') loadSuper();
     else if(u.role==='admin') loadAdmin();
     else loadUser();
@@ -4461,6 +4572,294 @@ function showPushEnableBtn() {
   document.body.appendChild(btn);
   // يختفي بعد 10 ثوانٍ
   setTimeout(() => btn.remove(), 10000);
+}
+
+
+// ════════════════════════════════════════════
+// OTP Registration Flow
+// ════════════════════════════════════════════
+let _otpCode = null;
+let _otpTimer = null;
+let _regData = {};
+
+function regStep1Next() {
+  const name  = (el('r-name')?.value||'').trim();
+  const code  = (el('r-inst-code')?.value||'').trim();
+  const phone = (el('r-phone')?.value||'').trim().replace(/\D/g,'');
+  const pass  = el('r-pass')?.value||'';
+  const pass2 = el('r-pass2')?.value||'';
+
+  if(!name)  { toast('يرجى إدخال الاسم','error'); return; }
+  if(!code)  { toast('يرجى إدخال كود المؤسسة','error'); return; }
+  if(!phone || phone.length < 8) { toast('يرجى إدخال رقم هاتف صحيح (8 أرقام)','error'); return; }
+  if(!pass)  { toast('يرجى إدخال كلمة المرور','error'); return; }
+  if(pass !== pass2) { toast('كلمتا المرور غير متطابقتين','error'); return; }
+  if(A.db.users.find(u=>(u.phone||'').replace(/\D/g,'')===phone)){ toast('رقم الهاتف مسجل مسبقاً','error'); return; }
+
+  const inst = A.db.institutes.find(i=>i.code===code);
+  if(!inst){ toast('❌ كود المؤسسة غير صحيح','error'); return; }
+
+  _regData = { name, code, phone, pass, inst, avatar: _avatarB64||null };
+  sendOtp(phone);
+}
+
+function sendOtp(phone) {
+  // ═══ وضع الاختبار ═══
+  // عند الاشتراك مع Twilio استبدل هذا السطر بـ API call
+  _otpCode = '0000';
+  console.log(`📱 OTP للاختبار: ${_otpCode} → +216${phone}`);
+  // ════════════════════
+
+  // عرض الخطوة الثانية
+  el('reg-step1').style.display = 'none';
+  el('reg-step2').style.display = 'block';
+  el('otp-phone-disp').textContent = `+216 ${phone}`;
+
+  // تفعيل step indicator
+  el('step2-num').style.background = 'var(--warning)';
+  el('step2-num').style.color = '#fff';
+  el('step2-lbl').style.color = 'var(--warning)';
+
+  // مسح الخانات
+  document.querySelectorAll('.otp-inp').forEach(i => { i.value=''; i.classList.remove('filled'); });
+  document.querySelectorAll('.otp-inp')[0]?.focus();
+
+  // عداد 2 دقيقة
+  startOtpTimer();
+
+  // WebOTP API — يملأ تلقائياً عند وصول SMS
+  if('OTPCredential' in window) {
+    const ac = new AbortController();
+    navigator.credentials.get({ otp: { transport:['sms'] }, signal: ac.signal })
+      .then(otp => {
+        if(otp?.code) fillOtpBoxes(otp.code);
+      }).catch(()=>{});
+  }
+}
+
+function fillOtpBoxes(code) {
+  const boxes = document.querySelectorAll('.otp-inp');
+  [...code.slice(0,4)].forEach((c,i) => {
+    if(boxes[i]) { boxes[i].value = c; boxes[i].classList.add('filled'); }
+  });
+  // تحقق تلقائي
+  setTimeout(() => verifyOtp(), 300);
+}
+
+function otpInput(inp, idx) {
+  inp.value = inp.value.replace(/\D/g,'').slice(-1);
+  if(inp.value) {
+    inp.classList.add('filled');
+    const boxes = document.querySelectorAll('.otp-inp');
+    if(idx < 3) boxes[idx+1]?.focus();
+    // إذا اكتملت الخانات تحقق تلقائياً
+    const code = [...boxes].map(b=>b.value).join('');
+    if(code.length === 4) setTimeout(()=>verifyOtp(), 200);
+  } else {
+    inp.classList.remove('filled');
+  }
+}
+
+function otpKey(inp, idx) {
+  if(event.key === 'Backspace' && !inp.value && idx > 0) {
+    const boxes = document.querySelectorAll('.otp-inp');
+    boxes[idx-1]?.focus();
+  }
+}
+
+function getOtpValue() {
+  return [...document.querySelectorAll('.otp-inp')].map(b=>b.value).join('');
+}
+
+async function verifyOtp() {
+  const entered = getOtpValue();
+  if(entered.length < 4) { toast('أدخل الرمز كاملاً','error'); return; }
+
+  if(entered !== _otpCode) {
+    toast('❌ رمز التحقق غير صحيح','error');
+    document.querySelectorAll('.otp-inp').forEach(i => {
+      i.style.borderColor = 'var(--danger)';
+      setTimeout(()=>i.style.borderColor='',800);
+    });
+    return;
+  }
+
+  // OTP صحيح — أكمل التسجيل
+  const btn = el('otp-verify-btn');
+  if(btn){ btn.textContent='⏳ جاري التسجيل...'; btn.disabled=true; }
+  stopOtpTimer();
+
+  // step indicator
+  el('step2-num').style.background = 'var(--success)';
+  el('step2-lbl').style.color = 'var(--success)';
+
+  await smartRegisterFinish();
+
+  if(btn){ btn.textContent='✅ تأكيد الرمز'; btn.disabled=false; }
+}
+
+async function smartRegisterFinish() {
+  const { name, phone, pass, inst } = _regData;
+  try {
+    const newUser = {
+      id:'u'+Date.now(), name, email: null, phone,
+      pw:pass, role:'user', status:'pending', instId:inst.id,
+      avatar:_regData.avatar||null, lastLoc:null, note:null
+    };
+    await saveUser(newUser);
+    A.db.users.push(newUser);
+
+    const now = new Date();
+    const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    if(!inst.alerts) inst.alerts = [];
+    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} (${email})`, time:dateStr, type:'register'});
+    await saveInst(inst);
+
+    el('pend-msg').style.display = 'block';
+    toast('✅ تم التسجيل! في انتظار موافقة المدير','success');
+
+    // إرسال Push للمديرين
+    fetch('/api/push', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ inst_id: inst.id, user_name: name })
+    }).then(r=>r.json()).then(d=>console.log('Push:',d)).catch(()=>{});
+
+  } catch(e) {
+    toast('خطأ في الحفظ — تحقق من الاتصال','error');
+    console.error(e);
+  }
+}
+
+function regBackToStep1() {
+  el('reg-step1').style.display = 'block';
+  el('reg-step2').style.display = 'none';
+  el('step2-num').style.background = 'var(--border)';
+  el('step2-num').style.color = 'var(--text2)';
+  el('step2-lbl').style.color = 'var(--text2)';
+  stopOtpTimer();
+}
+
+function startOtpTimer() {
+  let secs = 120;
+  const timerEl = el('otp-timer');
+  const resendBtn = el('resend-btn');
+  if(resendBtn) resendBtn.disabled = true;
+  stopOtpTimer();
+  _otpTimer = setInterval(()=>{
+    secs--;
+    if(timerEl) timerEl.textContent = `(${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')})`;
+    if(secs <= 0) {
+      stopOtpTimer();
+      if(timerEl) timerEl.textContent = '';
+      if(resendBtn) resendBtn.disabled = false;
+    }
+  }, 1000);
+}
+
+function stopOtpTimer() {
+  if(_otpTimer) { clearInterval(_otpTimer); _otpTimer=null; }
+}
+
+function resendOtp() {
+  sendOtp(_regData.phone);
+  toast('📱 تم إعادة إرسال الرمز','info');
+}
+
+
+// ════════════════════════════════════════════
+// نسيان كلمة المرور
+// ════════════════════════════════════════════
+let _fpOtp = null;
+let _fpPhone = null;
+
+function showForgotPass() {
+  el('forgot-step1').style.display = 'block';
+  el('forgot-step2').style.display = 'none';
+  if(el('fp-phone')) el('fp-phone').value = '';
+  openModal('m-forgot');
+}
+
+function forgotSendOtp() {
+  const phone = (el('fp-phone')?.value||'').replace(/\D/g,'');
+  if(!phone || phone.length < 8) { toast('يرجى إدخال رقم هاتف صحيح','error'); return; }
+
+  // تحقق من وجود المستخدم
+  const u = A.db.users.find(u => (u.phone||'').replace(/\D/g,'') === phone);
+  if(!u) { toast('❌ رقم الهاتف غير مسجل','error'); return; }
+
+  // إرسال OTP (وضع اختبار)
+  _fpOtp = '0000';
+  _fpPhone = phone;
+  console.log(`🔑 OTP للاختبار: ${_fpOtp}`);
+
+  el('forgot-step1').style.display = 'none';
+  el('forgot-step2').style.display = 'block';
+  el('fp-phone-disp').textContent = `+216 ${phone}`;
+
+  // مسح الخانات
+  document.querySelectorAll('#forgot-step2 .otp-inp').forEach(i => { i.value=''; i.classList.remove('filled'); });
+  document.querySelectorAll('#forgot-step2 .otp-inp')[0]?.focus();
+
+  // WebOTP
+  if('OTPCredential' in window) {
+    const ac = new AbortController();
+    navigator.credentials.get({ otp: { transport:['sms'] }, signal: ac.signal })
+      .then(otp => {
+        if(otp?.code) {
+          const boxes = document.querySelectorAll('#forgot-step2 .otp-inp');
+          [...otp.code.slice(0,4)].forEach((c,i) => { if(boxes[i]){ boxes[i].value=c; boxes[i].classList.add('filled'); } });
+        }
+      }).catch(()=>{});
+  }
+}
+
+function fpOtpInput(inp, idx) {
+  inp.value = inp.value.replace(/\D/g,'').slice(-1);
+  if(inp.value) {
+    inp.classList.add('filled');
+    const boxes = document.querySelectorAll('#forgot-step2 .otp-inp');
+    if(idx < 3) boxes[idx+1]?.focus();
+  } else { inp.classList.remove('filled'); }
+}
+
+function fpOtpKey(inp, idx) {
+  if(event.key==='Backspace' && !inp.value && idx>0) {
+    document.querySelectorAll('#forgot-step2 .otp-inp')[idx-1]?.focus();
+  }
+}
+
+function forgotBackStep1() {
+  el('forgot-step1').style.display = 'block';
+  el('forgot-step2').style.display = 'none';
+}
+
+async function forgotConfirm() {
+  const boxes = document.querySelectorAll('#forgot-step2 .otp-inp');
+  const entered = [...boxes].map(b=>b.value).join('');
+  const pass1 = el('fp-pass1')?.value||'';
+  const pass2 = el('fp-pass2')?.value||'';
+
+  if(entered.length < 4) { toast('أدخل الرمز كاملاً','error'); return; }
+  if(entered !== _fpOtp)  { toast('❌ رمز التحقق غير صحيح','error'); return; }
+  if(!pass1) { toast('يرجى إدخال كلمة المرور الجديدة','error'); return; }
+  if(pass1 !== pass2) { toast('كلمتا المرور غير متطابقتين','error'); return; }
+
+  const btn = el('fp-confirm-btn');
+  if(btn){ btn.textContent='⏳ جاري الحفظ...'; btn.disabled=true; }
+
+  try {
+    const u = A.db.users.find(u => (u.phone||'').replace(/\D/g,'') === _fpPhone);
+    if(!u) { toast('خطأ — المستخدم غير موجود','error'); return; }
+    u.pw = pass1;
+    await saveUser(u);
+    toast('✅ تم تغيير كلمة المرور بنجاح','success');
+    closeModal('m-forgot');
+  } catch(e) {
+    toast('خطأ في الحفظ — تحقق من الاتصال','error');
+    console.error(e);
+  } finally {
+    if(btn){ btn.textContent='✅ تغيير كلمة المرور'; btn.disabled=false; }
+  }
 }
 
 </script>
