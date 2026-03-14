@@ -2049,7 +2049,8 @@ async function saveDB(){
 
 // Quick save single user
 async function saveUser(u){
-  const _em = u.email||(u.phone?u.phone.replace(/\D/g,'')+'@phone.local':u.id+'@user.local');
+  const _cleanPhone = (u.phone||'').replace(/\D/g,'').replace(/^0+/,'');
+  const _em = u.email||(_cleanPhone?_cleanPhone+'@phone.local':u.id+'@user.local');
   await sbUpsert('users', {
     id: u.id, name: u.name, email: _em, pw: u.pw,
     phone: u.phone||null,
@@ -4414,7 +4415,7 @@ function logoTap(){
 }
 
 async function smartLogin(){
-  const phone = (el('l-phone')?.value||'').trim().replace(/\D/g,'');
+  const phone = (el('l-phone')?.value||'').trim().replace(/\D/g,'').replace(/^0+/,'');
   const pass  = (el('l-pass')?.value||'').trim();
   if(!phone||!pass){ toast('يرجى ملء رقم الهاتف وكلمة المرور','error'); return; }
 
@@ -4690,7 +4691,7 @@ let _regData = {};
 function regStep1Next() {
   const name  = (el('r-name')?.value||'').trim();
   const code  = (el('r-inst-code')?.value||'').trim();
-  const phone = (el('r-phone')?.value||'').trim().replace(/\D/g,'');
+  const phone = (el('r-phone')?.value||'').trim().replace(/\D/g,'').replace(/^0+/,'');
   const pass  = el('r-pass')?.value||'';
   const pass2 = el('r-pass2')?.value||'';
 
@@ -4718,7 +4719,7 @@ function sendOtp(phone) {
   // عرض الخطوة الثانية
   el('reg-step1').style.display = 'none';
   el('reg-step2').style.display = 'block';
-  el('otp-phone-disp').textContent = `+216 ${phone}`;
+  el('otp-phone-disp').textContent = `+216 ${phone.replace(/^0+/,'')}`;
 
   // تفعيل step indicator
   el('step2-num').style.background = 'var(--warning)';
@@ -4807,7 +4808,7 @@ async function smartRegisterFinish() {
   const { name, phone, pass, inst } = _regData;
   try {
     const newUser = {
-      id:'u'+Date.now(), name, email: null, phone,
+      id:'u'+Date.now(), name, phone,
       pw:pass, role:'user', status:'pending', instId:inst.id,
       avatar:_regData.avatar||null, lastLoc:null, note:null
     };
@@ -4885,7 +4886,7 @@ function showForgotPass() {
 }
 
 function forgotSendOtp() {
-  const phone = (el('fp-phone')?.value||'').replace(/\D/g,'');
+  const phone = (el('fp-phone')?.value||'').replace(/\D/g,'').replace(/^0+/,'');
   if(!phone || phone.length < 8) { toast('يرجى إدخال رقم هاتف صحيح','error'); return; }
 
   // تحقق من وجود المستخدم
