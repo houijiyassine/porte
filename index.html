@@ -1995,7 +1995,12 @@ async function initDB(){
     id: i.id, name: i.name, code: i.code||null, gps: i.gps||30,
     gpsForUsers: i.gps_for_users !== false,
     gpsForAdmin: i.gps_for_admin === true,
-    doors: i.doors||[], schedule: i.schedule||defSch(),
+    doors: (i.doors||[]).map(d => ({
+      ...d,
+      gpsForUsers: d.gpsForUsers !== false,  // default: مفعّل
+      gpsForAdmin: d.gpsForAdmin === true,    // default: معطّل
+    })),
+    schedule: i.schedule||defSch(),
     alerts: i.alerts||[], history: i.history||[]
   }));
 
@@ -2293,9 +2298,13 @@ function checkGeo(inst, ctx) {
   const doorLoc = getDoorLoc(inst);
   const role = A.user?.role;
   // تحقق من إعداد GPS حسب الدور
-  const gpsEnabled = role==='admin' ? inst?.gpsForAdmin===true : inst?.gpsForUsers!==false;
+  // GPS check per door (الباب الأول هو المرجع في checkGeo)
+  const _chkDoor = inst?.doors?.[0];
+  const gpsEnabled = role==='admin'
+    ? _chkDoor?.gpsForAdmin===true
+    : _chkDoor?.gpsForUsers!==false;
   if (!gpsEnabled) {
-    if (ctx === 'user') { A.geoOk = true; setGeoUI(true, '🟢 الوصول مسموح', role==='admin'?'شرط الموقع غير مفعّل للمسؤول':'شرط الموقع غير مفعّل لهذه المؤسسة'); }
+    if (ctx === 'user') { A.geoOk = true; setGeoUI(true, '🟢 الوصول مسموح', role==='admin'?'شرط الموقع غير مفعّل للمسؤول':'شرط الموقع غير مفعّل لهذا الباب'); }
     return;
   }
   // If no door location set → bypass GPS check completely
@@ -2446,7 +2455,8 @@ async function ctrlDoor(doorId,instId,action,pfx){
   if(action==='close'&&A.timers[doorId]){clearInterval(A.timers[doorId].iv);delete A.timers[doorId];resetAutoBtn(doorId,pfx);}
   if(pfx==='u'||pfx==='a'){
     const _role=A.user?.role;
-    const _gpsOn=_role==='admin'?inst?.gpsForAdmin===true:inst?.gpsForUsers!==false;
+    // GPS per door
+    const _gpsOn=_role==='admin'?door?.gpsForAdmin===true:door?.gpsForUsers!==false;
     if(_gpsOn){
       if(A.geoPos){const fc=detectFakeGps(A.geoPos);if(fc.fake){toast('🚫 موقع GPS مزيف — لا يمكن فتح الباب','error');showFakeGpsWarning(fc.reason);logAlert(inst,door,'محاولة بموقع GPS مزيف: '+fc.reason);return;}}
       const dl=getDoorLoc(inst);
@@ -3243,7 +3253,7 @@ async function addDoor(){
   const name=v('nd-name'),devId=v('nd-devid'),inst=myInst();
   const dtype = document.getElementById('nd-type')?.value || 'swing';
   if(!name){toast('يرجى إدخال اسم الباب','error');return;}
-  inst.doors.push({id:'door'+Date.now(),name,devId,active:true,type:dtype});
+  inst.doors.push({id:'door'+Date.now(),name,devId,active:true,type:dtype,gpsForUsers:true,gpsForAdmin:false});
   saveInst(inst);renderAdminDoors(inst);closeModal('m-add-door');
   // Reset type selector
   selectDoorType('swing');
@@ -3348,6 +3358,21 @@ async function renderSpInstGps(){
   A.db.institutes.forEach(i=>{ if(!A._instSteps) A._instSteps={}; A._instSteps[i.id]=1; });
 }
 
+async function toggleDoorGps(doorId, instId, type, enabled){
+  const inst = getInst(instId);
+  const door = inst?.doors?.find(d => d.id === doorId);
+  if(!door) return;
+  if(type === 'users'){
+    door.gpsForUsers = enabled;
+    toast(enabled ? `✅ GPS المستخدمين مفعّل — ${door.name}` : `🔓 GPS المستخدمين معطّل — ${door.name}`, 'info');
+  } else {
+    door.gpsForAdmin = enabled;
+    toast(enabled ? `✅ GPS المسؤول مفعّل — ${door.name}` : `🔓 GPS المسؤول معطّل — ${door.name}`, 'info');
+  }
+  await saveInst(inst);
+  renderInsts();
+}
+
 function adjInstGps(dir,instId){
   const step=(A._instSteps&&A._instSteps[instId])||1;
   const numEl=el(`spig-n-${instId}`);
@@ -3432,6 +3457,27 @@ function renderInsts(){
           <button onclick="spDoorCmd('${d.devId}','stop','${inst.id}','${d.id}')" ${!d.devId?"disabled":''} style="padding:.45rem .2rem;border:none;border-radius:7px;font-family:Cairo,sans-serif;font-size:.72rem;font-weight:700;cursor:pointer;background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3);${!d.devId?'opacity:.4;cursor:not-allowed':''}">🟡 إيقاف</button>
           <button onclick="spDoorCmd30('${d.devId}','${inst.id}','${d.id}')" ${!d.devId?"disabled":''} style="padding:.45rem .2rem;border:none;border-radius:7px;font-family:Cairo,sans-serif;font-size:.72rem;font-weight:700;cursor:pointer;background:rgba(59,130,246,.15);color:#3b82f6;border:1px solid rgba(59,130,246,.3);${!d.devId?'opacity:.4;cursor:not-allowed':''}">⏱️ 40ث</button>
         </div>
+        <!-- GPS toggles per door -->
+        <div style="display:flex;gap:.4rem;margin-top:.4rem">
+          <div class="gps-inline-row" style="flex:1;padding:.4rem .55rem">
+            <div class="gps-inline-lbl" style="font-size:.72rem">📍 GPS مستخدمين
+              <span style="font-size:.65rem">${d.gpsForUsers!==false?'<span style=\'color:var(--success)\'>ON</span>':'<span style=\'color:var(--danger)\'>OFF</span>'}</span>
+            </div>
+            <label class="mini-tog">
+              <input type="checkbox" ${d.gpsForUsers!==false?'checked':''} onchange="toggleDoorGps('${d.id}','${inst.id}','users',this.checked)">
+              <span class="mini-tog-sl"></span>
+            </label>
+          </div>
+          <div class="gps-inline-row" style="flex:1;padding:.4rem .55rem">
+            <div class="gps-inline-lbl" style="font-size:.72rem">🏛️ GPS مسؤول
+              <span style="font-size:.65rem">${d.gpsForAdmin===true?'<span style=\'color:var(--success)\'>ON</span>':'<span style=\'color:var(--text2)\'>OFF</span>'}</span>
+            </div>
+            <label class="mini-tog">
+              <input type="checkbox" ${d.gpsForAdmin===true?'checked':''} onchange="toggleDoorGps('${d.id}','${inst.id}','admin',this.checked)">
+              <span class="mini-tog-sl"></span>
+            </label>
+          </div>
+        </div>
       </div>`).join('');
     return `<div class="inst-card">
       <div class="inst-hdr">
@@ -3446,23 +3492,7 @@ function renderInsts(){
         <div class="stat-box"><div class="stat-num" style="color:var(--warning)">${users.filter(u=>u.status==='pending').length}</div><div class="stat-lbl">انتظار</div></div>
         <div class="stat-box"><div class="stat-num" style="color:var(--danger)">${inst.alerts?.length||0}</div><div class="stat-lbl">تنبيه</div></div>
       </div>
-      <!-- GPS Toggles -->
-      <div style="display:flex;gap:.5rem;margin-top:.65rem">
-        <div class="gps-inline-row" style="flex:1">
-          <div class="gps-inline-lbl">📍 GPS المستخدمين<span>${inst.gpsForUsers!==false?'<span style=\'color:var(--success)\'>مفعّل ✓</span>':'<span style=\'color:var(--danger)\'>معطّل ✗</span>'}</span></div>
-          <label class="mini-tog">
-            <input type="checkbox" ${inst.gpsForUsers!==false?'checked':''} onchange="toggleGpsSetting('${inst.id}','users',this.checked)">
-            <span class="mini-tog-sl"></span>
-          </label>
-        </div>
-        <div class="gps-inline-row" style="flex:1">
-          <div class="gps-inline-lbl">🏛️ GPS المسؤول<span>${inst.gpsForAdmin===true?'<span style=\'color:var(--success)\'>مفعّل ✓</span>':'<span style=\'color:var(--text2)\'>معطّل</span>'}</span></div>
-          <label class="mini-tog">
-            <input type="checkbox" ${inst.gpsForAdmin===true?'checked':''} onchange="toggleGpsSetting('${inst.id}','admin',this.checked)">
-            <span class="mini-tog-sl"></span>
-          </label>
-        </div>
-      </div>
+
       ${inst.doors.length?`<div style="margin-top:.75rem;border-top:1px solid var(--border);padding-top:.75rem"><p style="font-size:.75rem;color:var(--text2);margin-bottom:.5rem;font-weight:700">سجلات الأبواب:</p>${doorsHtml}</div>`:``}
       <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)">
         <button onclick="spOpenAddDoor('${inst.id}')" style="width:100%;padding:.55rem;background:rgba(37,99,235,.12);border:1px dashed var(--accent);border-radius:10px;color:var(--accent);font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer">
@@ -3494,7 +3524,7 @@ async function spAddDoor(){
   const devId = v('nd-devid');
   const dtype = document.getElementById('nd-type')?.value || 'swing';
   if(!name){ toast('يرجى إدخال اسم الباب','error'); return; }
-  inst.doors.push({ id:'door'+Date.now(), name, devId, active:true, type:dtype });
+  inst.doors.push({ id:'door'+Date.now(), name, devId, active:true, type:dtype, gpsForUsers:true, gpsForAdmin:false });
   await saveInst(inst);
   closeModal('m-add-door');
   selectDoorType('swing');
@@ -3648,7 +3678,7 @@ async function addInstitute(){
   const iid='inst'+Date.now();
   const newInst = {
     id:iid, name, code, gps:30, gpsForUsers:true, gpsForAdmin:false,
-    doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:'',active:true,type:'garage'}],
+    doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:'',active:true,type:'garage',gpsForUsers:true,gpsForAdmin:false}],
     schedule:defSch(), alerts:[], history:[]
   };
   const newAdmin = {id:'u'+Date.now(),name:'مدير '+name,phone,pw,role:'admin',status:'active',instId:iid,avatar:null,note:null,lastLoc:null};
