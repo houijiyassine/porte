@@ -3746,11 +3746,12 @@ function editInstModal(instId){
   const door = inst.doors?.[0];
   el('ei-id').value = instId;
   el('ei-name').value = inst.name || '';
-  el('ei-gps').value = inst.gps || 30;
-  el('ei-door-name').value = door?.name || 'الباب الرئيسي';
-  el('ei-dev').value = door?.devId || '';
-  el('ei-lat').value = door?.lat || '';
-  el('ei-lng').value = door?.lng || '';
+  // الحقول التالية قد تكون محذوفة من الـ modal — نتحقق أولاً
+  if(el('ei-gps'))       el('ei-gps').value       = inst.gps || 30;
+  if(el('ei-door-name')) el('ei-door-name').value  = door?.name || 'الباب الرئيسي';
+  if(el('ei-dev'))       el('ei-dev').value        = door?.devId || '';
+  if(el('ei-lat'))       el('ei-lat').value        = door?.lat || '';
+  if(el('ei-lng'))       el('ei-lng').value        = door?.lng || '';
   // تحميل بيانات المسؤول
   const admin = A.db.users.find(u => u.instId === instId && u.role === 'admin');
   if(el('ei-admin-phone')) el('ei-admin-phone').value = admin?.phone || '';
