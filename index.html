@@ -132,7 +132,10 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .door-status-label.moving-lbl{color:var(--warning);}
 .door-status-label.stopped-lbl{color:#a78bfa;}
 
-/* OTP inputs */
+/* PHONE INPUT — always LTR with flag on left */
+.phone-wrap{display:flex;gap:.5rem;direction:ltr;}
+.phone-prefix{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap;flex-shrink:0;}
+.phone-wrap input{flex:1;text-align:left;direction:ltr;}
 .otp-inp {
   width: 54px; height: 58px; text-align: center;
   font-size: 1.4rem; font-weight: 700;
@@ -551,9 +554,9 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
       <!-- LOGIN FORM -->
       <div id="land-login">
         <div class="fg"><label>رقم الهاتف 📱</label>
-            <div style="display:flex;gap:.5rem">
-              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap">🇹🇳 +216</div>
-              <input id="l-phone" type="tel" placeholder="XX XXX XXX" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8);el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')el('l-pass').focus()">
+            <div class="phone-wrap">
+              <div class="phone-prefix">🇹🇳 +216</div>
+              <input id="l-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8);el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')el('l-pass').focus()">
             </div>
           </div>
         <div class="fg"><label>كلمة المرور</label><input type="password" id="l-pass" placeholder="••••••••" oninput="el('login-error-msg')&&(el('login-error-msg').style.display='none')" onkeydown="if(event.key==='Enter')smartLogin()"></div>
@@ -597,9 +600,9 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
           <div class="fg"><label>الاسم الكامل</label><input id="r-name" placeholder="أدخل اسمك الكامل" oninput="updateAvLetter(this.value)"></div>
           <div class="fg"><label>كود المؤسسة <span style="color:var(--text2);font-size:.78rem">(5 أرقام — يمنحك إياه المدير)</span></label><input id="r-inst-code" placeholder="مثال: 12345" maxlength="5" oninput="this.value=this.value.replace(/\D/g,'')"></div>
           <div class="fg"><label>رقم الهاتف 📱</label>
-            <div style="display:flex;gap:.5rem">
-              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap">🇹🇳 +216</div>
-              <input id="r-phone" type="tel" placeholder="XX XXX XXX" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+            <div class="phone-wrap">
+              <div class="phone-prefix">🇹🇳 +216</div>
+              <input id="r-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
             </div>
           </div>
           <div class="fg"><label>كلمة المرور</label><input type="password" id="r-pass" placeholder="••••••••"></div>
@@ -1051,9 +1054,9 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <h3 class="modal-title">إضافة مؤسسة</h3>
     <div class="fg"><label>اسم المؤسسة</label><input id="ni-name" placeholder="معهد الأمل"></div>
     <div class="fg"><label>هاتف المسؤول 📱</label>
-      <div style="display:flex;gap:.5rem">
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap">🇹🇳 +216</div>
-        <input type="tel" id="ni-email" placeholder="XX XXX XXX" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+      <div class="phone-wrap">
+        <div class="phone-prefix">🇹🇳 +216</div>
+        <input type="tel" id="ni-email" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
       </div>
     </div>
     <div class="fg"><label>كلمة مرور المسؤول</label><input type="password" id="ni-pass" placeholder="••••••••"></div>
@@ -1083,9 +1086,9 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div id="forgot-step1">
       <p style="color:var(--text2);font-size:.85rem;margin-bottom:1rem;text-align:center">أدخل رقم هاتفك وسيصلك رمز التحقق</p>
       <div class="fg"><label>رقم الهاتف 📱</label>
-        <div style="display:flex;gap:.5rem">
-          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap">🇹🇳 +216</div>
-          <input id="fp-phone" type="tel" placeholder="XX XXX XXX" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+        <div class="phone-wrap">
+          <div class="phone-prefix">🇹🇳 +216</div>
+          <input id="fp-phone" type="tel" placeholder="XX XXX XXX" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
         </div>
       </div>
       <div style="background:var(--surface2);border:1px solid var(--warning);border-radius:8px;padding:.5rem;margin-bottom:1rem;font-size:.75rem;color:var(--warning);text-align:center">🧪 وضع الاختبار — الرمز هو: <strong>0000</strong></div>
@@ -4388,7 +4391,7 @@ async function smartRegister(){
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     if(!inst.alerts) inst.alerts = [];
-    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} (${email})`, time:dateStr, type:'register'});
+    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name}`, time:dateStr, type:'register'});
     await saveInst(inst);
 
     el('pend-msg').style.display = 'block';
@@ -4560,7 +4563,6 @@ async function initPushForAdmin() {
 }
 
 function showPushEnableBtn() {
-  // نتحقق إذا سبق وعرضنا الزر وتجاهله المستخدم
   try { if(localStorage.getItem('push_btn_dismissed')) return; } catch(e){}
   const existing = el('push-enable-btn');
   if (existing) return;
@@ -4568,9 +4570,8 @@ function showPushEnableBtn() {
   btn.id = 'push-enable-btn';
   btn.innerHTML = '🔔 تفعيل الإشعارات';
   btn.style.cssText = 'position:fixed;bottom:1rem;left:1rem;z-index:9000;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:.6rem 1rem;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)';
-  btn.onclick = async () => { await subscribePush(); btn.remove(); };
+  btn.onclick = async () => { await subscribePush(); try{localStorage.setItem('push_btn_dismissed','1');}catch(e){} btn.remove(); };
   document.body.appendChild(btn);
-  // يختفي بعد 10 ثوانٍ ويحفظ في localStorage حتى لا يظهر مجدداً
   setTimeout(() => {
     btn.remove();
     try { localStorage.setItem('push_btn_dismissed', '1'); } catch(e){}
@@ -4715,7 +4716,7 @@ async function smartRegisterFinish() {
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     if(!inst.alerts) inst.alerts = [];
-    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} (${email})`, time:dateStr, type:'register'});
+    inst.alerts.unshift({id:'al'+Date.now(), uid:newUser.id, uname:name, door:'طلب تسجيل', reason:`طلب انضمام جديد: ${name} (+216${phone})`, time:dateStr, type:'register'});
     await saveInst(inst);
 
     el('pend-msg').style.display = 'block';
