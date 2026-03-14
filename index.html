@@ -562,13 +562,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
           <button onclick="showForgotPass()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-family:Cairo,sans-serif;font-size:.82rem">🔑 نسيت كلمة المرور؟</button>
         </div>
         <div id="login-error-msg" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:.6rem .9rem;font-size:.8rem;color:#ef4444;margin-top:.5rem;text-align:center"></div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:.5rem">
-          <span style="font-size:.75rem;color:var(--text2)">🔒 بيانات دخولك ستُحفظ تلقائياً في جهازك</span>
-        </div>
-        <div style="text-align:center;margin-top:.5rem">
-            <span onclick="showForgotPass()" style="color:var(--accent);font-size:.78rem;cursor:pointer">🔑 نسيت كلمة المرور؟</span>
-          </div>
-          <div class="auth-toggle" style="margin-top:.75rem">ليس لديك حساب؟ <span onclick="showLandRegister()">إنشاء حساب</span></div>
+        <div class="auth-toggle" style="margin-top:.75rem">ليس لديك حساب؟ <span onclick="showLandRegister()">إنشاء حساب</span></div>
       </div>
 
       <!-- REGISTER FORM -->
@@ -1056,7 +1050,12 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="modal">
     <h3 class="modal-title">إضافة مؤسسة</h3>
     <div class="fg"><label>اسم المؤسسة</label><input id="ni-name" placeholder="معهد الأمل"></div>
-    <div class="fg"><label>بريد المسؤول</label><input type="email" id="ni-email" placeholder="admin@inst.com"></div>
+    <div class="fg"><label>هاتف المسؤول 📱</label>
+      <div style="display:flex;gap:.5rem">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;color:var(--text);font-size:.88rem;white-space:nowrap">🇹🇳 +216</div>
+        <input type="tel" id="ni-email" placeholder="XX XXX XXX" style="flex:1" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+      </div>
+    </div>
     <div class="fg"><label>كلمة مرور المسؤول</label><input type="password" id="ni-pass" placeholder="••••••••"></div>
     <div class="fg"><label>إعادة كلمة المرور</label><input type="password" id="ni-pass2" placeholder="••••••••"></div>
     <div class="fg">
@@ -3597,20 +3596,20 @@ function genInstCode(){
 }
 
 async function addInstitute(){
-  const name=v('ni-name'),email=v('ni-email'),pw=v('ni-pass'),pw2=v('ni-pass2');
+  const name=v('ni-name'),phone=v('ni-email').replace(/\D/g,''),pw=v('ni-pass'),pw2=v('ni-pass2');
   const code=v('ni-code');
-  if(!name||!email||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
+  if(!name||!phone||!pw){toast('يرجى ملء الحقول المطلوبة','error');return;}
   if(pw !== pw2){toast('كلمتا المرور غير متطابقتين','error');return;}
   if(!code||code.length!==5||!/^\d{5}$/.test(code)){toast('الكود يجب أن يكون 5 أرقام','error');return;}
   if(A.db.institutes.find(i=>i.code===code)){toast('هذا الكود مستخدم مسبقاً','error');return;}
-  if(A.db.users.find(u=>u.email.toLowerCase()===email.toLowerCase())){toast('هذا البريد مسجل مسبقاً','error');return;}
+  if(A.db.users.find(u=>(u.phone||'').replace(/\D/g,'')===phone)){toast('هذا الهاتف مسجل مسبقاً','error');return;}
   const iid='inst'+Date.now();
   const newInst = {
     id:iid, name, code, gps:30,
     doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:'',active:true,type:'garage'}],
     schedule:defSch(), alerts:[], history:[]
   };
-  const newAdmin = {id:'u'+Date.now(),name:'مدير '+name,email,pw,role:'admin',status:'active',instId:iid,avatar:null,note:null,lastLoc:null};
+  const newAdmin = {id:'u'+Date.now(),name:'مدير '+name,phone,pw,role:'admin',status:'active',instId:iid,avatar:null,note:null,lastLoc:null};
   try {
     await saveInst(newInst);
     await saveUser(newAdmin);
@@ -4561,7 +4560,8 @@ async function initPushForAdmin() {
 }
 
 function showPushEnableBtn() {
-  // نضيف زر صغير في الـ topbar
+  // نتحقق إذا سبق وعرضنا الزر وتجاهله المستخدم
+  try { if(localStorage.getItem('push_btn_dismissed')) return; } catch(e){}
   const existing = el('push-enable-btn');
   if (existing) return;
   const btn = document.createElement('button');
@@ -4570,8 +4570,11 @@ function showPushEnableBtn() {
   btn.style.cssText = 'position:fixed;bottom:1rem;left:1rem;z-index:9000;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:.6rem 1rem;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)';
   btn.onclick = async () => { await subscribePush(); btn.remove(); };
   document.body.appendChild(btn);
-  // يختفي بعد 10 ثوانٍ
-  setTimeout(() => btn.remove(), 10000);
+  // يختفي بعد 10 ثوانٍ ويحفظ في localStorage حتى لا يظهر مجدداً
+  setTimeout(() => {
+    btn.remove();
+    try { localStorage.setItem('push_btn_dismissed', '1'); } catch(e){}
+  }, 10000);
 }
 
 
