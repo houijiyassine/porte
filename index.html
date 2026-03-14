@@ -217,17 +217,6 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .bdg-admin{background:rgba(59,130,246,.15);color:var(--accent);border:1px solid rgba(59,130,246,.3);}
 
 /* GPS SETTINGS — per-institute */
-/* GPS TOGGLE */
-.gps-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:.75rem;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:.5rem;}
-.gps-toggle-row .gtl{flex:1;}
-.gps-toggle-row .gtl-title{font-size:.85rem;font-weight:700;color:var(--text);}
-.gps-toggle-row .gtl-sub{font-size:.72rem;color:var(--text2);margin-top:.15rem;}
-.big-tog{position:relative;width:52px;height:28px;flex-shrink:0;}
-.big-tog input{opacity:0;width:0;height:0;}
-.big-tog-sl{position:absolute;inset:0;background:var(--surface2);border-radius:99px;cursor:pointer;transition:.3s;border:1px solid var(--border);}
-.big-tog-sl:before{content:'';position:absolute;width:20px;height:20px;background:var(--text2);border-radius:50%;top:3px;left:3px;transition:.3s;}
-.big-tog input:checked+.big-tog-sl{background:var(--success);border-color:var(--success);}
-.big-tog input:checked+.big-tog-sl:before{transform:translateX(24px);background:#fff;}
 .gps-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;margin-bottom:1rem;}
 .gps-card h3{font-size:.95rem;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem;}
 .gps-row{display:flex;align-items:center;gap:1rem;}
@@ -1986,8 +1975,6 @@ async function initDB(){
 
   const mappedInsts = institutes.map(i => ({
     id: i.id, name: i.name, code: i.code||null, gps: i.gps||30,
-    gpsForUsers: i.gps_for_users !== false,   // default: مفعّل
-    gpsForAdmin: i.gps_for_admin === true,    // default: غير مفعّل
     doors: i.doors||[], schedule: i.schedule||defSch(),
     alerts: i.alerts||[], history: i.history||[]
   }));
@@ -2021,8 +2008,6 @@ async function saveDB(){
   for(const inst of A.db.institutes){
     await sbUpsert('institutes', {
       id: inst.id, name: inst.name, gps: inst.gps,
-      gps_for_users: inst.gpsForUsers !== false,
-      gps_for_admin: inst.gpsForAdmin === true,
       doors: inst.doors, schedule: inst.schedule,
       alerts: inst.alerts, history: inst.history
     });
@@ -2052,8 +2037,6 @@ async function saveUser(u){
 async function saveInst(inst){
   await sbUpsert('institutes', {
     id: inst.id, name: inst.name, code: inst.code||null, gps: inst.gps,
-    gps_for_users: inst.gpsForUsers !== false,
-    gps_for_admin: inst.gpsForAdmin === true,
     doors: inst.doors, schedule: inst.schedule,
     alerts: inst.alerts, history: inst.history
   });
@@ -2285,18 +2268,6 @@ function checkGeo(inst, ctx) {
   const door = inst?.doors?.[0];
   const radius = door?.gps || inst?.gps || 30;
   const doorLoc = getDoorLoc(inst);
-  const role = A.user?.role;
-
-  // تحقق من إعداد GPS حسب الدور
-  const gpsEnabled = role === 'admin'
-    ? inst?.gpsForAdmin === true
-    : inst?.gpsForUsers !== false;
-
-  // إذا GPS غير مفعّل لهذا الدور — تجاوز الشرط تماماً
-  if (!gpsEnabled) {
-    if (ctx === 'user') { A.geoOk = true; setGeoUI(true, '🟢 الوصول مسموح', role==='admin'?'شرط الموقع غير مفعّل للمسؤول':'شرط الموقع غير مفعّل لهذه المؤسسة'); }
-    return;
-  }
   
   // If no door location set → bypass GPS check completely
   if (!doorLoc) {
@@ -2444,24 +2415,20 @@ async function ctrlDoor(doorId,instId,action,pfx){
   if(navigator.vibrate) navigator.vibrate(action==='stop' ? 30 : 60);
   const inst=getInst(instId),door=inst.doors.find(d=>d.id===doorId),radius=inst.gps||30;
   if(action==='close'&&A.timers[doorId]){clearInterval(A.timers[doorId].iv);delete A.timers[doorId];resetAutoBtn(doorId,pfx);}
-  if(pfx==='u'||pfx==='a'){
-    const role = A.user?.role;
-    const gpsEnabled = role==='admin' ? inst?.gpsForAdmin===true : inst?.gpsForUsers!==false;
-    if(gpsEnabled){
-      // Re-check for fake GPS at moment of action
-      if(A.geoPos){
-        const freshCheck=detectFakeGps(A.geoPos);
-        if(freshCheck.fake){
-          toast('🚫 موقع GPS مزيف — لا يمكن فتح الباب','error');
-          showFakeGpsWarning(freshCheck.reason);
-          logAlert(inst,door,'محاولة بموقع GPS مزيف: '+freshCheck.reason);
-          return;
-        }
+  if(pfx==='u'){
+    // Re-check for fake GPS at moment of action
+    if(A.geoPos){
+      const freshCheck=detectFakeGps(A.geoPos);
+      if(freshCheck.fake){
+        toast('🚫 موقع GPS مزيف — لا يمكن فتح الباب','error');
+        showFakeGpsWarning(freshCheck.reason);
+        logAlert(inst,door,'محاولة بموقع GPS مزيف: '+freshCheck.reason);
+        return;
       }
-      const dl=getDoorLoc(inst);
-      if(dl && (dl.lat||dl.lng) && !A.geoOk){toast(`❌ يجب أن تكون قريباً من الباب (${radius}م)`,'error');logAlert(inst,door,'خارج النطاق الجغرافي');return;}
     }
-    if(pfx==='u' && !A.timeOk && action!=='stop'){toast('❌ خارج أوقات الدخول المسموحة','error');logAlert(inst,door,'خارج وقت العمل');return;}
+    const dl=getDoorLoc(inst);
+    if(dl && (dl.lat||dl.lng) && !A.geoOk){toast(`❌ يجب أن تكون قريباً من الباب (${radius}م)`,'error');logAlert(inst,door,'خارج النطاق الجغرافي');return;}
+    if(!A.timeOk&&action!=='stop'){toast('❌ خارج أوقات الدخول المسموحة','error');logAlert(inst,door,'خارج وقت العمل');return;}
   }
   const btns=['op','cl','st','au'].map(x=>el(`${pfx}-${x}-${doorId}`));
   btns.forEach(b=>b&&(b.disabled=true));
@@ -3340,30 +3307,6 @@ async function renderSpInstGps(){
         <button class="step-btn" id="spig-s50-${inst.id}" onclick="setInstStep('${inst.id}',50)">50م</button>
       </div>
       <button class="btn-sm" style="margin-top:1rem;width:100%" onclick="saveInstGps('${inst.id}')">💾 حفظ النطاق</button>
-      <!-- GPS Toggles -->
-      <div style="margin-top:.75rem;border-top:1px solid var(--border);padding-top:.75rem">
-        <div style="font-size:.8rem;font-weight:700;color:var(--text2);margin-bottom:.5rem">🔒 شرط الموقع الجغرافي</div>
-        <div class="gps-toggle-row">
-          <div class="gtl">
-            <div class="gtl-title">👤 للمستخدمين</div>
-            <div class="gtl-sub">يجب أن يكونوا قريبين لفتح الباب</div>
-          </div>
-          <label class="big-tog">
-            <input type="checkbox" id="gps-users-${inst.id}" ${inst.gpsForUsers!==false?'checked':''} onchange="toggleGpsSetting('${inst.id}','users',this.checked)">
-            <span class="big-tog-sl"></span>
-          </label>
-        </div>
-        <div class="gps-toggle-row">
-          <div class="gtl">
-            <div class="gtl-title">🏛️ للمسؤول (Admin)</div>
-            <div class="gtl-sub">يطبّق شرط الموقع على المدير أيضاً</div>
-          </div>
-          <label class="big-tog">
-            <input type="checkbox" id="gps-admin-${inst.id}" ${inst.gpsForAdmin===true?'checked':''} onchange="toggleGpsSetting('${inst.id}','admin',this.checked)">
-            <span class="big-tog-sl"></span>
-          </label>
-        </div>
-      </div>
       <div style="margin-top:.75rem;padding:.75rem;background:var(--bg);border-radius:10px;border:1px solid var(--border)">
         <div style="font-size:.8rem;font-weight:700;color:var(--accent);margin-bottom:.5rem">📍 موقع الباب الرئيسي</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.5rem">
@@ -3379,19 +3322,6 @@ async function renderSpInstGps(){
     </div>`).join('');
   // init step state
   A.db.institutes.forEach(i=>{ if(!A._instSteps) A._instSteps={}; A._instSteps[i.id]=1; });
-}
-
-async function toggleGpsSetting(instId, type, enabled){
-  const inst = getInst(instId);
-  if(!inst) return;
-  if(type === 'users'){
-    inst.gpsForUsers = enabled;
-    toast(enabled ? `✅ شرط الموقع مفعّل للمستخدمين — ${inst.name}` : `🔓 شرط الموقع مُعطَّل للمستخدمين — ${inst.name}`, 'info');
-  } else {
-    inst.gpsForAdmin = enabled;
-    toast(enabled ? `✅ شرط الموقع مفعّل للمسؤول — ${inst.name}` : `🔓 شرط الموقع مُعطَّل للمسؤول — ${inst.name}`, 'info');
-  }
-  await saveInst(inst);
 }
 
 function adjInstGps(dir,instId){
@@ -3676,7 +3606,7 @@ async function addInstitute(){
   if(A.db.users.find(u=>u.email.toLowerCase()===email.toLowerCase())){toast('هذا البريد مسجل مسبقاً','error');return;}
   const iid='inst'+Date.now();
   const newInst = {
-    id:iid, name, code, gps:30, gpsForUsers:true, gpsForAdmin:false,
+    id:iid, name, code, gps:30,
     doors:[{id:'door'+Date.now(),name:'الباب الرئيسي',devId:'',active:true,type:'garage'}],
     schedule:defSch(), alerts:[], history:[]
   };
@@ -4591,57 +4521,75 @@ async function registerPushSW() {
   } catch(e) { console.warn('SW register failed:', e); }
 }
 
-async function subscribePush() {
+async function subscribePush(silent=false) {
   try {
     const reg = await registerPushSW();
     if (!reg) return;
 
-    // طلب إذن الإشعارات
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') { toast('يرجى السماح بالإشعارات للحصول على تنبيهات فورية', 'info'); return; }
 
-    // الاشتراك
     const sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
 
-    // حفظ الاشتراك في Supabase
     const subJson = JSON.stringify(sub.toJSON());
-    console.log('📡 Push sub:', subJson.slice(0,80));
     await sbFetch('users?id=eq.' + A.user.id, {
       method: 'PATCH',
       prefer: 'return=minimal',
       body: JSON.stringify({ push_sub: subJson })
     });
-    console.log('✅ push_sub saved for', A.user.name);
-    toast('✅ تم تفعيل الإشعارات الفورية', 'success');
+
+    // ── أظهر الـ toast مرة واحدة فقط لكل مستخدم ──
+    const key = 'push_done_' + A.user.id;
+    if (!silent && !localStorage.getItem(key)) {
+      toast('✅ تم تفعيل الإشعارات الفورية', 'success');
+    }
+    localStorage.setItem(key, '1');
   } catch(e) { console.warn('Push subscribe failed:', e); }
 }
 
 // تفعيل Push تلقائياً عند دخول admin/super
 async function initPushForAdmin() {
   if (!('Notification' in window)) return;
+
+  // ── إذا سبق الاشتراك لهذا المستخدم — لا نفعل شيئاً ──
+  const key = 'push_done_' + (A.user?.id || '');
+  if (localStorage.getItem(key)) {
+    // أعد الاشتراك صامتاً بدون toast لتجديد push_sub إن لزم
+    if (Notification.permission === 'granted') {
+      subscribePush(true).catch(() => {});  // صامت — بدون toast
+    }
+    return;
+  }
+
   if (Notification.permission === 'granted') {
     await subscribePush();
   } else if (Notification.permission !== 'denied') {
-    // نعرض زر تفعيل
     showPushEnableBtn();
   }
 }
 
 function showPushEnableBtn() {
-  // نضيف زر صغير في الـ topbar
+  // لا نُظهر الزر إذا سبق رفضه
+  try { if (localStorage.getItem('push_btn_dismissed')) return; } catch(e) {}
   const existing = el('push-enable-btn');
   if (existing) return;
   const btn = document.createElement('button');
   btn.id = 'push-enable-btn';
   btn.innerHTML = '🔔 تفعيل الإشعارات';
   btn.style.cssText = 'position:fixed;bottom:1rem;left:1rem;z-index:9000;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:.6rem 1rem;font-family:Cairo,sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)';
-  btn.onclick = async () => { await subscribePush(); btn.remove(); };
+  btn.onclick = async () => {
+    await subscribePush();
+    btn.remove();
+  };
   document.body.appendChild(btn);
-  // يختفي بعد 10 ثوانٍ
-  setTimeout(() => btn.remove(), 10000);
+  // يختفي بعد 10 ثوانٍ ولا يعود يظهر
+  setTimeout(() => {
+    btn.remove();
+    try { localStorage.setItem('push_btn_dismissed', '1'); } catch(e) {}
+  }, 10000);
 }
 
 
