@@ -2120,12 +2120,12 @@ async function saveDB(){
 
 // Quick save single user
 async function saveUser(u){
-  // تشفير كلمة السر إذا لم تكن مشفرة
-  if(u.pw && !isHashed(u.pw)) u.pw = await hashPw(u.pw);
+  // تشفير كلمة السر فقط عند الحفظ إذا لم تكن مشفرة بعد
+  const _pwToSave = (u.pw && !isHashed(u.pw)) ? await hashPw(u.pw) : u.pw;
   const _cleanPhone = (u.phone||'').replace(/\D/g,'').replace(/^0+/,'');
   const _em = u.email||(_cleanPhone?_cleanPhone+'@phone.local':u.id+'@user.local');
   await sbUpsert('users', {
-    id: u.id, name: u.name, email: _em, pw: u.pw,
+    id: u.id, name: u.name, email: _em, pw: _pwToSave,
     expire_date: u.expireDate||null,
     phone: u.phone||null,
     role: u.role, status: u.status, inst_id: u.instId||null,
@@ -4091,8 +4091,15 @@ function toast(msg,type='info'){const t=el('toast');t.textContent=msg;t.classNam
   try {
     const saved = localStorage.getItem('dac_saved_creds');
     if(saved) {
-      const {phone, pass} = JSON.parse(saved);
-      const u = A.db.users.find(u => (u.phone||'').replace(/\D/g,'') === (phone||'').replace(/\D/g,'') && u.pw===pass);
+      const {phone, pass, plain} = JSON.parse(saved);
+      const _norm = (p) => (p||'').replace(/\D/g,'').replace(/^0+/,'');
+      const u = A.db.users.find(u => {
+        const pm = _norm(u.phone) === _norm(phone);
+        const pwm = isHashed(u.pw)
+          ? (u.pw === pass || u.pw === pass)  // pass قد يكون hash بالفعل
+          : ((u.pw||'').trim() === (plain||pass));
+        return pm && pwm;
+      });
       if(u && u.status==='active') {
         A.user = u;
         // Show splash briefly then go to dashboard
@@ -4672,9 +4679,11 @@ async function smartLogin(){
     try { await initDB(); } catch(e) { console.error('initDB error:', e); }
 
     const passHash = await hashPw(pass);
-    // مقارنة phone + pw (يقبل plain text للمستخدمين القدامى وhash للجدد)
+    // تطبيع الهاتف: إزالة الأصفار البادئة من الجانبين للمقارنة
+    const normPhone = (p) => (p||'').replace(/\D/g,'').replace(/^0+/,'');
     const u = A.db.users.find(u => {
-      const phoneMatch = (u.phone||'').replace(/\D/g,'') === phone;
+      const phoneMatch = normPhone(u.phone) === normPhone(phone);
+      // يقبل: plain text (للقدامى) أو hash (للجدد)
       const pwMatch = isHashed(u.pw) ? u.pw === passHash : (u.pw||'').trim() === pass;
       return phoneMatch && pwMatch;
     });
@@ -4690,7 +4699,12 @@ async function smartLogin(){
       if(errDiv){ errDiv.textContent = msg; errDiv.style.display='block'; }
       return;
     }
-    if(u.status==='pending'){ toast('حسابك في انتظار موافقة المدير ⏳','info'); return; }
+    if(u.status==='pending'){
+      A.user = u;
+      try { localStorage.setItem('dac_saved_creds', JSON.stringify({phone, pass: await hashPw(pass), plain: pass})); } catch(e){}
+      showPendingScreen();
+      return;
+    }
     // تحقق من تاريخ انتهاء الصلاحية
     if(u.expireDate){
       const exp = new Date(u.expireDate);
@@ -4704,7 +4718,9 @@ async function smartLogin(){
     if(u.status!=='active'){  toast('حساب غير مفعّل — تواصل مع المدير','error'); return; }
 
     A.user = u;
-    try { localStorage.setItem('dac_saved_creds', JSON.stringify({phone, pass})); } catch(e){}
+    // احفظ الـ hash في localStorage لاستخدامه في auto-login
+    const hashForStorage = await hashPw(pass);
+    try { localStorage.setItem('dac_saved_creds', JSON.stringify({phone, pass: hashForStorage, plain: pass})); } catch(e){}
     if(u.role==='super') loadSuper();
     else if(u.role==='admin') loadAdmin();
     else loadUser();
