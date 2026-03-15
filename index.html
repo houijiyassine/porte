@@ -273,7 +273,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .hist-text p{font-size:.75rem;color:var(--text2);}
 
 /* INSTITUTES */
-.inst-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;margin-bottom:.75rem;}
+.inst-card{background:var(--surface);border:2px solid #22c55e;border-radius:var(--r);padding:1.25rem;margin-bottom:.75rem;box-shadow:0 0 12px rgba(34,197,94,.15);}
 /* GPS inline toggle in inst-card */
 .gps-inline-row{display:flex;align-items:center;justify-content:space-between;padding:.5rem .65rem;border-radius:8px;background:var(--bg);border:1px solid var(--border);}
 .gps-inline-lbl{font-size:.78rem;font-weight:700;color:var(--text2);}
@@ -287,10 +287,11 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .mini-tog input:not(:checked)+.mini-tog-sl{background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.4);}
 .mini-tog input:not(:checked)+.mini-tog-sl:before{background:var(--danger);}
 .inst-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem;}
-.inst-name{font-size:1rem;font-weight:700;}
+.inst-name{font-size:1.4rem;font-weight:900;letter-spacing:-.01em;}
 .inst-meta{font-size:.8rem;color:var(--text2);margin-top:.2rem;}
 .inst-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;}
-.stat-box{background:var(--surface2);border-radius:10px;padding:.75rem;text-align:center;}
+.stat-box{background:var(--surface2);border-radius:10px;padding:.75rem;text-align:center;cursor:pointer;transition:all .2s;border:1px solid transparent;}
+.stat-box:hover{border-color:var(--accent);transform:scale(1.03);}
 .stat-num{font-size:1.3rem;font-weight:900;color:var(--accent);}
 .stat-lbl{font-size:.7rem;color:var(--text2);}
 
@@ -674,7 +675,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     </div>
 
     <div class="tl-bar">
-      <button class="tl-btn" id="theme-btn" onclick="toggleTheme()">☀️ Light Mode</button>
+      <button class="tl-btn" id="theme-btn" onclick="toggleTheme()">☀️</button>
       <button class="tl-btn" id="lang-btn" onclick="toggleLang()">🇫🇷 Français</button>
     </div>
   </div>
@@ -2948,6 +2949,53 @@ function buildSlidingDoorIcon(){
   </svg>`;
 }
 
+function showInstUsers(instId, filter){
+  const inst = getInst(instId);
+  const users = A.db.users.filter(u => u.instId === instId && u.role !== 'admin');
+  const filtered = filter ? users.filter(u => u.status === filter) : users;
+  const titles = { active: '✅ المستخدمون النشطون', pending: '⏳ طلبات الانتظار', all: '👥 جميع المستخدمين' };
+  el('inst-users-title').textContent = `${titles[filter]||'المستخدمون'} — ${inst?.name||''}`;
+  el('inst-users-body').innerHTML = filtered.length
+    ? filtered.map(u => `
+      <div class="user-item">
+        <div class="ui-hdr">
+          <div class="ui-info">
+            <div class="mini-av">${u.name?.[0]||'?'}</div>
+            <div>
+              <div class="ui-name">${u.name}</div>
+              <div class="ui-email">📱 ${u.phone?'+216'+u.phone:'—'}</div>
+            </div>
+          </div>
+          <span class="bdg ${u.status==='pending'?'bdg-pend':u.status==='frozen'?'bdg-frozen':'bdg-active'}">${u.status==='pending'?'انتظار':u.status==='frozen'?'موقوف':'نشط'}</span>
+        </div>
+        ${u.expireDate?`<div style="margin-top:.3rem">${expireBadge(u.expireDate)}</div>`:''}
+        <div class="ui-actions" style="margin-top:.5rem">
+          ${u.status==='pending'?`<button class="btn-sm" onclick="approveUsp('${u.id}');closeModal('m-inst-users');renderInsts()">✅ قبول</button>`:''}
+          <button class="btn-sm ${u.status==='frozen'?'btn-success':'btn-danger'}" onclick="freezeU('${u.id}');showInstUsers('${instId}','${filter}')">${u.status==='frozen'?'✅ تفعيل':'❄️ تجميد'}</button>
+          <button class="btn-sm btn-danger" onclick="delU('${u.id}');showInstUsers('${instId}','${filter}')">🗑️ حذف</button>
+        </div>
+      </div>`).join('')
+    : `<p class="empty">لا يوجد مستخدمون</p>`;
+  openModal('m-inst-users');
+}
+
+function showInstAlerts(instId){
+  const inst = getInst(instId);
+  const alerts = inst?.alerts || [];
+  el('inst-users-title').textContent = `🚨 التنبيهات — ${inst?.name||''}`;
+  el('inst-users-body').innerHTML = alerts.length
+    ? alerts.map(a=>`
+      <div class="alert-item" style="flex-direction:column;gap:.5rem;padding:.75rem 1rem">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="font-weight:700;font-size:.88rem;color:var(--danger)">${a.uname||'مجهول'} — 🚪 ${a.door||'—'}</div>
+          <div style="font-size:.75rem;color:var(--accent)">${a.time||''}</div>
+        </div>
+        <div style="font-size:.8rem;color:var(--text2)">${a.reason||'محاولة دخول مرفوضة'}</div>
+      </div>`).join('')
+    : `<p class="empty">لا توجد تنبيهات 🎉</p>`;
+  openModal('m-inst-users');
+}
+
 function openExpireModal(uid){
   const u = A.db.users.find(x=>x.id===uid);
   if(!u) return;
@@ -3725,7 +3773,7 @@ function renderInsts(){
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.6rem .75rem;margin-bottom:.5rem">
         <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem">
           <div style="flex:1;min-width:0">
-            <div style="font-size:.82rem;font-weight:700;color:var(--text)">🚪 ${d.name}</div>
+            <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap"><div style="font-size:.82rem;font-weight:700;color:var(--text)">🚪 ${d.name}</div><span id="online-badge-${d.id}" class="badge-off" style="font-size:.65rem">⏳</span></div>
             <div style="font-size:.68rem;color:var(--text2);margin-top:.1rem">${d.devId?'ID: '+d.devId.slice(0,14)+'…':tr('notConnected')}</div>
           </div>
           <button onclick="showDoorHistSuper('${d.id}','${inst.id}')" style="padding:.3rem .5rem;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-family:Cairo,sans-serif;font-size:.72rem;cursor:pointer" title="سجل الباب">📋</button>
@@ -3768,9 +3816,9 @@ function renderInsts(){
         </div>
       </div>
       <div class="inst-stats">
-        <div class="stat-box"><div class="stat-num">${users.filter(u=>u.status==='active').length}</div><div class="stat-lbl">نشط</div></div>
-        <div class="stat-box"><div class="stat-num" style="color:var(--warning)">${users.filter(u=>u.status==='pending').length}</div><div class="stat-lbl">انتظار</div></div>
-        <div class="stat-box"><div class="stat-num" style="color:var(--danger)">${inst.alerts?.length||0}</div><div class="stat-lbl">تنبيه</div></div>
+        <div class="stat-box" onclick="showInstUsers('${inst.id}','active')" title="عرض المستخدمين النشطين"><div class="stat-num">${users.filter(u=>u.status==='active').length}</div><div class="stat-lbl">نشط 👁</div></div>
+        <div class="stat-box" onclick="showInstUsers('${inst.id}','pending')" title="عرض طلبات الانتظار"><div class="stat-num" style="color:var(--warning)">${users.filter(u=>u.status==='pending').length}</div><div class="stat-lbl">انتظار 👁</div></div>
+        <div class="stat-box" onclick="showInstAlerts('${inst.id}')" title="عرض التنبيهات"><div class="stat-num" style="color:var(--danger)">${inst.alerts?.length||0}</div><div class="stat-lbl">تنبيه 👁</div></div>
       </div>
 
       ${inst.doors.length?`<div style="margin-top:.75rem;border-top:1px solid var(--border);padding-top:.75rem"><p style="font-size:.75rem;color:var(--text2);margin-bottom:.5rem;font-weight:700">سجلات الأبواب:</p>${doorsHtml}</div>`:``}
@@ -3781,6 +3829,8 @@ function renderInsts(){
       </div>
     </div>`;
   }).join('')||`<p class="empty">لا توجد مؤسسات</p>`;
+  // ابدأ polling للأبواب في super admin
+  A.db.institutes.forEach(inst=>inst.doors.forEach(d=>{ if(d.devId) { stopDoorPolling(d.id,'sp'); startDoorPolling(d,'sp'); } }));
 }
 
 function spOpenAddDoor(instId){
@@ -4209,7 +4259,7 @@ function toggleTheme(){
   const cur = document.documentElement.getAttribute('data-theme') || 'dark';
   const next = cur==='dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
-  document.querySelectorAll('#theme-btn').forEach(b => b.textContent = next==='dark' ? '☀️ Light Mode' : '🌙 Dark Mode');
+  document.querySelectorAll('#theme-btn').forEach(b => b.textContent = next==='dark' ? '☀️' : '🌙');
 }
 
 // ════════════════════════════════════════════
@@ -5452,6 +5502,17 @@ async function forgotConfirm() {
 
 <!-- DOOR SCHEDULE MODAL -->
 <!-- EXPIRE DATE MODAL -->
+<!-- INST USERS MODAL -->
+<div class="modal-ov" id="m-inst-users">
+  <div class="modal" style="max-height:85vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3 class="modal-title" style="margin:0" id="inst-users-title">المستخدمون</h3>
+      <button onclick="closeModal('m-inst-users')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.3rem .7rem;cursor:pointer;color:var(--text);font-family:Cairo,sans-serif">✕</button>
+    </div>
+    <div id="inst-users-body" class="user-list"></div>
+  </div>
+</div>
+
 <div class="modal-ov" id="m-expire">
   <div class="modal">
     <h3 class="modal-title">📅 تاريخ انتهاء الصلاحية</h3>
