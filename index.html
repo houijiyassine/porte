@@ -2699,6 +2699,7 @@ async function hmac256(str,secret){const e=new TextEncoder(),k=await crypto.subt
 // DOOR STATUS POLLING (RC sync)
 // ════════════════════════════════════════════
 const _pollIntervals = {};
+const _initializingDoors = new Set(); // أبواب في طور التهيئة — لا نرسل إشعار RC
 
 async function fetchDoorStatus(door, pfx) {
   try {
@@ -2716,19 +2717,19 @@ async function fetchDoorStatus(door, pfx) {
     // تحديث حالة الباب — لا نتجاوز stopped إلا إذا تغيرت الحالة فعلاً
     if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'open');
-      rcLogHistory(door, 'open');
+      rcLogHistory(door, 'open', pfx);
     } else if ((d.doorState === 'close' || d.doorState === 'closed') && currentState !== 'closed' && currentState !== 'closing' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'closed');
-      rcLogHistory(door, 'close');
+      rcLogHistory(door, 'close', pfx);
     } else if (d.doorState === 'stopped' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'stopped');
     } else if (d.doorState === 'open' && currentState === 'stopped') {
       // RC فتح بعد stop — نحدث
       animateDoor(door.id, pfx, 'open');
-      rcLogHistory(door, 'open');
+      rcLogHistory(door, 'open', pfx);
     } else if ((d.doorState === 'close' || d.doorState === 'closed') && currentState === 'stopped') {
       animateDoor(door.id, pfx, 'closed');
-      rcLogHistory(door, 'close');
+      rcLogHistory(door, 'close', pfx);
     }
 
     // تحديث شارة online/offline
@@ -2745,11 +2746,16 @@ async function fetchDoorStatus(door, pfx) {
   } catch(e) {}
 }
 
-function rcLogHistory(door, action) {
-  // لا نسجل إذا الحالة تغيرت بسببنا نحن (ctrlDoor يسجل بنفسه)
-  // نسجل فقط إذا تغيرت بسبب RC خارجي
+// تتبع آخر حالة معروفة لكل باب (مستقل عن pfx)
+const _lastKnownDoorState = {};
+
+function rcLogHistory(door, action, pfx) {
   const inst = (A.db?.institutes||[]).find(i => i.doors?.find(d => d.id === door.id));
   if (!inst) return;
+
+  // لا نسجل أثناء التهيئة (أول polling بعد فتح التطبيق)
+  if (_initializingDoors.has(door.id + '_' + (pfx||''))) return;
+
   const now = new Date();
   const dd = String(now.getDate()).padStart(2,'0');
   const mm = String(now.getMonth()+1).padStart(2,'0');
@@ -2758,10 +2764,22 @@ function rcLogHistory(door, action) {
   const min = String(now.getMinutes()).padStart(2,'0');
   const timeStr = `${dd}/${mm}/${yyyy} ${hh}:${min}`;
   const actionLabel = action === 'open' ? 'open' : 'close';
+
+  // ── Lock مزدوج لمنع التكرار ──
+  // 1. تحقق من التاريخ في history
   if (!inst.history) inst.history = [];
-  // تجنب التكرار — لا نضيف إذا آخر سجل نفس الحدث في نفس الدقيقة
   const last = inst.history[0];
-  if (last && last.door === door.name && last.action === actionLabel && last.time === timeStr) return;
+  if (last && last.door === door.name && last.action === actionLabel && last.time === timeStr) {
+    // السجل موجود — لكن هل أرسلنا الإشعار؟ لا نرسل مجدداً
+    return;
+  }
+
+  // 2. Lock عالمي بالثانية (بدقة أعلى من الدقيقة)
+  const _lockKey = `rc_lock_${door.id}_${actionLabel}`;
+  const _lockTime = window[_lockKey] || 0;
+  if (Date.now() - _lockTime < 10000) return; // 10 ثوانٍ كافية
+  window[_lockKey] = Date.now();
+
   inst.history.unshift({
     id: 'h' + Date.now(),
     uid: 'rc',
@@ -2772,16 +2790,7 @@ function rcLogHistory(door, action) {
     time: timeStr
   });
   saveInst(inst);
-  // إرسال push مرة واحدة فقط — نتجنب الإرسال المتكرر من polling متعدد
-  // إرسال إشعار RC — lock عالمي لمنع التكرار من polling متعدد
-  // المفتاح يشمل door.id + action + الدقيقة الحالية فقط (بدون pfx)
-  const _notifMinute = new Date().toISOString().slice(0,16); // yyyy-mm-ddThh:mm
-  const _notifKey = `rc_notif_${door.id}_${actionLabel}_${_notifMinute}`;
-  if(!window[_notifKey]){
-    window[_notifKey] = true;
-    setTimeout(()=>{ delete window[_notifKey]; }, 60000); // ينتهي بعد دقيقة
-    notifyRcEvent(inst, door, actionLabel);
-  }
+  notifyRcEvent(inst, door, actionLabel);
 }
 
 async function notifyRcEvent(inst, door, action){
@@ -2828,10 +2837,13 @@ function startDoorPolling(door, pfx) {
     return;
   }
 
-  // اقرأ الحالة فوراً عند البدء
-  fetchDoorStatus(door, pfx);
+  // اقرأ الحالة فوراً عند البدء — لكن فقط لتهيئة الـ state بدون إشعار
+  _initializingDoors.add(door.id + '_' + pfx);
+  fetchDoorStatus(door, pfx).finally(() => {
+    setTimeout(() => _initializingDoors.delete(door.id + '_' + pfx), 2000);
+  });
 
-  _pollIntervals[key] = setInterval(() => fetchDoorStatus(door, pfx), 4000);
+  _pollIntervals[key] = setInterval(() => fetchDoorStatus(door, pfx), 5000);
 }
 
 function stopDoorPolling(doorId, pfx) {
@@ -5238,14 +5250,11 @@ async function subscribePush(silent=false) {
 // تفعيل Push تلقائياً عند دخول admin/super
 async function initPushForAdmin() {
   if (!('Notification' in window)) return;
-  // إذا سبق الاشتراك — جدّد صامتاً بدون toast
   const key = 'push_done_' + (A.user?.id || '');
-  if (localStorage.getItem(key)) {
-    if (Notification.permission === 'granted') subscribePush(true).catch(()=>{});
-    return;
-  }
   if (Notification.permission === 'granted') {
-    await subscribePush();
+    // جدّد الاشتراك دائماً عند كل login لضمان push_sub محدّث
+    subscribePush(true).catch(()=>{});
+    if(!localStorage.getItem(key)) await subscribePush();
   } else if (Notification.permission !== 'denied') {
     showPushEnableBtn();
   }
