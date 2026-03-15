@@ -7,6 +7,11 @@ const SECRET = process.env.TUYA_SECRET;
 const DEVICE_ID = process.env.TUYA_DEVICE_ID;
 const BASE_URL = 'https://openapi.tuyaeu.com';
 
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
 function getSign(clientId, secret, t, accessToken, method, path) {
   const contentHash = crypto.createHash('sha256').update('').digest('hex');
   const stringToSign = method + '\n' + contentHash + '\n' + '' + '\n' + path;
@@ -22,7 +27,6 @@ async function getToken() {
     headers: { client_id: CLIENT_ID, sign, t, sign_method: 'HMAC-SHA256' }
   });
   const data = await res.json();
-  console.log('Token response:', JSON.stringify(data));
   return data.result && data.result.access_token ? data.result.access_token : null;
 }
 
@@ -41,10 +45,6 @@ async function sendNotifications(title, body) {
     'mailto:admin@example.com',
     process.env.VAPID_PUBLIC,
     process.env.VAPID_PRIVATE
-  );
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY
   );
   const result = await supabase
     .from('users')
@@ -70,7 +70,29 @@ if (!token) {
   console.error('فشل الحصول على token');
   process.exit(1);
 }
-console.log('Token OK');
 
-const status = await getDeviceStatus(token);
-console.log('Device status:', JSON.stringify(status, null, 2));
+const statusData = await getDeviceStatus(token);
+const result = statusData.result || [];
+
+const switch1 = result.find(r => r.code === 'switch_1');
+const currentValue = String(switch1 ? switch1.value : 'unknown');
+console.log('switch_1 current:', currentValue);
+
+const { data: prevData } = await supabase
+  .from('door_state')
+  .select('value')
+  .order('created_at', { ascending: false })
+  .limit(1);
+
+const prevValue = prevData && prevData.length > 0 ? prevData[0].value : null;
+console.log('switch_1 previous:', prevValue);
+
+if (prevValue === null || prevValue !== currentValue) {
+  console.log('تغيرت الحالة!');
+
+  const isOpen = currentValue === 'true';
+  const status = isOpen ? 'فُتح' : 'أُغلق';
+
+  await sendNotifications('RC Door', 'الباب ' + status);
+
+  await supabase.from('door_state').insert({ value:
