@@ -2765,20 +2765,19 @@ function rcLogHistory(door, action, pfx) {
   const timeStr = `${dd}/${mm}/${yyyy} ${hh}:${min}`;
   const actionLabel = action === 'open' ? 'open' : 'close';
 
-  // ── Lock مزدوج لمنع التكرار ──
-  // 1. تحقق من التاريخ في history
+  // ── Lock صارم: أول استدعاء يأخذ الـ lock والباقي يُتجاهل ──
   if (!inst.history) inst.history = [];
-  const last = inst.history[0];
-  if (last && last.door === door.name && last.action === actionLabel && last.time === timeStr) {
-    // السجل موجود — لكن هل أرسلنا الإشعار؟ لا نرسل مجدداً
-    return;
-  }
 
-  // 2. Lock عالمي بالثانية (بدقة أعلى من الدقيقة)
+  // تحقق من السجل الأخير أولاً
+  const last = inst.history[0];
+  if (last && last.door === door.name && last.action === actionLabel && last.time === timeStr) return;
+
+  // Lock بالميلي ثانية — يمنع أي استدعاء ثانٍ حتى لو جاء بعد 1ms
   const _lockKey = `rc_lock_${door.id}_${actionLabel}`;
-  const _lockTime = window[_lockKey] || 0;
-  if (Date.now() - _lockTime < 10000) return; // 10 ثوانٍ كافية
-  window[_lockKey] = Date.now();
+  if (window[_lockKey] === true) return; // مقفل — تجاهل
+  window[_lockKey] = true; // اقفل فوراً
+  // أطلق الـ lock بعد 15 ثانية للسماح بحدث جديد
+  setTimeout(() => { window[_lockKey] = false; }, 15000);
 
   inst.history.unshift({
     id: 'h' + Date.now(),
