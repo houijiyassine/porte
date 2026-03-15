@@ -2082,6 +2082,7 @@ async function initDB(){
     pw: (u.pw||'').trim(),
     role: u.role, status: u.status, instId: u.inst_id,
     expireDate: u.expire_date||null,
+    push_sub: u.push_sub||null,
     avatar: u.avatar, note: u.note, lastLoc: (()=>{ let l=u.last_loc; if(typeof l==='string'){try{l=JSON.parse(l);}catch(e){l=null;}} return l; })()
   }));
 
@@ -2772,9 +2773,11 @@ function rcLogHistory(door, action) {
   });
   saveInst(inst);
   // إرسال push مرة واحدة فقط — نتجنب الإرسال المتكرر من polling متعدد
-  const _notifKey = `rc_notif_sent_${door.id}_${actionLabel}_${timeStr}`;
-  if(!sessionStorage.getItem(_notifKey)){
-    sessionStorage.setItem(_notifKey, '1');
+  // إرسال إشعار RC — مع منع التكرار خلال 30 ثانية
+  const _notifKey = `rc_last_${door.id}_${actionLabel}`;
+  const _lastTime = parseInt(sessionStorage.getItem(_notifKey)||'0');
+  if(Date.now() - _lastTime > 30000){
+    sessionStorage.setItem(_notifKey, Date.now().toString());
     notifyRcEvent(inst, door, actionLabel);
   }
 }
@@ -2788,9 +2791,16 @@ async function notifyRcEvent(inst, door, action){
     for(const u of targets){
       const settingKey = `rc_notif_${door.id}_${u.id}`;
       const enabled = localStorage.getItem(settingKey);
-      // افتراضي: ON للمسؤول، ON للسوبر — إلا إذا وضع OFF
       if(enabled === 'off') continue;
-      if(!u.push_sub) continue;
+      // push_sub قد يكون في الذاكرة أو نحتاج نجلبه من Supabase
+      if(!u.push_sub){
+        // حاول تحديث push_sub من Supabase
+        try {
+          const fresh = await sbGet('users', `select=push_sub&id=eq.${u.id}`);
+          if(fresh?.[0]?.push_sub) u.push_sub = fresh[0].push_sub;
+          else continue;
+        } catch(e){ continue; }
+      }
       await fetch('/api/push', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
