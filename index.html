@@ -2790,35 +2790,17 @@ function rcLogHistory(door, action, pfx) {
 }
 
 async function notifyRcEvent(inst, door, action){
-  // لكل admin/super لديه push_sub ومفعّل إشعار RC لهذا الباب
+  // إرسال طلب واحد فقط — push.js يتولى توزيعه على المستحقين
   try {
-    const targets = A.db.users.filter(u =>
-      (u.role==='admin'&&u.instId===inst.id) || u.role==='super'
-    );
-    for(const u of targets){
-      const settingKey = `rc_notif_${door.id}_${u.id}`;
-      const enabled = localStorage.getItem(settingKey);
-      if(enabled === 'off') continue;
-      // push_sub قد يكون في الذاكرة أو نحتاج نجلبه من Supabase
-      if(!u.push_sub){
-        // حاول تحديث push_sub من Supabase
-        try {
-          const fresh = await sbGet('users', `select=push_sub&id=eq.${u.id}`);
-          if(fresh?.[0]?.push_sub) u.push_sub = fresh[0].push_sub;
-          else continue;
-        } catch(e){ continue; }
-      }
-      await fetch('/api/push', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          inst_id: inst.id,
-          user_name: u.name,
-          custom_title: `🚪 ${action==='open'?'فتح':'غلق'} الباب`,
-          custom_body: `${door.name} — ${action==='open'?'تم الفتح':'تم الغلق'} عبر جهاز التحكم`,
-          target_user_id: u.id
-        })
-      }).catch(()=>{});
-    }
+    await fetch('/api/push', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        inst_id: inst.id,
+        custom_title: `🚪 ${action==='open'?'فتح':'غلق'} الباب`,
+        custom_body: `${door.name} — ${action==='open'?'تم الفتح':'تم الغلق'} عبر جهاز التحكم`,
+        rc_door_id: door.id  // push.js سيتحقق من إعداد RC لكل user
+      })
+    }).catch(()=>{});
   } catch(e){}
 }
 
