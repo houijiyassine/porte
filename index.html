@@ -3749,6 +3749,8 @@ function getRcNotifSetting(doorId){
 function setRcNotifSetting(doorId, enabled){
   const key = `rc_notif_${doorId}_${A.user?.id||''}`;
   localStorage.setItem(key, enabled ? 'on' : 'off');
+  // عند التشغيل — أعد تهيئة الحالة حتى يعمل الإشعار من جديد
+  if(enabled) delete _lastKnownDoorState[doorId];
   toast(enabled ? '✅ سيصلك إشعار عند استخدام RC' : '🔕 لن يصلك إشعار RC', 'info');
 }
 
