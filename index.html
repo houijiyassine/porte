@@ -2699,7 +2699,6 @@ async function hmac256(str,secret){const e=new TextEncoder(),k=await crypto.subt
 // DOOR STATUS POLLING (RC sync)
 // ════════════════════════════════════════════
 const _pollIntervals = {};
-const _initializingDoors = new Set(); // أبواب في طور التهيئة — لا نرسل إشعار RC
 
 async function fetchDoorStatus(door, pfx) {
   try {
@@ -2747,47 +2746,44 @@ async function fetchDoorStatus(door, pfx) {
   } catch(e) {}
 }
 
-// تتبع آخر حالة معروفة لكل باب (مستقل عن pfx)
-const _lastKnownDoorState = {};
+// آخر حالة معروفة لكل باب — تُهيَّأ من أول polling ولا تُرسَل إشعار
+const _lastKnownDoorState = {}; // door.id -> 'open'|'close'
 
 function rcLogHistory(door, action, pfx) {
   const inst = (A.db?.institutes||[]).find(i => i.doors?.find(d => d.id === door.id));
   if (!inst) return;
 
-  // لا نسجل أثناء التهيئة (أول polling بعد فتح التطبيق)
-  if (_initializingDoors.has(door.id + '_' + (pfx||''))) return;
-
-  const now = new Date();
-  const dd = String(now.getDate()).padStart(2,'0');
-  const mm = String(now.getMonth()+1).padStart(2,'0');
-  const yyyy = now.getFullYear();
-  const hh = String(now.getHours()).padStart(2,'0');
-  const min = String(now.getMinutes()).padStart(2,'0');
-  const timeStr = `${dd}/${mm}/${yyyy} ${hh}:${min}`;
   const actionLabel = action === 'open' ? 'open' : 'close';
 
-  // ── Lock صارم: أول استدعاء يأخذ الـ lock والباقي يُتجاهل ──
-  if (!inst.history) inst.history = [];
+  // ── المنطق الجوهري ──
+  // إذا لم نعرف الحالة السابقة → هذا أول polling → نحفظ فقط بدون إشعار
+  if (_lastKnownDoorState[door.id] === undefined) {
+    _lastKnownDoorState[door.id] = actionLabel;
+    return; // لا إشعار عند فتح التطبيق
+  }
 
-  // تحقق من السجل الأخير أولاً
+  // إذا لم تتغير الحالة → لا إشعار
+  if (_lastKnownDoorState[door.id] === actionLabel) return;
+
+  // الحالة تغيرت فعلاً → سجّل وأرسل إشعار
+  _lastKnownDoorState[door.id] = actionLabel;
+
+  // Lock لمنع التكرار من pfx متعدد
+  const _lockKey = `rc_lock_${door.id}_${actionLabel}`;
+  if (window[_lockKey]) return;
+  window[_lockKey] = true;
+  setTimeout(() => { window[_lockKey] = false; }, 15000);
+
+  const now = new Date();
+  const timeStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  if (!inst.history) inst.history = [];
   const last = inst.history[0];
   if (last && last.door === door.name && last.action === actionLabel && last.time === timeStr) return;
 
-  // Lock بالميلي ثانية — يمنع أي استدعاء ثانٍ حتى لو جاء بعد 1ms
-  const _lockKey = `rc_lock_${door.id}_${actionLabel}`;
-  if (window[_lockKey] === true) return; // مقفل — تجاهل
-  window[_lockKey] = true; // اقفل فوراً
-  // أطلق الـ lock بعد 15 ثانية للسماح بحدث جديد
-  setTimeout(() => { window[_lockKey] = false; }, 15000);
-
   inst.history.unshift({
-    id: 'h' + Date.now(),
-    uid: 'rc',
-    uname: 'جهاز تحكم',
-    via: 'rc',
-    door: door.name,
-    action: actionLabel,
-    time: timeStr
+    id: 'h' + Date.now(), uid: 'rc', uname: 'جهاز تحكم',
+    via: 'rc', door: door.name, action: actionLabel, time: timeStr
   });
   saveInst(inst);
   notifyRcEvent(inst, door, actionLabel);
@@ -2837,12 +2833,8 @@ function startDoorPolling(door, pfx) {
     return;
   }
 
-  // اقرأ الحالة فوراً عند البدء — لكن فقط لتهيئة الـ state بدون إشعار
-  _initializingDoors.add(door.id + '_' + pfx);
-  fetchDoorStatus(door, pfx).finally(() => {
-    setTimeout(() => _initializingDoors.delete(door.id + '_' + pfx), 2000);
-  });
-
+  // اقرأ الحالة فوراً عند البدء لتهيئة الـ state
+  fetchDoorStatus(door, pfx);
   _pollIntervals[key] = setInterval(() => fetchDoorStatus(door, pfx), 5000);
 }
 
