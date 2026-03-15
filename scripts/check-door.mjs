@@ -7,7 +7,6 @@ const SECRET     = process.env.TUYA_SECRET;
 const DEVICE_ID  = process.env.TUYA_DEVICE_ID;
 const BASE_URL   = 'https://openapi.tuyaeu.com';
 
-// ── 1. الحصول على Access Token من Tuya ──
 async function getToken() {
   const t    = Date.now().toString();
   const sign = crypto.createHmac('sha256', SECRET)
@@ -21,7 +20,6 @@ async function getToken() {
   return data.result.access_token;
 }
 
-// ── 2. جلب سجلات الجهاز من آخر دقيقتين ──
 async function getDeviceLogs(token) {
   const t         = Date.now().toString();
   const endTime   = Date.now();
@@ -45,7 +43,6 @@ async function getDeviceLogs(token) {
   return res.json();
 }
 
-// ── 3. إرسال إشعار Push لكل المشتركين ──
 async function sendNotifications(title, body) {
   webpush.setVapidDetails(
     'mailto:admin@example.com',
@@ -74,7 +71,6 @@ async function sendNotifications(title, body) {
   }
 }
 
-// ── 4. المنطق الرئيسي ──
 const token = await getToken();
 const logs  = await getDeviceLogs(token);
 
@@ -82,7 +78,6 @@ console.log('Raw logs:', JSON.stringify(logs, null, 2));
 
 const events = logs.result?.logs || [];
 
-// type=1 = حدث جاء من الجهاز نفسه (RC أو زر يدوي)
 if (events.length > 0) {
   const last   = events[events.length - 1];
   const isOpen = last.value === 'true' || last.value === 'open' || last.value === '1';
