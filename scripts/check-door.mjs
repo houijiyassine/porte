@@ -5,45 +5,50 @@ import { createClient } from '@supabase/supabase-js';
 const CLIENT_ID = process.env.TUYA_CLIENT;
 const SECRET    = process.env.TUYA_SECRET;
 const DEVICE_ID = process.env.TUYA_DEVICE_ID;
+const BASE_URL  = 'https://openapi.tuyaeu.com';
 
-const REGIONS = [
-  'https://openapi.tuyaeu.com',
-  'https://openapi.tuyaus.com',
-  'https://openapi.tuyacn.com',
-];
-
-async function getToken(baseUrl) {
-  const t    = Date.now().toString();
-  const sign = crypto.createHmac('sha256', SECRET)
-    .update(CLIENT_ID + t)
-    .digest('hex').toUpperCase();
-
-  const res  = await fetch(`${baseUrl}/v1.0/token?grant_type=1`, {
-    headers: { client_id: CLIENT_ID, sign, t, sign_method: 'HMAC-SHA256' }
-  });
-  const data = await res.json();
-  console.log(`[${baseUrl}] token response:`, JSON.stringify(data));
-  if (!data.result?.access_token) return null;
-  return { token: data.result.access_token, baseUrl };
+function calcSign(clientId, secret, timestamp, accessToken = '') {
+  const str = clientId + accessToken + timestamp;
+  return crypto.createHmac('sha256', secret)
+    .update(str)
+    .digest('hex')
+    .toUpperCase();
 }
 
-async function getDeviceLogs(baseUrl, token) {
+async function getToken() {
+  const t    = Date.now().toString();
+  const sign = calcSign(CLIENT_ID, SECRET, t);
+
+  const res  = await fetch(`${BASE_URL}/v1.0/token?grant_type=1`, {
+    headers: {
+      client_id:   CLIENT_ID,
+      sign:        sign,
+      t:           t,
+      sign_method: 'HMAC-SHA256',
+      nonce:       '',
+    }
+  });
+  const data = await res.json();
+  console.log('Token response:', JSON.stringify(data));
+  return data.result?.access_token;
+}
+
+async function getDeviceLogs(token) {
   const t         = Date.now().toString();
   const endTime   = Date.now();
   const startTime = endTime - 2 * 60 * 1000;
-
-  const sign = crypto.createHmac('sha256', SECRET)
-    .update(CLIENT_ID + token + t)
-    .digest('hex').toUpperCase();
+  const sign      = calcSign(CLIENT_ID, SECRET, t, token);
 
   const res = await fetch(
-    `${baseUrl}/v1.0/devices/${DEVICE_ID}/logs?type=1&start_time=${startTime}&end_time=${endTime}`,
+    `${BASE_URL}/v1.0/devices/${DEVICE_ID}/logs?type=1&start_time=${startTime}&end_time=${endTime}`,
     {
       headers: {
-        client_id: CLIENT_ID,
+        client_id:    CLIENT_ID,
         access_token: token,
-        sign, t,
-        sign_method: 'HMAC-SHA256'
+        sign:         sign,
+        t:            t,
+        sign_method:  'HMAC-SHA256',
+        nonce:        '',
       }
     }
   );
@@ -78,22 +83,16 @@ async function sendNotifications(title, body) {
   }
 }
 
-// جرب كل المناطق حتى تنجح
-let result = null;
-for (const region of REGIONS) {
-  result = await getToken(region);
-  if (result) break;
-}
+const token = await getToken();
 
-if (!result) {
-  console.error('❌ فشل الحصول على token من جميع المناطق');
+if (!token) {
+  console.error('❌ فشل الحصول على token');
   process.exit(1);
 }
 
-const { token, baseUrl } = result;
-console.log('✅ Token من:', baseUrl);
+console.log('✅ Token OK');
 
-const logs   = await getDeviceLogs(baseUrl, token);
+const logs   = await getDeviceLogs(token);
 console.log('Raw logs:', JSON.stringify(logs, null, 2));
 
 const events = logs.result?.logs || [];
