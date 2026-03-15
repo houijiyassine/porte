@@ -1,29 +1,20 @@
-// /api/rc-check.js
-// Cron Job: يعمل كل دقيقة — يتحقق من حالة الأبواب ويرسل Push إذا تغيرت
 const crypto = require('crypto');
 const webpush = require('web-push');
 
-// ── Tuya ──
 const CLIENT_ID = '59gmr8xdf3m5vdt55c89';
 const SECRET    = 'f551321a6229419098b3c40728460bdd';
 const BASE      = 'https://openapi.tuyaeu.com';
 
-// ── Supabase ──
 const SB_URL = 'https://sjfaootvlxesdytdsknc.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZmFvb3R2bHhlc2R5dGRza25jIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzE4MDI1NywiZXhwIjoyMDg4NzU2MjU3fQ.R_0KS6U0VUKfFheCxJ5rmKY9vo7UkVkSx2lFwLjGvFI';
 
-// ── VAPID ──
 const VAPID_PUBLIC  = 'BOfIw6laarxGfV8Ezc04YzfCzq4Njm7ewizkfnGDIWJGpsfHkqUHVG8SXGb8cJZJxOTIzFeauX4K0Z8oYdfgKTw';
 const VAPID_PRIVATE = 'uG-xpdUzkxefHzbUD-YDtT6Ut0oz1tq0EjUX0UVWyBI';
 webpush.setVapidDetails('mailto:admin@door-system.com', VAPID_PUBLIC, VAPID_PRIVATE);
 
-// ── Tuya helpers ──
-function sign(str) {
-  return crypto.createHmac('sha256', SECRET).update(str).digest('hex').toUpperCase();
-}
-function sha256(str) {
-  return crypto.createHash('sha256').update(str).digest('hex');
-}
+function sign(str) { return crypto.createHmac('sha256', SECRET).update(str).digest('hex').toUpperCase(); }
+function sha256(str) { return crypto.createHash('sha256').update(str).digest('hex'); }
+
 async function getToken() {
   const t = Date.now().toString();
   const url = '/v1.0/token?grant_type=1';
@@ -35,6 +26,7 @@ async function getToken() {
   if (!data.success) throw new Error('Token failed');
   return data.result?.access_token;
 }
+
 async function getDoorState(devId, tok) {
   const t = Date.now().toString();
   const url = `/v1.0/iot-03/devices/${devId}/status`;
@@ -51,101 +43,91 @@ async function getDoorState(devId, tok) {
   return 'stopped';
 }
 
-// ── Supabase helpers ──
-async function sbGet(table, query = '') {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, {
+async function sbGet(path) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
     headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }
   });
   return r.json();
 }
-async function sbPatch(table, query, body) {
-  await fetch(`${SB_URL}/rest/v1/${table}?${query}`, {
+
+async function sbPatch(table, id, body) {
+  await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, {
     method: 'PATCH',
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    headers: {
+      apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`,
+      'Content-Type': 'application/json', Prefer: 'return=minimal'
+    },
     body: JSON.stringify(body)
   });
 }
 
 module.exports = async function handler(req, res) {
-  // السماح بالاستدعاء من Vercel Cron أو يدوياً
-  const authHeader = req.headers.authorization;
-  const cronSecret = process.env.CRON_SECRET || 'rc-cron-2024';
-  if (req.method !== 'GET') return res.status(405).end();
-  if (authHeader !== `Bearer ${cronSecret}`) return res.status(401).json({ error: 'Unauthorized' });
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    // 1. جلب جميع المؤسسات من Supabase
-    const institutes = await sbGet('institutes', 'select=id,name,doors,rc_door_states');
-    if (!Array.isArray(institutes)) return res.status(200).json({ ok: false, msg: 'No institutes' });
+    const [institutes, users] = await Promise.all([
+      sbGet('institutes?select=id,name,doors,rc_door_states'),
+      sbGet('users?select=id,name,role,inst_id,push_sub')
+    ]);
 
-    // 2. جلب المستخدمين (admin فقط مع push_sub)
-    const users = await sbGet('users', 'select=id,name,role,inst_id,push_sub');
-    if (!Array.isArray(users)) return res.status(200).json({ ok: false, msg: 'No users' });
+    if (!Array.isArray(institutes) || !Array.isArray(users)) {
+      return res.status(200).json({ ok: false, msg: 'DB error' });
+    }
 
-    // 3. الحصول على Tuya token
     const tok = await getToken();
+    let totalNotif = 0;
 
-    let totalNotifications = 0;
-
-    // 4. لكل مؤسسة — لكل باب له devId
     for (const inst of institutes) {
-      const doors = inst.doors || [];
-      const prevStates = inst.rc_door_states || {}; // آخر حالة محفوظة لكل باب
+      const doors = Array.isArray(inst.doors) ? inst.doors : [];
+      const prevStates = inst.rc_door_states || {};
       const newStates = { ...prevStates };
-      let statesChanged = false;
+      let changed = false;
 
       for (const door of doors) {
         if (!door.devId) continue;
 
-        // اقرأ الحالة من Tuya
-        const currentState = await getDoorState(door.devId, tok);
-        if (!currentState || currentState === 'stopped') continue;
+        const state = await getDoorState(door.devId, tok);
+        if (!state || state === 'stopped') continue;
 
-        const prevState = prevStates[door.id];
+        const prev = prevStates[door.id];
 
-        // إذا لم نكن نعرف الحالة السابقة — سجّلها فقط بدون إشعار
-        if (!prevState) {
-          newStates[door.id] = currentState;
-          statesChanged = true;
+        if (prev === undefined) {
+          // أول مرة — سجّل الحالة بدون إشعار
+          newStates[door.id] = state;
+          changed = true;
           continue;
         }
 
-        // إذا تغيرت الحالة — أرسل إشعار
-        if (currentState !== prevState) {
-          newStates[door.id] = currentState;
-          statesChanged = true;
+        if (state === prev) continue; // لم تتغير
 
-          // جهّز الإشعار
-          const title = `🚪 ${currentState === 'open' ? 'فتح' : 'غلق'} الباب`;
-          const body  = `${door.name} — ${currentState === 'open' ? 'تم الفتح' : 'تم الغلق'} عبر جهاز التحكم`;
-          const payload = JSON.stringify({ title, body, tag: `rc-${door.id}-${Date.now()}`, url: '/' });
+        // تغيّرت! → أرسل إشعار
+        newStates[door.id] = state;
+        changed = true;
 
-          // أرسل لكل admin في هذه المؤسسة
-          const targets = users.filter(u =>
-            u.role === 'admin' &&
-            u.inst_id === inst.id &&
-            u.push_sub
-          );
+        const title = `🚪 ${state === 'open' ? 'فتح' : 'غلق'} الباب`;
+        const body  = `${door.name} — ${state === 'open' ? 'تم الفتح' : 'تم الغلق'} عبر جهاز التحكم`;
+        const payload = JSON.stringify({ title, body, tag: `rc-${door.id}`, url: '/' });
 
-          for (const u of targets) {
-            try {
-              const sub = typeof u.push_sub === 'string' ? JSON.parse(u.push_sub) : u.push_sub;
-              await webpush.sendNotification(sub, payload);
-              totalNotifications++;
-            } catch(e) {
-              console.warn(`Push failed for ${u.name}:`, e.message);
-            }
+        const targets = users.filter(u =>
+          u.role === 'admin' && u.inst_id === inst.id && u.push_sub
+        );
+
+        for (const u of targets) {
+          try {
+            const sub = typeof u.push_sub === 'string' ? JSON.parse(u.push_sub) : u.push_sub;
+            await webpush.sendNotification(sub, payload);
+            totalNotif++;
+          } catch(e) {
+            console.warn(`Push failed for ${u.name}:`, e.message);
           }
         }
       }
 
-      // 5. احفظ الحالات الجديدة في Supabase
-      if (statesChanged) {
-        await sbPatch('institutes', `id=eq.${inst.id}`, { rc_door_states: newStates });
-      }
+      if (changed) await sbPatch('institutes', inst.id, { rc_door_states: newStates });
     }
 
-    return res.status(200).json({ ok: true, notifications: totalNotifications, time: new Date().toISOString() });
+    return res.status(200).json({ ok: true, notifications: totalNotif });
 
   } catch(e) {
     console.error('rc-check error:', e);
