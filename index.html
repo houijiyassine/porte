@@ -2714,22 +2714,23 @@ async function fetchDoorStatus(door, pfx) {
     const uid = `${pfx}-${door.id}`;
     const currentState = doorStates[uid];
 
-    // تحديث حالة الباب — لا نتجاوز stopped إلا إذا تغيرت الحالة فعلاً
+    // ── الإشعار و السجل: من pfx='u' فقط (مصدر واحد) ──
+    const shouldLog = (pfx === 'u');
+
     if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'open');
-      rcLogHistory(door, 'open', pfx);
+      if(shouldLog) rcLogHistory(door, 'open', pfx);
     } else if ((d.doorState === 'close' || d.doorState === 'closed') && currentState !== 'closed' && currentState !== 'closing' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'closed');
-      rcLogHistory(door, 'close', pfx);
+      if(shouldLog) rcLogHistory(door, 'close', pfx);
     } else if (d.doorState === 'stopped' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'stopped');
     } else if (d.doorState === 'open' && currentState === 'stopped') {
-      // RC فتح بعد stop — نحدث
       animateDoor(door.id, pfx, 'open');
-      rcLogHistory(door, 'open', pfx);
+      if(shouldLog) rcLogHistory(door, 'open', pfx);
     } else if ((d.doorState === 'close' || d.doorState === 'closed') && currentState === 'stopped') {
       animateDoor(door.id, pfx, 'closed');
-      rcLogHistory(door, 'close', pfx);
+      if(shouldLog) rcLogHistory(door, 'close', pfx);
     }
 
     // تحديث شارة online/offline
@@ -3001,7 +3002,15 @@ function renderAdminDoors(inst){
       </div>
     </div>`).join('');
   // ابدأ الـ polling لكل باب (RC sync)
-  inst.doors.forEach(d=>{ if(d.devId) stopDoorPolling(d.id,'a'); startDoorPolling(d,'a'); });
+  inst.doors.forEach(d=>{
+    if(d.devId){
+      stopDoorPolling(d.id,'a');
+      startDoorPolling(d,'a');
+      // polling إضافي بـ pfx='u' للإشعارات فقط (مصدر واحد للسجل)
+      stopDoorPolling(d.id,'u');
+      startDoorPolling(d,'u');
+    }
+  });
 }
 
 function buildSlidingDoorIcon(){
@@ -3912,7 +3921,15 @@ function renderInsts(){
     </div>`;
   }).join('')||`<p class="empty">لا توجد مؤسسات</p>`;
   // ابدأ polling للأبواب في super admin
-  A.db.institutes.forEach(inst=>inst.doors.forEach(d=>{ if(d.devId) { stopDoorPolling(d.id,'sp'); startDoorPolling(d,'sp'); } }));
+  A.db.institutes.forEach(inst=>inst.doors.forEach(d=>{
+    if(d.devId){
+      stopDoorPolling(d.id,'sp');
+      startDoorPolling(d,'sp');
+      // polling بـ pfx='u' للإشعارات فقط
+      stopDoorPolling(d.id,'u');
+      startDoorPolling(d,'u');
+    }
+  }));
 }
 
 function spOpenAddDoor(instId){
