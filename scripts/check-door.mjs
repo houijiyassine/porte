@@ -2,25 +2,32 @@ import crypto from 'crypto';
 import webpush from 'web-push';
 import { createClient } from '@supabase/supabase-js';
 
-const CLIENT_ID  = process.env.TUYA_CLIENT;
-const SECRET     = process.env.TUYA_SECRET;
-const DEVICE_ID  = process.env.TUYA_DEVICE_ID;
-const BASE_URL   = 'https://openapi.tuyaeu.com';
+const CLIENT_ID = process.env.TUYA_CLIENT;
+const SECRET    = process.env.TUYA_SECRET;
+const DEVICE_ID = process.env.TUYA_DEVICE_ID;
 
-async function getToken() {
+const REGIONS = [
+  'https://openapi.tuyaeu.com',
+  'https://openapi.tuyaus.com',
+  'https://openapi.tuyacn.com',
+];
+
+async function getToken(baseUrl) {
   const t    = Date.now().toString();
   const sign = crypto.createHmac('sha256', SECRET)
     .update(CLIENT_ID + t)
     .digest('hex').toUpperCase();
 
-  const res  = await fetch(`${BASE_URL}/v1.0/token?grant_type=1`, {
+  const res  = await fetch(`${baseUrl}/v1.0/token?grant_type=1`, {
     headers: { client_id: CLIENT_ID, sign, t, sign_method: 'HMAC-SHA256' }
   });
   const data = await res.json();
-  return data.result.access_token;
+  console.log(`[${baseUrl}] token response:`, JSON.stringify(data));
+  if (!data.result?.access_token) return null;
+  return { token: data.result.access_token, baseUrl };
 }
 
-async function getDeviceLogs(token) {
+async function getDeviceLogs(baseUrl, token) {
   const t         = Date.now().toString();
   const endTime   = Date.now();
   const startTime = endTime - 2 * 60 * 1000;
@@ -30,7 +37,7 @@ async function getDeviceLogs(token) {
     .digest('hex').toUpperCase();
 
   const res = await fetch(
-    `${BASE_URL}/v1.0/devices/${DEVICE_ID}/logs?type=1&start_time=${startTime}&end_time=${endTime}`,
+    `${baseUrl}/v1.0/devices/${DEVICE_ID}/logs?type=1&start_time=${startTime}&end_time=${endTime}`,
     {
       headers: {
         client_id: CLIENT_ID,
@@ -71,9 +78,22 @@ async function sendNotifications(title, body) {
   }
 }
 
-const token = await getToken();
-const logs  = await getDeviceLogs(token);
+// جرب كل المناطق حتى تنجح
+let result = null;
+for (const region of REGIONS) {
+  result = await getToken(region);
+  if (result) break;
+}
 
+if (!result) {
+  console.error('❌ فشل الحصول على token من جميع المناطق');
+  process.exit(1);
+}
+
+const { token, baseUrl } = result;
+console.log('✅ Token من:', baseUrl);
+
+const logs   = await getDeviceLogs(baseUrl, token);
 console.log('Raw logs:', JSON.stringify(logs, null, 2));
 
 const events = logs.result?.logs || [];
