@@ -1,0 +1,13 @@
+name: RC Door Check
+on:
+  schedule:
+    - cron: '* * * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check RC Door State
+        run: |
+          curl -X GET https://project-xb9ro.vercel.app/api/rc-check
