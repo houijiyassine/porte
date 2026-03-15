@@ -14,69 +14,61 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { inst_id, user_name, custom_title, custom_body, target_user_id } = req.body || {};
-  console.log('Push request: inst_id=', inst_id, 'user=', user_name, 'target=', target_user_id);
+  const { inst_id, user_name, custom_title, custom_body, target_user_id, rc_door_id } = req.body || {};
 
   try {
     const r = await fetch(`${SB_URL}/rest/v1/users?select=id,name,role,inst_id,push_sub`, {
       headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }
     });
     const all = await r.json();
-
-    if (!Array.isArray(all)) {
-      return res.status(200).json({ success: false, msg: 'supabase error', raw: all });
-    }
+    if (!Array.isArray(all)) return res.status(200).json({ success: false, msg: 'supabase error' });
 
     let targets = [];
 
     if (target_user_id) {
-      // إشعار لمستخدم محدد (قبول الطلب، RC)
+      // إشعار لمستخدم محدد (قبول الطلب)
       targets = all.filter(u => u.id === target_user_id && u.push_sub);
+
+    } else if (rc_door_id) {
+      // إشعار RC — للمسؤول (admin) فقط، ليس السوبر أدمين
+      targets = all.filter(u =>
+        u.push_sub &&
+        u.role === 'admin' &&
+        u.inst_id === inst_id
+      );
+
     } else if (inst_id) {
-      // إشعار لمديري المؤسسة + سوبر أدمين (تسجيل جديد)
+      // إشعار تسجيل جديد — للمسؤول + السوبر أدمين
       targets = all.filter(u =>
         u.push_sub &&
         ((u.role === 'admin' && u.inst_id === inst_id) || u.role === 'super')
       );
+
     } else {
-      return res.status(400).json({ error: 'Missing inst_id or target_user_id' });
+      return res.status(400).json({ error: 'Missing parameters' });
     }
 
-    console.log('Targets:', targets.length, targets.map(u => u.name));
-
-    if (targets.length === 0) {
-      return res.status(200).json({ success: true, sent: 0, total: 0 });
-    }
+    if (targets.length === 0) return res.status(200).json({ success: true, sent: 0, total: 0 });
 
     const title = custom_title || '👤 طلب تسجيل جديد';
     const body  = custom_body  || `${user_name || 'مستخدم جديد'} يطلب الانضمام`;
 
-    const payload = JSON.stringify({
-      title,
-      body,
-      tag: 'notif-' + Date.now(),
-      url: '/'
-    });
+    const payload = JSON.stringify({ title, body, tag: 'notif-' + Date.now(), url: '/' });
 
     const results = await Promise.allSettled(
       targets.map(u => {
         try {
           const sub = typeof u.push_sub === 'string' ? JSON.parse(u.push_sub) : u.push_sub;
           return webpush.sendNotification(sub, payload);
-        } catch(e) {
-          return Promise.reject(e);
-        }
+        } catch(e) { return Promise.reject(e); }
       })
     );
 
     const sent   = results.filter(r => r.status === 'fulfilled').length;
     const errors = results.filter(r => r.status === 'rejected').map(r => r.reason?.message);
-    console.log('Sent:', sent, '/', targets.length, errors);
-
     return res.status(200).json({ success: true, sent, total: targets.length, errors });
 
   } catch(e) {
-    console.error('Push error:', e);
     return res.status(500).json({ success: false, error: e.message });
   }
 };
