@@ -2923,6 +2923,25 @@ function renderAdminDoors(inst){
           ⏰ جدول الباب
         </button>
       </div>
+      <!-- شرط التواجد أمام الباب -->
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.65rem .75rem;margin-top:.5rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem">
+          <div style="font-size:.78rem;font-weight:700;color:var(--text)">📍 شرط التواجد أمام الباب</div>
+          <label class="mini-tog">
+            <input type="checkbox" id="gps-users-admin-${d.id}" ${d.gpsForUsers!==false?'checked':''} onchange="toggleDoorGps('${d.id}','${inst.id}','users',this.checked)">
+            <span class="mini-tog-sl"></span>
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <button onclick="adjAdminDoorGps(-1,'${d.id}','${inst.id}')" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);color:var(--danger);font-size:1.1rem;font-weight:900;cursor:pointer;flex-shrink:0">−</button>
+          <div style="flex:1;background:var(--bg);border-radius:8px;padding:.35rem .5rem;text-align:center">
+            <span id="adgps-n-${d.id}" style="font-size:1.1rem;font-weight:900;color:var(--accent)">${d.gps||30}</span>
+            <span style="font-size:.72rem;color:var(--text2)"> م</span>
+          </div>
+          <button onclick="adjAdminDoorGps(1,'${d.id}','${inst.id}')" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(16,185,129,.3);background:rgba(16,185,129,.1);color:var(--success);font-size:1.1rem;font-weight:900;cursor:pointer;flex-shrink:0">+</button>
+          <button onclick="saveAdminDoorGps('${d.id}','${inst.id}')" style="padding:.35rem .65rem;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:Cairo,sans-serif;font-size:.75rem;font-weight:700;cursor:pointer">💾</button>
+        </div>
+      </div>
       <!-- RC Notification toggle -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .75rem;background:var(--surface2);border-radius:10px;margin-top:.5rem;border:1px solid var(--border)">
         <div>
@@ -3673,6 +3692,23 @@ async function saveDoorSchedule(){
   await saveInst(inst);
   closeModal('m-door-sch');
   toast(`✅ تم حفظ جدول ${door.name}`,'success');
+}
+
+function adjAdminDoorGps(dir, doorId, instId){
+  const numEl = document.getElementById(`adgps-n-${doorId}`);
+  if(!numEl) return;
+  const cur = parseInt(numEl.textContent) || 30;
+  numEl.textContent = Math.max(5, Math.min(500, cur + dir));
+}
+
+async function saveAdminDoorGps(doorId, instId){
+  const inst = getInst(instId) || myInst();
+  const door = inst?.doors?.find(d => d.id === doorId);
+  if(!door) return;
+  const numEl = document.getElementById(`adgps-n-${doorId}`);
+  door.gps = parseInt(numEl?.textContent) || 30;
+  await saveInst(inst);
+  toast(`✅ نطاق ${door.name}: ${door.gps}م`, 'success');
 }
 
 function getRcNotifSetting(doorId){
