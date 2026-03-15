@@ -2589,6 +2589,13 @@ async function ctrlDoor(doorId,instId,action,pfx){
     showTuyaError('لا يوجد Device ID', 'اذهب للاعدادات واضف Device ID للباب: '+door.name);
     return;
   }
+  // تحقق من الاتصال بالإنترنت قبل الإرسال
+  if(!navigator.onLine){
+    animateDoor(doorId,pfx,'closed');
+    toast('❌ لا يوجد اتصال بالإنترنت','error');
+    setTimeout(()=>btns.forEach(b=>b&&(b.disabled=false)),500);
+    return;
+  }
   try{
     await tuyaCmd(door.devId,action);
     if(action==='open') setTimeout(()=>animateDoor(doorId,pfx,'open'),1300);
@@ -2600,8 +2607,10 @@ async function ctrlDoor(doorId,instId,action,pfx){
     if(action==='open') animateDoor(doorId,pfx,'closed');
     else if(action==='close') animateDoor(doorId,pfx,'open');
     else if(action==='stop') { /* keep visual as-is on error */ }
-    showTuyaError('فشل التحكم بالباب', e.message||'خطأ غير معروف');
-    toast(`فشل في ${lbl[action]} الباب`,'error');
+    if(e.message !== 'timeout'){
+      showTuyaError('فشل التحكم بالباب', e.message||'خطأ غير معروف');
+    }
+    toast(`❌ فشل في ${lbl[action]} الباب — تحقق من الاتصال`,'error');
   }
   setTimeout(()=>btns.forEach(b=>b&&(b.disabled=false)),2000);
 }
@@ -2652,15 +2661,26 @@ function resetAutoBtn(doorId,pfx){
 async function tuyaCmd(devId, action){
   if(!devId){ await new Promise(r=>setTimeout(r,700)); return; }
 
+  // AbortController: إلغاء الطلب إذا استغرق أكثر من 8 ثوانٍ
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
   let d;
   try {
     const r = await fetch('/api/tuya', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ devId, action })
+      body: JSON.stringify({ devId, action }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     d = await r.json();
   } catch(e) {
+    clearTimeout(timeoutId);
+    if(e.name === 'AbortError'){
+      showTuyaError('⏱️ انتهت مهلة الاتصال', 'تحقق من الإنترنت وحاول مجدداً');
+      throw new Error('timeout');
+    }
     showTuyaError('❌ فشل الاتصال بالخادم', e.message);
     throw e;
   }
@@ -2696,7 +2716,7 @@ async function fetchDoorStatus(door, pfx) {
     if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'open');
       rcLogHistory(door, 'open');
-    } else if (d.doorState === 'close' && currentState !== 'closed' && currentState !== 'closing' && currentState !== 'stopped') {
+    } else if ((d.doorState === 'close' || d.doorState === 'closed') && currentState !== 'closed' && currentState !== 'closing' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'closed');
       rcLogHistory(door, 'close');
     } else if (d.doorState === 'stopped' && currentState !== 'stopped') {
@@ -2705,8 +2725,7 @@ async function fetchDoorStatus(door, pfx) {
       // RC فتح بعد stop — نحدث
       animateDoor(door.id, pfx, 'open');
       rcLogHistory(door, 'open');
-    } else if (d.doorState === 'close' && currentState === 'stopped') {
-      // RC أغلق بعد stop — نحدث
+    } else if ((d.doorState === 'close' || d.doorState === 'closed') && currentState === 'stopped') {
       animateDoor(door.id, pfx, 'closed');
       rcLogHistory(door, 'close');
     }
@@ -2752,8 +2771,12 @@ function rcLogHistory(door, action) {
     time: timeStr
   });
   saveInst(inst);
-  // إرسال push إذا مفعّل للمسؤول/سوبر
-  notifyRcEvent(inst, door, actionLabel);
+  // إرسال push مرة واحدة فقط — نتجنب الإرسال المتكرر من polling متعدد
+  const _notifKey = `rc_notif_sent_${door.id}_${actionLabel}_${timeStr}`;
+  if(!sessionStorage.getItem(_notifKey)){
+    sessionStorage.setItem(_notifKey, '1');
+    notifyRcEvent(inst, door, actionLabel);
+  }
 }
 
 async function notifyRcEvent(inst, door, action){
