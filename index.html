@@ -2773,11 +2773,13 @@ function rcLogHistory(door, action) {
   });
   saveInst(inst);
   // إرسال push مرة واحدة فقط — نتجنب الإرسال المتكرر من polling متعدد
-  // إرسال إشعار RC — مع منع التكرار خلال 30 ثانية
-  const _notifKey = `rc_last_${door.id}_${actionLabel}`;
-  const _lastTime = parseInt(sessionStorage.getItem(_notifKey)||'0');
-  if(Date.now() - _lastTime > 30000){
-    sessionStorage.setItem(_notifKey, Date.now().toString());
+  // إرسال إشعار RC — lock عالمي لمنع التكرار من polling متعدد
+  // المفتاح يشمل door.id + action + الدقيقة الحالية فقط (بدون pfx)
+  const _notifMinute = new Date().toISOString().slice(0,16); // yyyy-mm-ddThh:mm
+  const _notifKey = `rc_notif_${door.id}_${actionLabel}_${_notifMinute}`;
+  if(!window[_notifKey]){
+    window[_notifKey] = true;
+    setTimeout(()=>{ delete window[_notifKey]; }, 60000); // ينتهي بعد دقيقة
     notifyRcEvent(inst, door, actionLabel);
   }
 }
