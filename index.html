@@ -2790,7 +2790,9 @@ function rcLogHistory(door, action, pfx) {
 }
 
 async function notifyRcEvent(inst, door, action){
-  // إرسال طلب واحد فقط — push.js يتولى توزيعه على المستحقين
+  // تحقق من إعداد toggle الـ RC للمستخدم الحالي
+  if(!getRcNotifSetting(door.id)) return;
+
   try {
     await fetch('/api/push', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -2798,7 +2800,7 @@ async function notifyRcEvent(inst, door, action){
         inst_id: inst.id,
         custom_title: `🚪 ${action==='open'?'فتح':'غلق'} الباب`,
         custom_body: `${door.name} — ${action==='open'?'تم الفتح':'تم الغلق'} عبر جهاز التحكم`,
-        rc_door_id: door.id  // push.js سيتحقق من إعداد RC لكل user
+        rc_door_id: door.id
       })
     }).catch(()=>{});
   } catch(e){}
