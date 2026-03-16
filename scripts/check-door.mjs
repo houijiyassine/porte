@@ -40,6 +40,16 @@ async function getDeviceStatus(token) {
   return res.json();
 }
 
+async function getDeviceInfo(token) {
+  const t = Date.now().toString();
+  const path = '/v1.0/devices/' + DEVICE_ID;
+  const sign = getSign(CLIENT_ID, SECRET, t, token, 'GET', path);
+  const res = await fetch(BASE_URL + path, {
+    headers: { client_id: CLIENT_ID, access_token: token, sign, t, sign_method: 'HMAC-SHA256' }
+  });
+  return res.json();
+}
+
 async function sendNotifications(title, body) {
   webpush.setVapidDetails(
     'mailto:admin@example.com',
@@ -67,7 +77,6 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// احصل على token مرة واحدة
 const token = await getToken();
 if (!token) {
   console.error('فشل الحصول على token');
@@ -75,7 +84,6 @@ if (!token) {
 }
 console.log('Token OK');
 
-// اقرأ الحالة السابقة من Supabase
 const { data: prevData } = await supabase
   .from('door_state')
   .select('value, source')
@@ -86,8 +94,17 @@ let prevValue = prevData && prevData.length > 0 ? prevData[0].value : null;
 let prevSource = prevData && prevData.length > 0 ? prevData[0].source : null;
 console.log('Initial state:', prevValue, '| source:', prevSource);
 
-// loop كل 5 ثوانٍ لمدة 55 ثانية = 11 فحص
 for (let i = 0; i < 11; i++) {
+  // تحقق من online أولاً
+  const devInfo = await getDeviceInfo(token);
+  const isOnline = devInfo?.result?.online === true;
+
+  if (!isOnline) {
+    console.log(`[${i+1}/11] الجهاز offline — تخطي`);
+    if (i < 10) await sleep(5000);
+    continue;
+  }
+
   const statusData = await getDeviceStatus(token);
   const result = statusData.result || [];
   const switch1 = result.find(r => r.code === 'switch_1');
