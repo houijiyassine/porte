@@ -51,57 +51,66 @@ async function sendNotifications(title, body) {
     .select('push_sub')
     .not('push_sub', 'is', null);
   const rows = result.data || [];
-  console.log('Users with push_sub:', rows.length);
   for (const row of rows) {
     try {
       const subscription = typeof row.push_sub === 'string'
         ? JSON.parse(row.push_sub)
         : row.push_sub;
       await webpush.sendNotification(subscription, JSON.stringify({ title, body }));
-      console.log('Push sent OK');
     } catch (e) {
       console.error('Push failed:', e.message);
     }
   }
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// احصل على token مرة واحدة
 const token = await getToken();
 if (!token) {
   console.error('فشل الحصول على token');
   process.exit(1);
 }
+console.log('Token OK');
 
-const statusData = await getDeviceStatus(token);
-const result = statusData.result || [];
-
-const switch1 = result.find(r => r.code === 'switch_1');
-const currentValue = String(switch1 ? switch1.value : 'unknown');
-console.log('switch_1 current:', currentValue);
-
+// اقرأ الحالة السابقة من Supabase
 const { data: prevData } = await supabase
   .from('door_state')
   .select('value, source')
   .order('created_at', { ascending: false })
   .limit(1);
 
-const prevValue = prevData && prevData.length > 0 ? prevData[0].value : null;
-const prevSource = prevData && prevData.length > 0 ? prevData[0].source : null;
-console.log('previous value:', prevValue, '| source:', prevSource);
+let prevValue = prevData && prevData.length > 0 ? prevData[0].value : null;
+let prevSource = prevData && prevData.length > 0 ? prevData[0].source : null;
+console.log('Initial state:', prevValue, '| source:', prevSource);
 
-if (prevValue === null || prevValue !== currentValue) {
-  console.log('تغيرت الحالة!');
+// loop كل 5 ثوانٍ لمدة 55 ثانية = 11 فحص
+for (let i = 0; i < 11; i++) {
+  const statusData = await getDeviceStatus(token);
+  const result = statusData.result || [];
+  const switch1 = result.find(r => r.code === 'switch_1');
+  const currentValue = String(switch1 ? switch1.value : 'unknown');
 
-  if (prevSource === 'app') {
-    console.log('التغيير كان عبر التطبيق — لا إشعار');
-    await supabase.from('door_state').insert({ value: currentValue, source: 'app' });
-  } else {
-    console.log('التغيير عبر RC — إرسال إشعار');
-    const isOpen = currentValue === 'true';
-    const status = isOpen ? 'فُتح' : 'أُغلق';
-    await sendNotifications('RC Door 🚪', 'الباب ' + status + ' عبر جهاز التحكم');
-    await supabase.from('door_state').insert({ value: currentValue, source: 'rc' });
-    console.log('تم الإشعار:', status);
+  console.log(`[${i+1}/11] switch_1: ${currentValue} | prev: ${prevValue}`);
+
+  if (prevValue !== null && prevValue !== currentValue) {
+    if (prevSource === 'app') {
+      console.log('تغيير عبر التطبيق — لا إشعار');
+      await supabase.from('door_state').insert({ value: currentValue, source: 'app' });
+    } else {
+      const isOpen = currentValue === 'true';
+      const status = isOpen ? 'فُتح' : 'أُغلق';
+      await sendNotifications('RC Door 🚪', 'الباب ' + status + ' عبر جهاز التحكم');
+      await supabase.from('door_state').insert({ value: currentValue, source: 'rc' });
+      console.log('✅ إشعار RC:', status);
+    }
+    prevValue = currentValue;
+    prevSource = 'rc';
   }
-} else {
-  console.log('لم تتغير الحالة');
+
+  if (i < 10) await sleep(5000);
 }
+
+console.log('انتهى الفحص');
