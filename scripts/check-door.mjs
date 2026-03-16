@@ -70,14 +70,17 @@ async function sendNotifications(title, body) {
   const result = await supabase
     .from('users')
     .select('push_sub')
+    .eq('role', 'admin')
     .not('push_sub', 'is', null);
   const rows = result.data || [];
+  console.log('Admins with push_sub:', rows.length);
   for (const row of rows) {
     try {
       const subscription = typeof row.push_sub === 'string'
         ? JSON.parse(row.push_sub)
         : row.push_sub;
       await webpush.sendNotification(subscription, JSON.stringify({ title, body }));
+      console.log('Push sent OK');
     } catch (e) {
       console.error('Push failed:', e.message);
     }
