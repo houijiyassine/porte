@@ -120,11 +120,10 @@ module.exports = async function handler(req, res) {
     if (!result.success)
       return res.status(200).json({ success: false, code: result.code, msg: result.msg });
 
-    // ✅ سجل أن التغيير جاء من التطبيق
-    const newValue = action === 'open' ? 'true' : 'false';
-    await supabase.from('door_state').insert({
-      value: newValue,
-      source: 'app'
+    // ✅ سجل أمر التطبيق في app_commands
+    await supabase.from('app_commands').insert({
+      device_id: devId,
+      action: action
     });
 
     return res.status(200).json({ success: true });
