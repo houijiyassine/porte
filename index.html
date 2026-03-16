@@ -2599,10 +2599,8 @@ async function ctrlDoor(doorId,instId,action,pfx){
   }
   try{
     await tuyaCmd(door.devId,action);
-    // ✅ منع إشعار RC عند استخدام التطبيق
     window._appTriggered = window._appTriggered || {};
-    window._appTriggered[door.id] = true;
-    setTimeout(() => { window._appTriggered[door.id] = false; }, 15000);
+    window._appTriggered[door.id] = Date.now();
     if(action==='open') setTimeout(()=>animateDoor(doorId,pfx,'open'),1300);
     else if(action==='close') setTimeout(()=>animateDoor(doorId,pfx,'closed'),1300);
     else if(action==='stop') { /* stays in stopped state */ }
@@ -2769,8 +2767,9 @@ function rcLogHistory(door, action, pfx) {
   // إذا لم تتغير الحالة → لا إشعار
   if (_lastKnownDoorState[door.id] === actionLabel) return;
 
-  // إذا كان التغيير عبر التطبيق → لا إشعار
-  if (window._appTriggered && window._appTriggered[door.id]) {
+  // إذا كان التغيير عبر التطبيق خلال آخر 20 ثانية → لا إشعار
+  const appTime = window._appTriggered && window._appTriggered[door.id];
+  if (appTime && (Date.now() - appTime) < 20000) {
     _lastKnownDoorState[door.id] = actionLabel;
     return;
   }
