@@ -1,8 +1,14 @@
 const crypto = require('crypto');
+const { createClient } = require('@supabase/supabase-js');
 
 const CLIENT_ID = '59gmr8xdf3m5vdt55c89';
 const SECRET    = 'f551321a6229419098b3c40728460bdd';
 const BASE      = 'https://openapi.tuyaeu.com';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
 function sign(str) {
   return crypto.createHmac('sha256', SECRET).update(str).digest('hex').toUpperCase();
@@ -66,7 +72,6 @@ module.exports = async function handler(req, res) {
   try {
     const tok = await getToken();
 
-    // ─── GET: قراءة حالة الجهاز للـ polling ───────────────────────────
     if (req.method === 'GET') {
       const devId = req.query?.devId;
       if (!devId) return res.status(400).json({ error: 'Missing devId' });
@@ -83,14 +88,12 @@ module.exports = async function handler(req, res) {
       else if (s1 === false && s2 === false) doorState = 'stopped';
       else if (s1 === true  && s2 === true)  doorState = 'stopped';
 
-      // جلب حالة الاتصال (online/offline)
       const devInfo = await tuyaGet(`/v1.0/iot-03/devices/${devId}`, tok);
       const online  = devInfo?.result?.online === true ? true : (devInfo?.result?.online === false ? false : null);
 
       return res.status(200).json({ success: true, doorState, switch_1: s1, switch_2: s2, online });
     }
 
-    // ─── POST: إرسال أمر للجهاز ────────────────────────────────────────
     const { devId, action } = req.body || {};
     if (!devId || !action) return res.status(400).json({ error: 'Missing devId or action' });
     if (!['open','close','stop'].includes(action))
@@ -98,7 +101,6 @@ module.exports = async function handler(req, res) {
 
     const cmdUrl = `/v1.0/iot-03/devices/${devId}/commands`;
 
-    // خطوة 1: أوقف كل الـ relay أولاً (حماية المحرك)
     await tuyaPost(cmdUrl, tok, [
       { code: 'switch_1', value: false },
       { code: 'switch_2', value: false },
@@ -108,10 +110,8 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
-    // خطوة 2: انتظر 300ms
     await delay(300);
 
-    // خطوة 3: أرسل أمر الاتجاه
     const dirCmd = action === 'open'
       ? [{ code: 'switch_1', value: true  }, { code: 'switch_2', value: false }]
       : [{ code: 'switch_1', value: false }, { code: 'switch_2', value: true  }];
@@ -119,6 +119,13 @@ module.exports = async function handler(req, res) {
     const result = await tuyaPost(cmdUrl, tok, dirCmd);
     if (!result.success)
       return res.status(200).json({ success: false, code: result.code, msg: result.msg });
+
+    // ✅ سجل أن التغيير جاء من التطبيق
+    const newValue = action === 'open' ? 'true' : 'false';
+    await supabase.from('door_state').insert({
+      value: newValue,
+      source: 'app'
+    });
 
     return res.status(200).json({ success: true });
 
