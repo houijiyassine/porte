@@ -30,6 +30,16 @@ async function getToken() {
   return data.result && data.result.access_token ? data.result.access_token : null;
 }
 
+async function getDeviceInfo(token) {
+  const t = Date.now().toString();
+  const path = '/v1.0/devices/' + DEVICE_ID;
+  const sign = getSign(CLIENT_ID, SECRET, t, token, 'GET', path);
+  const res = await fetch(BASE_URL + path, {
+    headers: { client_id: CLIENT_ID, access_token: token, sign, t, sign_method: 'HMAC-SHA256' }
+  });
+  return res.json();
+}
+
 async function getDeviceStatus(token) {
   const t = Date.now().toString();
   const path = '/v1.0/devices/' + DEVICE_ID + '/status';
@@ -40,14 +50,15 @@ async function getDeviceStatus(token) {
   return res.json();
 }
 
-async function getDeviceInfo(token) {
-  const t = Date.now().toString();
-  const path = '/v1.0/devices/' + DEVICE_ID;
-  const sign = getSign(CLIENT_ID, SECRET, t, token, 'GET', path);
-  const res = await fetch(BASE_URL + path, {
-    headers: { client_id: CLIENT_ID, access_token: token, sign, t, sign_method: 'HMAC-SHA256' }
-  });
-  return res.json();
+async function wasAppCommand() {
+  const since = new Date(Date.now() - 30000).toISOString();
+  const { data } = await supabase
+    .from('app_commands')
+    .select('id')
+    .eq('device_id', DEVICE_ID)
+    .gte('created_at', since)
+    .limit(1);
+  return data && data.length > 0;
 }
 
 async function sendNotifications(title, body) {
@@ -86,16 +97,14 @@ console.log('Token OK');
 
 const { data: prevData } = await supabase
   .from('door_state')
-  .select('value, source')
+  .select('value')
   .order('created_at', { ascending: false })
   .limit(1);
 
 let prevValue = prevData && prevData.length > 0 ? prevData[0].value : null;
-let prevSource = prevData && prevData.length > 0 ? prevData[0].source : null;
-console.log('Initial state:', prevValue, '| source:', prevSource);
+console.log('Initial state:', prevValue);
 
 for (let i = 0; i < 11; i++) {
-  // تحقق من online أولاً
   const devInfo = await getDeviceInfo(token);
   const isOnline = devInfo?.result?.online === true;
 
@@ -113,18 +122,19 @@ for (let i = 0; i < 11; i++) {
   console.log(`[${i+1}/11] switch_1: ${currentValue} | prev: ${prevValue}`);
 
   if (prevValue !== null && prevValue !== currentValue) {
-    if (prevSource === 'app') {
+    const fromApp = await wasAppCommand();
+
+    if (fromApp) {
       console.log('تغيير عبر التطبيق — لا إشعار');
-      await supabase.from('door_state').insert({ value: currentValue, source: 'app' });
     } else {
       const isOpen = currentValue === 'true';
       const status = isOpen ? 'فُتح' : 'أُغلق';
       await sendNotifications('RC Door 🚪', 'الباب ' + status + ' عبر جهاز التحكم');
-      await supabase.from('door_state').insert({ value: currentValue, source: 'rc' });
       console.log('✅ إشعار RC:', status);
     }
+
+    await supabase.from('door_state').insert({ value: currentValue });
     prevValue = currentValue;
-    prevSource = 'rc';
   }
 
   if (i < 10) await sleep(5000);
