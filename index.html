@@ -2716,20 +2716,14 @@ async function fetchDoorStatus(door, pfx) {
     // ── الإشعار و السجل: من pfx='u' فقط (مصدر واحد) ──
     const shouldLog = (pfx === 'u');
 
-    if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening' && currentState !== 'stopped') {
+    if (d.doorState === 'open' && currentState !== 'open' && currentState !== 'opening') {
       animateDoor(door.id, pfx, 'open');
       if(shouldLog) rcLogHistory(door, 'open', pfx);
-    } else if ((d.doorState === 'close' || d.doorState === 'closed') && currentState !== 'closed' && currentState !== 'closing' && currentState !== 'stopped') {
+    } else if ((d.doorState === 'close' || d.doorState === 'closed') && currentState !== 'closed' && currentState !== 'closing') {
       animateDoor(door.id, pfx, 'closed');
       if(shouldLog) rcLogHistory(door, 'close', pfx);
     } else if (d.doorState === 'stopped' && currentState !== 'stopped') {
       animateDoor(door.id, pfx, 'stopped');
-    } else if (d.doorState === 'open' && currentState === 'stopped') {
-      animateDoor(door.id, pfx, 'open');
-      if(shouldLog) rcLogHistory(door, 'open', pfx);
-    } else if ((d.doorState === 'close' || d.doorState === 'closed') && currentState === 'stopped') {
-      animateDoor(door.id, pfx, 'closed');
-      if(shouldLog) rcLogHistory(door, 'close', pfx);
     }
 
     // تحديث شارة online/offline
@@ -5715,4 +5709,3 @@ async function forgotConfirm() {
 </div>
 </body>
 </html>
-
