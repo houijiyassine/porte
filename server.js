@@ -17,20 +17,17 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
-// ─── Supabase ─────────────────────────────────────────────────────────────────
 const supabase = createClient(
   process.env.SUPABASE_URL || 'https://sjfaootvlxesdytdsknc.supabase.co',
   process.env.SUPABASE_SERVICE_KEY
 );
 
-// ─── VAPID ────────────────────────────────────────────────────────────────────
 webpush.setVapidDetails(
   'mailto:admin@porte.app',
   process.env.VAPID_PUBLIC || 'BOfIw6laarxGfV8Ezc04YzfCzq4Njm7ewizkfnGDIWJGpsfHkqUHVG8SXGb8cJZJxOTIzFeauX4K0Z8oYdfgKTw',
   process.env.VAPID_PRIVATE
 );
 
-// ─── Tuya Config ──────────────────────────────────────────────────────────────
 const TUYA = {
   CLIENT_ID: process.env.TUYA_CLIENT_ID || '59gmr8xdf3m5vdt55c89',
   SECRET: process.env.TUYA_SECRET,
@@ -38,42 +35,35 @@ const TUYA = {
   BASE_URL: `https://${process.env.TUYA_REGION || 'openapi.tuyaeu.com'}`,
 };
 
-console.log('🔧 Tuya Config:', {
+console.log('Tuya Config:', {
   CLIENT_ID: TUYA.CLIENT_ID,
   DEVICE_ID: TUYA.DEVICE_ID,
   BASE_URL: TUYA.BASE_URL,
-  SECRET: TUYA.SECRET ? '✅ موجود' : '❌ مفقود',
+  SECRET_LENGTH: TUYA.SECRET ? TUYA.SECRET.length : 0,
 });
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─── WebSocket Clients Map ────────────────────────────────────────────────────
 const wsClients = new Map();
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://localhost');
   const token = url.searchParams.get('token');
-  
   if (!token) { ws.close(); return; }
-  
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'porte_secret_2024');
     wsClients.set(decoded.id, ws);
     ws.userId = decoded.id;
     ws.userRole = decoded.role;
     ws.send(JSON.stringify({ type: 'connected', userId: decoded.id }));
-    
     ws.on('close', () => wsClients.delete(decoded.id));
     ws.on('message', (data) => handleWsMessage(ws, JSON.parse(data)));
-  } catch {
-    ws.close();
-  }
+  } catch { ws.close(); }
 });
 
 function broadcast(message, roleFilter = null) {
-  wsClients.forEach((ws, userId) => {
+  wsClients.forEach((ws) => {
     if (ws.readyState === 1) {
       if (!roleFilter || ws.userRole === roleFilter || ws.userRole === 'super_admin') {
         ws.send(JSON.stringify(message));
@@ -89,103 +79,83 @@ async function handleWsMessage(ws, msg) {
   }
 }
 
-// ─── Tuya Helper ──────────────────────────────────────────────────────────────
 async function getTuyaToken() {
-  try {
-    const t = Date.now().toString();
-    const str = TUYA.CLIENT_ID + t;
-    const sign = crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
-    
-    console.log('🔑 جلب Tuya Token...');
-    
-    const res = await fetch(`${TUYA.BASE_URL}/v1.0/token?grant_type=1`, {
-      headers: { 
-        client_id: TUYA.CLIENT_ID, 
-        sign, 
-        t, 
-        sign_method: 'HMAC-SHA256' 
-      }
-    });
-    
-    const data = await res.json();
-    console.log('🔑 Tuya Token Response:', JSON.stringify(data));
-    
-    if (!data.result?.access_token) {
-      console.error('❌ فشل جلب Token:', data);
-      throw new Error('فشل جلب Tuya Token: ' + JSON.stringify(data));
+  const t = Date.now().toString();
+  const str = TUYA.CLIENT_ID + t;
+  const sign = crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
+
+  console.log('Getting Tuya Token...', { t, sign: sign.substring(0,10) + '...' });
+
+  const res = await fetch(`${TUYA.BASE_URL}/v1.0/token?grant_type=1`, {
+    method: 'GET',
+    headers: {
+      'client_id': TUYA.CLIENT_ID,
+      'sign': sign,
+      't': t,
+      'sign_method': 'HMAC-SHA256',
     }
-    
-    console.log('✅ Token جُلب بنجاح');
-    return data.result.access_token;
-  } catch (err) {
-    console.error('❌ خطأ في getTuyaToken:', err.message);
-    throw err;
+  });
+
+  const data = await res.json();
+  console.log('Token Response:', JSON.stringify(data));
+
+  if (!data.result?.access_token) {
+    throw new Error('Token failed: ' + JSON.stringify(data));
   }
+  return data.result.access_token;
 }
 
-async function tuyaRequest(method, path, body = null) {
-  try {
-    const token = await getTuyaToken();
-    const t = Date.now().toString();
-    const contentHash = crypto.createHash('sha256').update(body ? JSON.stringify(body) : '').digest('hex');
-    const strToSign = [method, contentHash, '', path].join('\n');
-    const str = TUYA.CLIENT_ID + token + t + strToSign;
-    const sign = crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
-    
-    const opts = {
-      method,
-      headers: {
-        client_id: TUYA.CLIENT_ID,
-        access_token: token,
-        sign, t,
-        sign_method: 'HMAC-SHA256',
-        'Content-Type': 'application/json',
-      }
-    };
-    if (body) opts.body = JSON.stringify(body);
-    
-    console.log(`📡 Tuya Request: ${method} ${TUYA.BASE_URL}${path}`);
-    if (body) console.log('📦 Body:', JSON.stringify(body));
-    
-    const res = await fetch(`${TUYA.BASE_URL}${path}`, opts);
-    const data = await res.json();
-    
-    console.log('📨 Tuya Response:', JSON.stringify(data));
-    
-    if (!data.success) {
-      console.error('❌ Tuya Error Code:', data.code, '| Message:', data.msg);
+async function tuyaRequest(method, urlPath, body = null) {
+  const token = await getTuyaToken();
+  const t = Date.now().toString();
+  const nonce = '';
+  const bodyStr = body ? JSON.stringify(body) : '';
+  const contentHash = crypto.createHash('sha256').update(bodyStr).digest('hex');
+  const strToSign = [method, contentHash, '', urlPath].join('\n');
+  const str = TUYA.CLIENT_ID + token + t + nonce + strToSign;
+  const sign = crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
+
+  const opts = {
+    method,
+    headers: {
+      'client_id': TUYA.CLIENT_ID,
+      'access_token': token,
+      'sign': sign,
+      't': t,
+      'sign_method': 'HMAC-SHA256',
+      'nonce': nonce,
+      'Content-Type': 'application/json',
     }
-    
-    return data;
-  } catch (err) {
-    console.error('❌ خطأ في tuyaRequest:', err.message);
-    throw err;
-  }
+  };
+  if (body) opts.body = bodyStr;
+
+  console.log('Tuya Request:', method, urlPath, bodyStr);
+
+  const res = await fetch(`${TUYA.BASE_URL}${urlPath}`, opts);
+  const data = await res.json();
+  console.log('Tuya Response:', JSON.stringify(data));
+  return data;
 }
 
 async function controlDoor(action) {
-  console.log(`🚪 تنفيذ أمر: ${action}`);
-  
   const commands = {
     open:   [{ code: 'switch_1', value: true }],
     close:  [{ code: 'switch_1', value: false }],
     stop:   [{ code: 'switch_2', value: true }],
     open40: [{ code: 'switch_1', value: true }],
   };
-  
+
   if (action === 'open40') {
     const result = await tuyaRequest('POST', `/v1.0/devices/${TUYA.DEVICE_ID}/commands`, { commands: commands.open });
     setTimeout(async () => {
-      console.log('⏱ إغلاق تلقائي بعد 40 ثانية');
       await tuyaRequest('POST', `/v1.0/devices/${TUYA.DEVICE_ID}/commands`, { commands: commands.close });
     }, 40000);
     return result;
   }
-  
+
   return tuyaRequest('POST', `/v1.0/devices/${TUYA.DEVICE_ID}/commands`, { commands: commands[action] });
 }
 
-// ─── Auth Middleware ──────────────────────────────────────────────────────────
 function authMiddleware(roles = []) {
   return (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
@@ -203,84 +173,59 @@ function authMiddleware(roles = []) {
   };
 }
 
-// ─── API Routes ───────────────────────────────────────────────────────────────
-
-// Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// Auth
 app.post('/api/auth/login', async (req, res) => {
   const { phone, pw } = req.body;
-  console.log(`🔐 محاولة دخول: ${phone}`);
-  
   const { data: user, error } = await supabase
     .from('users').select('*').eq('phone', phone).eq('pw', pw).single();
-  
-  if (error || !user) {
-    console.log('❌ فشل الدخول:', phone);
-    return res.status(401).json({ error: 'بيانات غير صحيحة' });
-  }
+  if (error || !user) return res.status(401).json({ error: 'بيانات غير صحيحة' });
   if (user.status === 'blocked') return res.status(403).json({ error: 'الحساب محظور' });
   if (user.expire_date && new Date(user.expire_date) < new Date()) {
     return res.status(403).json({ error: 'انتهت صلاحية الحساب' });
   }
-  
   const token = jwt.sign(
     { id: user.id, role: user.role, inst_id: user.inst_id, name: user.name },
     process.env.JWT_SECRET || 'porte_secret_2024',
     { expiresIn: '30d' }
   );
-  
-  console.log(`✅ دخول ناجح: ${user.name} (${user.role})`);
   res.json({ token, user: { id: user.id, name: user.name, role: user.role, inst_id: user.inst_id } });
 });
 
-// Door control
 app.post('/api/door/control', authMiddleware(['user','admin','super_admin']), async (req, res) => {
   const { action } = req.body;
-  console.log(`🚪 طلب تحكم: ${action} من ${req.user.name}`);
-  
+  console.log('Door control:', action, 'by', req.user.name);
   try {
     const result = await controlDoor(action);
-    
-    // Log to door_state
     await supabase.from('door_state').insert({
       value: action,
       source: `${req.user.name} (${req.user.role})`,
     });
-    
-    // Notify admins
     notifyAdmins(req.user.inst_id, {
       title: 'تحكم في الباب',
       body: `${req.user.name} قام بـ ${getActionLabel(action)}`,
     });
-    
     broadcast({ type: 'door_action', action, user: req.user.name, time: Date.now() });
-    
-    console.log(`✅ نتيجة Tuya:`, JSON.stringify(result));
     res.json({ success: true, result });
   } catch (err) {
-    console.error('❌ خطأ في التحكم:', err.message);
+    console.error('Door control error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Door status
 app.get('/api/door/status', authMiddleware(), async (req, res) => {
   const { data } = await supabase
     .from('door_state').select('*').order('created_at', { ascending: false }).limit(1).single();
   res.json(data || {});
 });
 
-// Push subscription
 app.post('/api/push/subscribe', authMiddleware(), async (req, res) => {
   await supabase.from('users').update({ push_sub: req.body.subscription }).eq('id', req.user.id);
   res.json({ success: true });
 });
 
-// Users management
 app.get('/api/users', authMiddleware(['admin','super_admin']), async (req, res) => {
   let query = supabase.from('users').select('id,name,phone,role,status,expire_date,note,schedule,last_loc');
   if (req.user.role === 'admin') query = query.eq('inst_id', req.user.inst_id);
@@ -308,7 +253,6 @@ app.delete('/api/users/:id', authMiddleware(['admin','super_admin']), async (req
   res.json({ success: true });
 });
 
-// Institutes
 app.get('/api/institutes', authMiddleware(['admin','super_admin']), async (req, res) => {
   let query = supabase.from('institutes').select('*');
   if (req.user.role === 'admin') query = query.eq('id', req.user.inst_id);
@@ -328,21 +272,16 @@ app.put('/api/institutes/:id', authMiddleware(['admin','super_admin']), async (r
   res.json({ success: true });
 });
 
-// History
 app.get('/api/history', authMiddleware(), async (req, res) => {
   const { data } = await supabase
     .from('door_state').select('*').order('created_at', { ascending: false }).limit(100);
   res.json(data || []);
 });
 
-// Stats
 app.get('/api/stats', authMiddleware(['admin','super_admin']), async (req, res) => {
   const today = new Date().toISOString().split('T')[0];
-  const { data: todayActions } = await supabase
-    .from('door_state').select('*').gte('created_at', today);
-  const { data: users } = await supabase
-    .from('users').select('id,status').eq('inst_id', req.user.inst_id);
-  
+  const { data: todayActions } = await supabase.from('door_state').select('*').gte('created_at', today);
+  const { data: users } = await supabase.from('users').select('id,status').eq('inst_id', req.user.inst_id);
   res.json({
     today_actions: todayActions?.length || 0,
     active_users: users?.filter(u => u.status === 'active').length || 0,
@@ -350,9 +289,8 @@ app.get('/api/stats', authMiddleware(['admin','super_admin']), async (req, res) 
   });
 });
 
-// Tuya Webhook
 app.post('/api/webhook/tuya', async (req, res) => {
-  console.log('📩 Tuya Webhook:', JSON.stringify(req.body));
+  console.log('Tuya Webhook:', JSON.stringify(req.body));
   const { data } = req.body;
   if (data) {
     const action = data.value ? 'opened' : 'closed';
@@ -362,16 +300,15 @@ app.post('/api/webhook/tuya', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function getActionLabel(action) {
-  return { open:'فتح الباب', close:'غلق الباب', stop:'إيقاف', open40:'فتح 40ث' }[action] || action;
+  return { open:'فتح', close:'غلق', stop:'إيقاف', open40:'فتح 40ث' }[action] || action;
 }
 
 async function notifyAdmins(inst_id, notification) {
   if (!inst_id) return;
   const { data: admins } = await supabase
-    .from('users').select('push_sub').eq('inst_id', inst_id).eq('role', 'admin').not('push_sub', 'is', null);
-  
+    .from('users').select('push_sub')
+    .eq('inst_id', inst_id).eq('role', 'admin').not('push_sub', 'is', null);
   admins?.forEach(admin => {
     if (admin.push_sub) {
       webpush.sendNotification(admin.push_sub, JSON.stringify(notification)).catch(() => {});
@@ -379,10 +316,9 @@ async function notifyAdmins(inst_id, notification) {
   });
 }
 
-// ─── Serve SPA ────────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 Porte server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Porte running on port ${PORT}`));
