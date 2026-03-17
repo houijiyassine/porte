@@ -91,6 +91,7 @@ async function getTuyaToken() {
       'sign': sign,
       't': t,
       'sign_method': 'HMAC-SHA256',
+      'mode': 'cors',
     }
   });
 
@@ -120,6 +121,7 @@ async function tuyaRequest(method, urlPath, body = null) {
       'sign': sign,
       't': t,
       'sign_method': 'HMAC-SHA256',
+      'mode': 'cors',
       'Content-Type': 'application/json',
     }
   };
@@ -133,7 +135,6 @@ async function tuyaRequest(method, urlPath, body = null) {
 }
 
 async function controlDoor(action) {
-  // ✅ المسار الصحيح: /v1.0/iot-03/devices/
   const PATH = `/v1.0/iot-03/devices/${TUYA.DEVICE_ID}/commands`;
 
   let commands = [];
@@ -149,7 +150,6 @@ async function controlDoor(action) {
 
   if (action === 'open40') {
     setTimeout(async () => {
-      console.log('Auto close after 40s');
       await tuyaRequest('POST', PATH, { commands: [{ code: 'switch_1', value: false }] });
     }, 40000);
   }
