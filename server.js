@@ -79,10 +79,14 @@ async function handleWsMessage(ws, msg) {
   }
 }
 
+// ─── Tuya Token ───────────────────────────────────────────────────────────────
 async function getTuyaToken() {
   const t = Date.now().toString();
-  const str = TUYA.CLIENT_ID + t;
+  const nonce = crypto.randomUUID().replace(/-/g, '');
+  const str = TUYA.CLIENT_ID + t + nonce;
   const sign = crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
+
+  console.log('Token req:', { t, nonce, str, sign: sign.substring(0,10)+'...' });
 
   const res = await fetch(`${TUYA.BASE_URL}/v1.0/token?grant_type=1`, {
     method: 'GET',
@@ -91,26 +95,28 @@ async function getTuyaToken() {
       'sign': sign,
       't': t,
       'sign_method': 'HMAC-SHA256',
-      'mode': 'cors',
+      'nonce': nonce,
     }
   });
 
   const data = await res.json();
-  console.log('Token:', JSON.stringify(data));
+  console.log('Token res:', JSON.stringify(data));
 
   if (!data.result?.access_token) {
     throw new Error('Token failed: ' + JSON.stringify(data));
   }
-  return data.result.access_token;
+  return { token: data.result.access_token };
 }
 
+// ─── Tuya Request ─────────────────────────────────────────────────────────────
 async function tuyaRequest(method, urlPath, body = null) {
-  const token = await getTuyaToken();
+  const { token } = await getTuyaToken();
   const t = Date.now().toString();
+  const nonce = crypto.randomUUID().replace(/-/g, '');
   const bodyStr = body ? JSON.stringify(body) : '';
   const contentHash = crypto.createHash('sha256').update(bodyStr).digest('hex');
   const strToSign = [method, contentHash, '', urlPath].join('\n');
-  const str = TUYA.CLIENT_ID + token + t + strToSign;
+  const str = TUYA.CLIENT_ID + token + t + nonce + strToSign;
   const sign = crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
 
   const opts = {
@@ -121,19 +127,20 @@ async function tuyaRequest(method, urlPath, body = null) {
       'sign': sign,
       't': t,
       'sign_method': 'HMAC-SHA256',
-      'mode': 'cors',
+      'nonce': nonce,
       'Content-Type': 'application/json',
     }
   };
   if (body) opts.body = bodyStr;
 
-  console.log('Tuya Req:', method, urlPath);
+  console.log('Tuya req:', method, urlPath);
   const res = await fetch(`${TUYA.BASE_URL}${urlPath}`, opts);
   const data = await res.json();
-  console.log('Tuya Res:', JSON.stringify(data));
+  console.log('Tuya res:', JSON.stringify(data));
   return data;
 }
 
+// ─── Door Control ─────────────────────────────────────────────────────────────
 async function controlDoor(action) {
   const PATH = `/v1.0/iot-03/devices/${TUYA.DEVICE_ID}/commands`;
 
@@ -157,6 +164,7 @@ async function controlDoor(action) {
   return result;
 }
 
+// ─── Auth Middleware ──────────────────────────────────────────────────────────
 function authMiddleware(roles = []) {
   return (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
