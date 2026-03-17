@@ -35,7 +35,12 @@ const TUYA = {
   BASE_URL: 'https://openapi.tuyaeu.com',
 };
 
-console.log('Tuya:', { CLIENT_ID: TUYA.CLIENT_ID, DEVICE_ID: TUYA.DEVICE_ID, BASE_URL: TUYA.BASE_URL, SECRET_LEN: TUYA.SECRET?.length });
+console.log('Tuya:', {
+  CLIENT_ID: TUYA.CLIENT_ID,
+  DEVICE_ID: TUYA.DEVICE_ID,
+  BASE_URL: TUYA.BASE_URL,
+  SECRET_LEN: TUYA.SECRET?.length,
+});
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -120,7 +125,7 @@ async function tuyaRequest(method, urlPath, body = null) {
   };
   if (body) opts.body = bodyStr;
 
-  console.log('Tuya Req:', method, urlPath, bodyStr);
+  console.log('Tuya Req:', method, urlPath);
   const res = await fetch(`${TUYA.BASE_URL}${urlPath}`, opts);
   const data = await res.json();
   console.log('Tuya Res:', JSON.stringify(data));
@@ -128,18 +133,27 @@ async function tuyaRequest(method, urlPath, body = null) {
 }
 
 async function controlDoor(action) {
-  let commands = [];
-  if (action === 'open' || action === 'open40') commands = [{ code: 'switch_1', value: true }];
-  else if (action === 'close') commands = [{ code: 'switch_1', value: false }];
-  else if (action === 'stop') commands = [{ code: 'switch_2', value: true }];
+  // ✅ المسار الصحيح: /v1.0/iot-03/devices/
+  const PATH = `/v1.0/iot-03/devices/${TUYA.DEVICE_ID}/commands`;
 
-  const result = await tuyaRequest('POST', `/v1.0/devices/${TUYA.DEVICE_ID}/commands`, { commands });
+  let commands = [];
+  if (action === 'open' || action === 'open40') {
+    commands = [{ code: 'switch_1', value: true }];
+  } else if (action === 'close') {
+    commands = [{ code: 'switch_1', value: false }];
+  } else if (action === 'stop') {
+    commands = [{ code: 'switch_2', value: true }];
+  }
+
+  const result = await tuyaRequest('POST', PATH, { commands });
 
   if (action === 'open40') {
     setTimeout(async () => {
-      await tuyaRequest('POST', `/v1.0/devices/${TUYA.DEVICE_ID}/commands`, { commands: [{ code: 'switch_1', value: false }] });
+      console.log('Auto close after 40s');
+      await tuyaRequest('POST', PATH, { commands: [{ code: 'switch_1', value: false }] });
     }, 40000);
   }
+
   return result;
 }
 
@@ -164,12 +178,17 @@ app.post('/api/auth/login', async (req, res) => {
   if (error || !user) return res.status(401).json({ error: 'بيانات غير صحيحة' });
   if (user.status === 'blocked') return res.status(403).json({ error: 'الحساب محظور' });
   if (user.expire_date && new Date(user.expire_date) < new Date()) return res.status(403).json({ error: 'انتهت صلاحية الحساب' });
-  const token = jwt.sign({ id: user.id, role: user.role, inst_id: user.inst_id, name: user.name }, process.env.JWT_SECRET || 'porte_secret_2024', { expiresIn: '30d' });
+  const token = jwt.sign(
+    { id: user.id, role: user.role, inst_id: user.inst_id, name: user.name },
+    process.env.JWT_SECRET || 'porte_secret_2024',
+    { expiresIn: '30d' }
+  );
   res.json({ token, user: { id: user.id, name: user.name, role: user.role, inst_id: user.inst_id } });
 });
 
 app.post('/api/door/control', authMiddleware(['user','admin','super_admin']), async (req, res) => {
   const { action } = req.body;
+  console.log('Door:', action, 'by', req.user.name);
   try {
     const result = await controlDoor(action);
     await supabase.from('door_state').insert({ value: action, source: `${req.user.name} (${req.user.role})` });
@@ -177,7 +196,7 @@ app.post('/api/door/control', authMiddleware(['user','admin','super_admin']), as
     broadcast({ type: 'door_action', action, user: req.user.name, time: Date.now() });
     res.json({ success: true, result });
   } catch (err) {
-    console.error('Door error:', err.message);
+    console.error('Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
