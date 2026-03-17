@@ -29,20 +29,21 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE
 );
 
-// ─── Tuya Connector ──────────────────────────────────────────────────────────
+// ─── Tuya Connector ───────────────────────────────────────────────────────────
+const DEVICE_ID = process.env.TUYA_DEVICE_ID || 'bf7c670914391fc80cwayk';
+const BASE_URL = 'https://openapi.tuyaeu.com';
+
 const tuya = new TuyaConnector({
   accessKey: process.env.TUYA_CLIENT_ID || '59gmr8xdf3m5vdt55c89',
   secretKey: process.env.TUYA_SECRET,
-  baseUrl: `https://${process.env.TUYA_REGION || 'openapi.tuyaeu.com'}`,
+  baseUrl: BASE_URL,
   rpc: { timeout: 10000 },
 });
-
-const DEVICE_ID = process.env.TUYA_DEVICE_ID || 'bf7c670914391fc80cwayk';
 
 console.log('Tuya Config:', {
   accessKey: process.env.TUYA_CLIENT_ID,
   DEVICE_ID,
-  baseUrl: `https://${process.env.TUYA_REGION || 'openapi.tuyaeu.com'}`,
+  BASE_URL,
   secretLength: process.env.TUYA_SECRET?.length,
 });
 
@@ -90,7 +91,6 @@ async function controlDoor(action) {
   console.log('Door action:', action);
 
   let commands = [];
-
   if (action === 'open' || action === 'open40') {
     commands = [{ code: 'switch_1', value: true }];
   } else if (action === 'close') {
