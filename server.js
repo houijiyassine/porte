@@ -1,15 +1,19 @@
-const express = require('express');
-const crypto = require('crypto');
-const { createClient } = require('@supabase/supabase-js');
-const webpush = require('web-push');
-const path = require('path');
+import express from 'express';
+import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
+import webpush from 'web-push';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://sjfaootvlxesdytdsknc.supabase.co';
+const SUPABASE_URL      = process.env.SUPABASE_URL      || 'https://sjfaootvlxesdytdsknc.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZmFvb3R2bHhlc2R5dGRza25jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxODAyNTcsImV4cCI6MjA4ODc1NjI1N30.pEhpszTGygiR6brpWHglnpcASAPw7kyWl0qd5mFwwMQ';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -41,129 +45,68 @@ if (VAPID_PRIVATE) {
 // ─── Tuya Token Cache ─────────────────────────────────────────────────────────
 let tuyaTokenCache = { token: null, expiresAt: 0 };
 
-/**
- * حساب التوقيع لطلب Token (بدون token في السلسلة)
- * str = CLIENT_ID + t
- */
 function buildTokenSign(t) {
   const str = TUYA.CLIENT_ID + t;
-  return crypto
-    .createHmac('sha256', TUYA.SECRET)
-    .update(str)
-    .digest('hex')
-    .toUpperCase();
+  return crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
 }
 
-/**
- * حساب التوقيع للطلبات العادية (بعد الحصول على Token)
- * str = CLIENT_ID + access_token + t + nonce + stringToSign
- *
- * stringToSign = HTTPMethod + "\n"
- *              + SHA256(body) + "\n"
- *              + headers_to_sign + "\n"
- *              + url_with_query
- */
 function buildRequestSign({ token, t, nonce, method, path: urlPath, query = {}, body = '' }) {
-  // 1) Hash الـ body
   const bodyHash = crypto
     .createHash('sha256')
     .update(typeof body === 'string' ? body : JSON.stringify(body))
     .digest('hex');
 
-  // 2) بناء الـ query string
   const queryStr = Object.keys(query).length
     ? '?' + new URLSearchParams(query).toString()
     : '';
 
-  // 3) stringToSign
-  const stringToSign = [
-    method.toUpperCase(),
-    bodyHash,
-    '',          // headers to sign (فارغ هنا)
-    urlPath + queryStr,
-  ].join('\n');
-
-  // 4) السلسلة الكاملة
+  const stringToSign = [method.toUpperCase(), bodyHash, '', urlPath + queryStr].join('\n');
   const str = TUYA.CLIENT_ID + token + t + nonce + stringToSign;
 
-  return crypto
-    .createHmac('sha256', TUYA.SECRET)
-    .update(str)
-    .digest('hex')
-    .toUpperCase();
+  return crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
 }
 
-/**
- * جلب Token من Tuya مع التوقيع الصحيح
- */
 async function getTuyaToken() {
   const now = Date.now();
+  if (tuyaTokenCache.token && now < tuyaTokenCache.expiresAt) return tuyaTokenCache.token;
 
-  // استخدام الـ Cache إذا لم ينتهِ
-  if (tuyaTokenCache.token && now < tuyaTokenCache.expiresAt) {
-    return tuyaTokenCache.token;
-  }
-
-  const t = now.toString();
+  const t    = now.toString();
   const sign = buildTokenSign(t);
 
-  const res = await fetch(`${TUYA.BASE_URL}/v1.0/token?grant_type=1`, {
+  const res  = await fetch(`${TUYA.BASE_URL}/v1.0/token?grant_type=1`, {
     method: 'GET',
     headers: {
-      'client_id':   TUYA.CLIENT_ID,
-      'sign':        sign,
-      't':           t,
-      'sign_method': 'HMAC-SHA256',
-      'nonce':       '',
-      'Content-Type': 'application/json',
+      'client_id': TUYA.CLIENT_ID, 'sign': sign, 't': t,
+      'sign_method': 'HMAC-SHA256', 'nonce': '', 'Content-Type': 'application/json',
     },
   });
 
   const data = await res.json();
   console.log('[Tuya] Token response:', JSON.stringify(data));
 
-  if (!data.success) {
-    throw new Error(`Tuya token error: ${data.msg} (code: ${data.code})`);
-  }
+  if (!data.success) throw new Error(`Tuya token error: ${data.msg} (code: ${data.code})`);
 
-  // cache الـ token (مع هامش أمان 60 ثانية)
   tuyaTokenCache = {
     token:     data.result.access_token,
     expiresAt: now + (data.result.expire_time * 1000) - 60000,
   };
-
   return tuyaTokenCache.token;
 }
 
-/**
- * إرسال أمر لجهاز Tuya
- */
 async function sendTuyaCommand(commands) {
-  const token  = await getTuyaToken();
-  const t      = Date.now().toString();
-  const nonce  = crypto.randomBytes(8).toString('hex');
+  const token   = await getTuyaToken();
+  const t       = Date.now().toString();
+  const nonce   = crypto.randomBytes(8).toString('hex');
   const urlPath = `/v1.0/devices/${TUYA.DEVICE_ID}/commands`;
-  const body   = JSON.stringify({ commands });
+  const body    = JSON.stringify({ commands });
+  const sign    = buildRequestSign({ token, t, nonce, method: 'POST', path: urlPath, body });
 
-  const sign = buildRequestSign({
-    token,
-    t,
-    nonce,
-    method: 'POST',
-    path: urlPath,
-    body,
-  });
-
-  const res = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
+  const res  = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
     method: 'POST',
     headers: {
-      'client_id':   TUYA.CLIENT_ID,
-      'access_token': token,
-      'sign':        sign,
-      't':           t,
-      'nonce':       nonce,
-      'sign_method': 'HMAC-SHA256',
-      'Content-Type': 'application/json',
+      'client_id': TUYA.CLIENT_ID, 'access_token': token,
+      'sign': sign, 't': t, 'nonce': nonce,
+      'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
     },
     body,
   });
@@ -173,33 +116,19 @@ async function sendTuyaCommand(commands) {
   return data;
 }
 
-/**
- * جلب حالة الجهاز
- */
 async function getTuyaDeviceStatus() {
-  const token  = await getTuyaToken();
-  const t      = Date.now().toString();
-  const nonce  = crypto.randomBytes(8).toString('hex');
+  const token   = await getTuyaToken();
+  const t       = Date.now().toString();
+  const nonce   = crypto.randomBytes(8).toString('hex');
   const urlPath = `/v1.0/devices/${TUYA.DEVICE_ID}/status`;
+  const sign    = buildRequestSign({ token, t, nonce, method: 'GET', path: urlPath });
 
-  const sign = buildRequestSign({
-    token,
-    t,
-    nonce,
-    method: 'GET',
-    path: urlPath,
-  });
-
-  const res = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
+  const res  = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
     method: 'GET',
     headers: {
-      'client_id':   TUYA.CLIENT_ID,
-      'access_token': token,
-      'sign':        sign,
-      't':           t,
-      'nonce':       nonce,
-      'sign_method': 'HMAC-SHA256',
-      'Content-Type': 'application/json',
+      'client_id': TUYA.CLIENT_ID, 'access_token': token,
+      'sign': sign, 't': t, 'nonce': nonce,
+      'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
     },
   });
 
@@ -208,37 +137,40 @@ async function getTuyaDeviceStatus() {
   return data;
 }
 
-// ─── API Routes ───────────────────────────────────────────────────────────────
+async function sendPushToAll(notification) {
+  if (!VAPID_PRIVATE) return;
+  try {
+    const { data: subs } = await supabase.from('push_subscriptions').select('*');
+    if (!subs?.length) return;
+    const payload = JSON.stringify(notification);
+    await Promise.allSettled(
+      subs.map(sub =>
+        webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          payload
+        ).catch(err => {
+          if (err.statusCode === 410)
+            supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+        })
+      )
+    );
+  } catch (err) { console.error('[Push Send Error]', err); }
+}
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+// ─── Routes ───────────────────────────────────────────────────────────────────
+app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-// فتح الباب
 app.post('/api/door/open', async (req, res) => {
   try {
     const { userId, reason } = req.body;
-
-    // إرسال الأمر لـ Tuya
     const result = await sendTuyaCommand([{ code: 'switch_1', value: true }]);
+    if (!result.success) return res.status(500).json({ success: false, error: result.msg });
 
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.msg });
-    }
-
-    // تسجيل في Supabase
     await supabase.from('door_logs').insert({
-      user_id:  userId || 'unknown',
-      action:   'open',
-      reason:   reason || 'manual',
-      success:  true,
-      created_at: new Date().toISOString(),
+      user_id: userId || 'unknown', action: 'open', reason: reason || 'manual',
+      success: true, created_at: new Date().toISOString(),
     });
-
-    // إرسال Push Notification
     await sendPushToAll({ title: '🚪 الباب مفتوح', body: `تم فتح الباب بواسطة ${userId || 'مجهول'}` });
-
     res.json({ success: true, message: 'تم فتح الباب' });
   } catch (err) {
     console.error('[Door Open Error]', err);
@@ -246,24 +178,16 @@ app.post('/api/door/open', async (req, res) => {
   }
 });
 
-// إغلاق الباب
 app.post('/api/door/close', async (req, res) => {
   try {
     const { userId } = req.body;
-
     const result = await sendTuyaCommand([{ code: 'switch_1', value: false }]);
-
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.msg });
-    }
+    if (!result.success) return res.status(500).json({ success: false, error: result.msg });
 
     await supabase.from('door_logs').insert({
-      user_id: userId || 'unknown',
-      action:  'close',
-      success: true,
+      user_id: userId || 'unknown', action: 'close', success: true,
       created_at: new Date().toISOString(),
     });
-
     res.json({ success: true, message: 'تم إغلاق الباب' });
   } catch (err) {
     console.error('[Door Close Error]', err);
@@ -271,7 +195,6 @@ app.post('/api/door/close', async (req, res) => {
   }
 });
 
-// حالة الباب
 app.get('/api/door/status', async (req, res) => {
   try {
     const data = await getTuyaDeviceStatus();
@@ -282,15 +205,11 @@ app.get('/api/door/status', async (req, res) => {
   }
 });
 
-// سجل العمليات
 app.get('/api/door/logs', async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('door_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(50);
-
+      .from('door_logs').select('*')
+      .order('created_at', { ascending: false }).limit(50);
     if (error) throw error;
     res.json({ success: true, logs: data });
   } catch (err) {
@@ -299,19 +218,15 @@ app.get('/api/door/logs', async (req, res) => {
   }
 });
 
-// ─── Push Notifications ───────────────────────────────────────────────────────
-
-// حفظ subscription
 app.post('/api/push/subscribe', async (req, res) => {
   try {
     const subscription = req.body;
     await supabase.from('push_subscriptions').upsert({
-      endpoint:   subscription.endpoint,
-      p256dh:     subscription.keys?.p256dh,
-      auth:       subscription.keys?.auth,
+      endpoint: subscription.endpoint,
+      p256dh:   subscription.keys?.p256dh,
+      auth:     subscription.keys?.auth,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'endpoint' });
-
     res.json({ success: true });
   } catch (err) {
     console.error('[Push Subscribe Error]', err);
@@ -319,42 +234,9 @@ app.post('/api/push/subscribe', async (req, res) => {
   }
 });
 
-// إرسال إشعار لكل المشتركين
-async function sendPushToAll(notification) {
-  if (!VAPID_PRIVATE) return;
+app.get('/api/push/vapid-key', (req, res) => res.json({ publicKey: VAPID_PUBLIC }));
 
-  try {
-    const { data: subs } = await supabase.from('push_subscriptions').select('*');
-    if (!subs?.length) return;
-
-    const payload = JSON.stringify(notification);
-    await Promise.allSettled(
-      subs.map(sub =>
-        webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          payload
-        ).catch(err => {
-          if (err.statusCode === 410) {
-            // Subscription منتهية - نحذفها
-            supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
-          }
-        })
-      )
-    );
-  } catch (err) {
-    console.error('[Push Send Error]', err);
-  }
-}
-
-// VAPID public key للـ frontend
-app.get('/api/push/vapid-key', (req, res) => {
-  res.json({ publicKey: VAPID_PUBLIC });
-});
-
-// ─── Fallback → index.html ────────────────────────────────────────────────────
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
