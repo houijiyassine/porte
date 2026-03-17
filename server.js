@@ -2,13 +2,12 @@ import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { createClient } from '@supabase/supabase-js';
-import fetch from 'node-fetch';
-import crypto from 'crypto';
 import webpush from 'web-push';
 import jwt from 'jsonwebtoken';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import TuyaConnector from '@tuya-connector/nodejs';
 
 dotenv.config();
 
@@ -17,34 +16,41 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
+// ─── Supabase ─────────────────────────────────────────────────────────────────
 const supabase = createClient(
   process.env.SUPABASE_URL || 'https://sjfaootvlxesdytdsknc.supabase.co',
   process.env.SUPABASE_SERVICE_KEY
 );
 
+// ─── VAPID ────────────────────────────────────────────────────────────────────
 webpush.setVapidDetails(
   'mailto:admin@porte.app',
-  process.env.VAPID_PUBLIC || 'BOfIw6laarxGfV8Ezc04YzfCzq4Njm7ewizkfnGDIWJGpsfHkqUHVG8SXGb8cJZJxOTIzFeauX4K0Z8oYdfgKTw',
+  process.env.VAPID_PUBLIC,
   process.env.VAPID_PRIVATE
 );
 
-const TUYA = {
-  CLIENT_ID: process.env.TUYA_CLIENT_ID || '59gmr8xdf3m5vdt55c89',
-  SECRET: process.env.TUYA_SECRET,
-  DEVICE_ID: process.env.TUYA_DEVICE_ID || 'bf7c670914391fc80cwayk',
-  BASE_URL: `https://${process.env.TUYA_REGION || 'openapi.tuyaeu.com'}`,
-};
-
-console.log('Tuya Config:', {
-  CLIENT_ID: TUYA.CLIENT_ID,
-  DEVICE_ID: TUYA.DEVICE_ID,
-  BASE_URL: TUYA.BASE_URL,
-  SECRET_LENGTH: TUYA.SECRET ? TUYA.SECRET.length : 0,
+// ─── Tuya Connector ──────────────────────────────────────────────────────────
+const tuya = new TuyaConnector({
+  accessKey: process.env.TUYA_CLIENT_ID || '59gmr8xdf3m5vdt55c89',
+  secretKey: process.env.TUYA_SECRET,
+  baseUrl: `https://${process.env.TUYA_REGION || 'openapi.tuyaeu.com'}`,
+  rpc: { timeout: 10000 },
 });
 
+const DEVICE_ID = process.env.TUYA_DEVICE_ID || 'bf7c670914391fc80cwayk';
+
+console.log('Tuya Config:', {
+  accessKey: process.env.TUYA_CLIENT_ID,
+  DEVICE_ID,
+  baseUrl: `https://${process.env.TUYA_REGION || 'openapi.tuyaeu.com'}`,
+  secretLength: process.env.TUYA_SECRET?.length,
+});
+
+// ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ─── WebSocket ────────────────────────────────────────────────────────────────
 const wsClients = new Map();
 
 wss.on('connection', (ws, req) => {
@@ -79,108 +85,40 @@ async function handleWsMessage(ws, msg) {
   }
 }
 
-// ─── Tuya Token ───────────────────────────────────────────────────────────────
-async function getTuyaToken() {
-  const t = Date.now().toString();
-  const str = TUYA.CLIENT_ID + t;
-  const sign = crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
-
-  console.log('Getting Tuya Token...');
-
-  const res = await fetch(`${TUYA.BASE_URL}/v1.0/token?grant_type=1`, {
-    method: 'GET',
-    headers: {
-      'client_id': TUYA.CLIENT_ID,
-      'sign': sign,
-      't': t,
-      'sign_method': 'HMAC-SHA256',
-    }
-  });
-
-  const data = await res.json();
-  console.log('Token Response:', JSON.stringify(data));
-
-  if (!data.result?.access_token) {
-    throw new Error('Token failed: ' + JSON.stringify(data));
-  }
-  return data.result.access_token;
-}
-
-// ─── Tuya Request ─────────────────────────────────────────────────────────────
-async function tuyaRequest(method, urlPath, body = null) {
-  const token = await getTuyaToken();
-  const t = Date.now().toString();
-  const nonce = '';
-  const bodyStr = body ? JSON.stringify(body) : '';
-  const contentHash = crypto.createHash('sha256').update(bodyStr).digest('hex');
-  const strToSign = [method, contentHash, '', urlPath].join('\n');
-  const str = TUYA.CLIENT_ID + token + t + nonce + strToSign;
-  const sign = crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
-
-  const opts = {
-    method,
-    headers: {
-      'client_id': TUYA.CLIENT_ID,
-      'access_token': token,
-      'sign': sign,
-      't': t,
-      'sign_method': 'HMAC-SHA256',
-      'nonce': nonce,
-      'Content-Type': 'application/json',
-    }
-  };
-  if (body) opts.body = bodyStr;
-
-  console.log('Tuya Request:', method, urlPath, bodyStr);
-
-  const res = await fetch(`${TUYA.BASE_URL}${urlPath}`, opts);
-  const data = await res.json();
-  console.log('Tuya Response:', JSON.stringify(data));
-  return data;
-}
-
 // ─── Door Control ─────────────────────────────────────────────────────────────
 async function controlDoor(action) {
   console.log('Door action:', action);
 
-  // استخدام v2.0 API مع shadow/actions
-  if (action === 'open') {
-    return tuyaRequest('POST',
-      `/v2.0/cloud/thing/${TUYA.DEVICE_ID}/shadow/actions`,
-      { properties: { switch_1: true } }
-    );
+  let commands = [];
+
+  if (action === 'open' || action === 'open40') {
+    commands = [{ code: 'switch_1', value: true }];
+  } else if (action === 'close') {
+    commands = [{ code: 'switch_1', value: false }];
+  } else if (action === 'stop') {
+    commands = [{ code: 'switch_2', value: true }];
   }
 
-  if (action === 'close') {
-    return tuyaRequest('POST',
-      `/v2.0/cloud/thing/${TUYA.DEVICE_ID}/shadow/actions`,
-      { properties: { switch_1: false } }
-    );
-  }
+  const result = await tuya.request({
+    method: 'POST',
+    path: `/v1.0/devices/${DEVICE_ID}/commands`,
+    body: { commands },
+  });
 
-  if (action === 'stop') {
-    return tuyaRequest('POST',
-      `/v2.0/cloud/thing/${TUYA.DEVICE_ID}/shadow/actions`,
-      { properties: { switch_2: true } }
-    );
-  }
+  console.log('Tuya Result:', JSON.stringify(result));
 
   if (action === 'open40') {
-    // فتح أولاً
-    const result = await tuyaRequest('POST',
-      `/v2.0/cloud/thing/${TUYA.DEVICE_ID}/shadow/actions`,
-      { properties: { switch_1: true } }
-    );
-    // إغلاق بعد 40 ثانية
     setTimeout(async () => {
       console.log('Auto close after 40s');
-      await tuyaRequest('POST',
-        `/v2.0/cloud/thing/${TUYA.DEVICE_ID}/shadow/actions`,
-        { properties: { switch_1: false } }
-      );
+      await tuya.request({
+        method: 'POST',
+        path: `/v1.0/devices/${DEVICE_ID}/commands`,
+        body: { commands: [{ code: 'switch_1', value: false }] },
+      });
     }, 40000);
-    return result;
   }
+
+  return result;
 }
 
 // ─── Auth Middleware ──────────────────────────────────────────────────────────
@@ -202,7 +140,6 @@ function authMiddleware(roles = []) {
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
