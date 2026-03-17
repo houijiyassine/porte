@@ -79,12 +79,13 @@ async function handleWsMessage(ws, msg) {
   }
 }
 
+// ─── Tuya Token ───────────────────────────────────────────────────────────────
 async function getTuyaToken() {
   const t = Date.now().toString();
   const str = TUYA.CLIENT_ID + t;
   const sign = crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
 
-  console.log('Getting Tuya Token...', { t, sign: sign.substring(0,10) + '...' });
+  console.log('Getting Tuya Token...');
 
   const res = await fetch(`${TUYA.BASE_URL}/v1.0/token?grant_type=1`, {
     method: 'GET',
@@ -105,6 +106,7 @@ async function getTuyaToken() {
   return data.result.access_token;
 }
 
+// ─── Tuya Request ─────────────────────────────────────────────────────────────
 async function tuyaRequest(method, urlPath, body = null) {
   const token = await getTuyaToken();
   const t = Date.now().toString();
@@ -137,25 +139,51 @@ async function tuyaRequest(method, urlPath, body = null) {
   return data;
 }
 
+// ─── Door Control ─────────────────────────────────────────────────────────────
 async function controlDoor(action) {
-  const commands = {
-    open:   [{ code: 'switch_1', value: true }],
-    close:  [{ code: 'switch_1', value: false }],
-    stop:   [{ code: 'switch_2', value: true }],
-    open40: [{ code: 'switch_1', value: true }],
-  };
+  console.log('Door action:', action);
+
+  // استخدام v2.0 API مع shadow/actions
+  if (action === 'open') {
+    return tuyaRequest('POST',
+      `/v2.0/cloud/thing/${TUYA.DEVICE_ID}/shadow/actions`,
+      { properties: { switch_1: true } }
+    );
+  }
+
+  if (action === 'close') {
+    return tuyaRequest('POST',
+      `/v2.0/cloud/thing/${TUYA.DEVICE_ID}/shadow/actions`,
+      { properties: { switch_1: false } }
+    );
+  }
+
+  if (action === 'stop') {
+    return tuyaRequest('POST',
+      `/v2.0/cloud/thing/${TUYA.DEVICE_ID}/shadow/actions`,
+      { properties: { switch_2: true } }
+    );
+  }
 
   if (action === 'open40') {
-    const result = await tuyaRequest('POST', `/v1.0/devices/${TUYA.DEVICE_ID}/commands`, { commands: commands.open });
+    // فتح أولاً
+    const result = await tuyaRequest('POST',
+      `/v2.0/cloud/thing/${TUYA.DEVICE_ID}/shadow/actions`,
+      { properties: { switch_1: true } }
+    );
+    // إغلاق بعد 40 ثانية
     setTimeout(async () => {
-      await tuyaRequest('POST', `/v1.0/devices/${TUYA.DEVICE_ID}/commands`, { commands: commands.close });
+      console.log('Auto close after 40s');
+      await tuyaRequest('POST',
+        `/v2.0/cloud/thing/${TUYA.DEVICE_ID}/shadow/actions`,
+        { properties: { switch_1: false } }
+      );
     }, 40000);
     return result;
   }
-
-  return tuyaRequest('POST', `/v1.0/devices/${TUYA.DEVICE_ID}/commands`, { commands: commands[action] });
 }
 
+// ─── Auth Middleware ──────────────────────────────────────────────────────────
 function authMiddleware(roles = []) {
   return (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
@@ -172,6 +200,8 @@ function authMiddleware(roles = []) {
     }
   };
 }
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
@@ -191,6 +221,7 @@ app.post('/api/auth/login', async (req, res) => {
     process.env.JWT_SECRET || 'porte_secret_2024',
     { expiresIn: '30d' }
   );
+  console.log('Login:', user.name, user.role);
   res.json({ token, user: { id: user.id, name: user.name, role: user.role, inst_id: user.inst_id } });
 });
 
@@ -210,7 +241,7 @@ app.post('/api/door/control', authMiddleware(['user','admin','super_admin']), as
     broadcast({ type: 'door_action', action, user: req.user.name, time: Date.now() });
     res.json({ success: true, result });
   } catch (err) {
-    console.error('Door control error:', err.message);
+    console.error('Door error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
