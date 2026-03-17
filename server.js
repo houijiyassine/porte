@@ -27,64 +27,90 @@ const TUYA = {
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC  || 'BOfIw6laarxGfV8Ezc04YzfCzq4Njm7ewizkfnGDIWJGpsfHkqUHVG8SXGb8cJZJxOTIzFeauX4K0Z8oYdfgKTw';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE;
 
+// SHA256 of empty string (used for GET requests with no body)
+const EMPTY_BODY_HASH = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
 // ─── Supabase ─────────────────────────────────────────────────────────────────
-const supabase = createClient(
-  SUPABASE_URL,
-  SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY
-);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY);
 
 // ─── Web Push ─────────────────────────────────────────────────────────────────
 if (VAPID_PRIVATE) {
-  webpush.setVapidDetails(
-    'mailto:admin@porte.app',
-    VAPID_PUBLIC,
-    VAPID_PRIVATE
-  );
+  webpush.setVapidDetails('mailto:admin@porte.app', VAPID_PUBLIC, VAPID_PRIVATE);
 }
 
 // ─── Tuya Token Cache ─────────────────────────────────────────────────────────
 let tuyaTokenCache = { token: null, expiresAt: 0 };
 
-function buildTokenSign(t) {
-  const str = TUYA.CLIENT_ID + t;
+function hmacSign(str) {
   return crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
 }
 
-function buildRequestSign({ token, t, nonce, method, path: urlPath, query = {}, body = '' }) {
-  const bodyHash = crypto
-    .createHash('sha256')
-    .update(typeof body === 'string' ? body : JSON.stringify(body))
-    .digest('hex');
+/**
+ * ✅ التوقيع الصحيح لطلب التوكن (الخوارزمية الجديدة بعد 2021)
+ *
+ * stringToSign = HTTPMethod + "\n" + SHA256(body) + "\n" + "" + "\n" + url
+ * str = CLIENT_ID + t + nonce + stringToSign
+ */
+function buildTokenSign(t) {
+  const nonce = '';
+  const url   = '/v1.0/token?grant_type=1';
+  const stringToSign = ['GET', EMPTY_BODY_HASH, '', url].join('\n');
+  const str = TUYA.CLIENT_ID + t + nonce + stringToSign;
 
-  const queryStr = Object.keys(query).length
-    ? '?' + new URLSearchParams(query).toString()
-    : '';
+  console.log('[Tuya] Token sign str:', str);
+  return hmacSign(str);
+}
 
-  const stringToSign = [method.toUpperCase(), bodyHash, '', urlPath + queryStr].join('\n');
+/**
+ * ✅ التوقيع الصحيح للطلبات العادية (بعد الحصول على التوكن)
+ *
+ * stringToSign = HTTPMethod + "\n" + SHA256(body) + "\n" + "" + "\n" + url
+ * str = CLIENT_ID + access_token + t + nonce + stringToSign
+ */
+function buildRequestSign({ token, t, nonce, method, urlPath, body = '' }) {
+  const bodyHash = body
+    ? crypto.createHash('sha256').update(body).digest('hex')
+    : EMPTY_BODY_HASH;
+
+  const stringToSign = [method.toUpperCase(), bodyHash, '', urlPath].join('\n');
   const str = TUYA.CLIENT_ID + token + t + nonce + stringToSign;
 
-  return crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
+  console.log('[Tuya] Request sign str:', str);
+  return hmacSign(str);
 }
 
+/**
+ * جلب Token من Tuya
+ */
 async function getTuyaToken() {
   const now = Date.now();
-  if (tuyaTokenCache.token && now < tuyaTokenCache.expiresAt) return tuyaTokenCache.token;
+  if (tuyaTokenCache.token && now < tuyaTokenCache.expiresAt) {
+    return tuyaTokenCache.token;
+  }
 
   const t    = now.toString();
   const sign = buildTokenSign(t);
 
+  console.log('[Tuya] Requesting token with sign:', sign);
+
   const res  = await fetch(`${TUYA.BASE_URL}/v1.0/token?grant_type=1`, {
     method: 'GET',
     headers: {
-      'client_id': TUYA.CLIENT_ID, 'sign': sign, 't': t,
-      'sign_method': 'HMAC-SHA256', 'nonce': '', 'Content-Type': 'application/json',
+      'client_id':    TUYA.CLIENT_ID,
+      'sign':         sign,
+      't':            t,
+      'sign_method':  'HMAC-SHA256',
+      'nonce':        '',
+      'Content-Type': 'application/json',
     },
   });
 
   const data = await res.json();
   console.log('[Tuya] Token response:', JSON.stringify(data));
 
-  if (!data.success) throw new Error(`Tuya token error: ${data.msg} (code: ${data.code})`);
+  if (!data.success) {
+    throw new Error(`Tuya token error: ${data.msg} (code: ${data.code})`);
+  }
 
   tuyaTokenCache = {
     token:     data.result.access_token,
@@ -93,20 +119,27 @@ async function getTuyaToken() {
   return tuyaTokenCache.token;
 }
 
+/**
+ * إرسال أمر لجهاز Tuya
+ */
 async function sendTuyaCommand(commands) {
   const token   = await getTuyaToken();
   const t       = Date.now().toString();
-  const nonce   = crypto.randomBytes(8).toString('hex');
+  const nonce   = crypto.randomBytes(16).toString('hex');
   const urlPath = `/v1.0/devices/${TUYA.DEVICE_ID}/commands`;
   const body    = JSON.stringify({ commands });
-  const sign    = buildRequestSign({ token, t, nonce, method: 'POST', path: urlPath, body });
+  const sign    = buildRequestSign({ token, t, nonce, method: 'POST', urlPath, body });
 
-  const res  = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
+  const res = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
     method: 'POST',
     headers: {
-      'client_id': TUYA.CLIENT_ID, 'access_token': token,
-      'sign': sign, 't': t, 'nonce': nonce,
-      'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
+      'client_id':    TUYA.CLIENT_ID,
+      'access_token': token,
+      'sign':         sign,
+      't':            t,
+      'nonce':        nonce,
+      'sign_method':  'HMAC-SHA256',
+      'Content-Type': 'application/json',
     },
     body,
   });
@@ -116,19 +149,26 @@ async function sendTuyaCommand(commands) {
   return data;
 }
 
+/**
+ * جلب حالة الجهاز
+ */
 async function getTuyaDeviceStatus() {
   const token   = await getTuyaToken();
   const t       = Date.now().toString();
-  const nonce   = crypto.randomBytes(8).toString('hex');
+  const nonce   = crypto.randomBytes(16).toString('hex');
   const urlPath = `/v1.0/devices/${TUYA.DEVICE_ID}/status`;
-  const sign    = buildRequestSign({ token, t, nonce, method: 'GET', path: urlPath });
+  const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
 
-  const res  = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
+  const res = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
     method: 'GET',
     headers: {
-      'client_id': TUYA.CLIENT_ID, 'access_token': token,
-      'sign': sign, 't': t, 'nonce': nonce,
-      'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
+      'client_id':    TUYA.CLIENT_ID,
+      'access_token': token,
+      'sign':         sign,
+      't':            t,
+      'nonce':        nonce,
+      'sign_method':  'HMAC-SHA256',
+      'Content-Type': 'application/json',
     },
   });
 
@@ -137,6 +177,7 @@ async function getTuyaDeviceStatus() {
   return data;
 }
 
+// ─── Push Notifications ───────────────────────────────────────────────────────
 async function sendPushToAll(notification) {
   if (!VAPID_PRIVATE) return;
   try {
@@ -165,7 +206,6 @@ app.post('/api/door/open', async (req, res) => {
     const { userId, reason } = req.body;
     const result = await sendTuyaCommand([{ code: 'switch_1', value: true }]);
     if (!result.success) return res.status(500).json({ success: false, error: result.msg });
-
     await supabase.from('door_logs').insert({
       user_id: userId || 'unknown', action: 'open', reason: reason || 'manual',
       success: true, created_at: new Date().toISOString(),
@@ -183,7 +223,6 @@ app.post('/api/door/close', async (req, res) => {
     const { userId } = req.body;
     const result = await sendTuyaCommand([{ code: 'switch_1', value: false }]);
     if (!result.success) return res.status(500).json({ success: false, error: result.msg });
-
     await supabase.from('door_logs').insert({
       user_id: userId || 'unknown', action: 'close', success: true,
       created_at: new Date().toISOString(),
@@ -222,9 +261,9 @@ app.post('/api/push/subscribe', async (req, res) => {
   try {
     const subscription = req.body;
     await supabase.from('push_subscriptions').upsert({
-      endpoint: subscription.endpoint,
-      p256dh:   subscription.keys?.p256dh,
-      auth:     subscription.keys?.auth,
+      endpoint:   subscription.endpoint,
+      p256dh:     subscription.keys?.p256dh,
+      auth:       subscription.keys?.auth,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'endpoint' });
     res.json({ success: true });
