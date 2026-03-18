@@ -684,6 +684,59 @@
   </div>
 </div>
 
+
+<!-- Modal: GPS -->
+<div class="modal-overlay" id="modal-gps">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">📡 إعدادات GPS</span>
+      <button class="modal-close" onclick="closeModal('modal-gps')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>شعاع الدائرة (متر)</label>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
+          <input type="range" id="gps-radius" min="10" max="2000" value="100" step="10"
+            oninput="document.getElementById('gps-radius-val').textContent=this.value"
+            style="flex:1;accent-color:var(--accent)">
+          <span id="gps-radius-val" style="font-family:'JetBrains Mono';font-weight:700;color:var(--accent);min-width:50px">100</span>
+          <span style="color:var(--muted);font-size:0.85rem">م</span>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <label style="font-size:0.82rem;color:var(--muted);font-weight:600">موقع الباب (اختياري)</label>
+          <button onclick="useMyLocation()" class="door-action-btn dab-edit" style="font-size:0.75rem">
+            📍 موقعي الحالي
+          </button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin-bottom:0">
+            <label>خط العرض (Lat)</label>
+            <input type="number" id="gps-lat" placeholder="36.8065" step="0.000001"
+              style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 14px;width:100%;font-family:'JetBrains Mono';font-size:0.85rem;direction:ltr">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>خط الطول (Lng)</label>
+            <input type="number" id="gps-lng" placeholder="10.1815" step="0.000001"
+              style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 14px;width:100%;font-family:'JetBrains Mono';font-size:0.85rem;direction:ltr">
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-top:16px;font-size:0.82rem;color:var(--muted)">
+        <div style="font-weight:700;color:var(--text);margin-bottom:6px">كيف يعمل؟</div>
+        المستخدم يجب أن يكون داخل دائرة شعاعها <strong style="color:var(--accent)" id="gps-info-val">100</strong>م حول موقع الباب لكي يتمكن من فتحه.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-gps')">إلغاء</button>
+      <button class="btn btn-primary btn-sm" onclick="saveGpsModal()" style="flex:1">حفظ</button>
+    </div>
+  </div>
+</div>
+
 <script src="/app.js"></script>
 </body>
 </html>
