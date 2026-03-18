@@ -696,7 +696,7 @@
       <div class="form-group">
         <label>شعاع الدائرة (متر)</label>
         <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
-          <input type="range" id="gps-radius" min="10" max="2000" value="100" step="10"
+          <input type="range" id="gps-radius" min="0" max="2000" value="100" step="10"
             oninput="document.getElementById('gps-radius-val').textContent=this.value"
             style="flex:1;accent-color:var(--accent)">
           <span id="gps-radius-val" style="font-family:'JetBrains Mono';font-weight:700;color:var(--accent);min-width:50px">100</span>
@@ -727,7 +727,7 @@
 
       <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-top:16px;font-size:0.82rem;color:var(--muted)">
         <div style="font-weight:700;color:var(--text);margin-bottom:6px">كيف يعمل؟</div>
-        المستخدم يجب أن يكون داخل دائرة شعاعها <strong style="color:var(--accent)" id="gps-info-val">100</strong>م حول موقع الباب لكي يتمكن من فتحه.
+        المستخدم يجب أن يكون داخل دائرة شعاعها <strong style="color:var(--accent)" id="gps-info-val">100</strong>م حول موقع الباب. <span style="color:var(--warning)">0م = لا قيود على الموقع</span>
       </div>
     </div>
     <div class="modal-footer">
