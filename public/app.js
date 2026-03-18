@@ -78,7 +78,6 @@ function bootApp() {
   const isSuperAdmin = user.role === 'super_admin';
 
   if (!isAdmin) {
-    document.getElementById('nav-dashboard').style.display = 'none';
     document.getElementById('nav-users').style.display = 'none';
   }
   if (isSuperAdmin) {
@@ -92,11 +91,15 @@ function bootApp() {
     loadStats();
   }
 
-  loadDoorStatus();
-  loadRecentHistory();
   connectWS();
   subscribePush();
   startLocationTracking();
+  // افتح صفحة المؤسسات افتراضياً للسوبر أدمن والأدمن
+  if (['admin','super_admin'].includes(user.role)) {
+    showPage('institutes', document.querySelector('[onclick*="institutes"]'));
+  } else {
+    showPage('institutes', document.querySelector('[onclick*="institutes"]'));
+  }
 }
 
 // ─── WebSocket ────────────────────────────────
@@ -525,6 +528,20 @@ async function toggleGps(instId, key, value) {
     const inst = institutesCache.find(i => i.id === instId);
     const gps  = { ...(inst?.gps||{}), [key]: value };
     await apiFetch(`/api/institutes/${instId}`, 'PUT', { gps });
+    loadInstitutes();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function toggleDoorGps(doorId, key, value) {
+  try {
+    // Find door in cache
+    let doorGps = {};
+    institutesCache.forEach(inst => {
+      const door = (inst.doors||[]).find(d => d.id === doorId);
+      if (door) doorGps = door.gps || {};
+    });
+    const gps = { ...doorGps, [key]: value };
+    await apiFetch(`/api/doors/${doorId}`, 'PUT', { gps });
     loadInstitutes();
   } catch(e) { toast(e.message, 'error'); }
 }
