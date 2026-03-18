@@ -338,10 +338,14 @@ async function loadInstitutes() {
 // ─── GPS Modal ────────────────────────────────────────
 let currentGpsInstId = null;
 
-function openGpsModal(instId, range, lat, lng) {
-  currentGpsInstId = instId;
-  document.getElementById('gps-radius').value = range || 100;
-  document.getElementById('gps-radius-val').textContent = range || 100;
+let currentGpsDoorId = null;
+
+function openGpsModal(doorId, range, lat, lng) {
+  currentGpsDoorId = doorId;
+  const r = range === undefined || range === null ? 100 : range;
+  document.getElementById('gps-radius').value = r;
+  document.getElementById('gps-radius-val').textContent = r;
+  document.getElementById('gps-info-val').textContent = r;
   document.getElementById('gps-lat').value = lat || '';
   document.getElementById('gps-lng').value = lng || '';
   openModal('modal-gps');
@@ -352,9 +356,9 @@ async function saveGpsModal() {
   const lat   = parseFloat(document.getElementById('gps-lat').value) || null;
   const lng   = parseFloat(document.getElementById('gps-lng').value) || null;
   try {
-    const inst = institutesCache.find(i => i.id === currentGpsInstId);
-    const gps  = { ...(inst?.gps||{}), range, lat, lng };
-    await apiFetch(`/api/institutes/${currentGpsInstId}`, 'PUT', { gps });
+    await apiFetch(`/api/doors/${currentGpsDoorId}`, 'PUT', {
+      gps: { range, lat, lng }
+    });
     closeModal('modal-gps');
     loadInstitutes();
     toast('تم حفظ إعدادات GPS', 'success');
@@ -374,23 +378,22 @@ function useMyLocation() {
 const doorStatusCache = {};
 
 async function checkDoorStatus(deviceId, elemId) {
+  const el = document.getElementById(elemId);
+  if (!el) return;
+  el.textContent = '...';
+  el.style.color = 'var(--muted)';
+  el.style.background = 'var(--surface)';
   try {
-    const data = await apiFetch(`/api/door/status?deviceId=${deviceId}`);
-    const online = data.success !== false;
+    const data = await apiFetch(`/api/device/status/${deviceId}`);
+    const online = data.online === true;
     doorStatusCache[deviceId] = online;
-    const el = document.getElementById(elemId);
-    if (el) {
-      el.textContent = online ? 'En ligne' : 'Hors ligne';
-      el.style.color = online ? 'var(--success)' : 'var(--danger)';
-      el.style.background = online ? 'rgba(0,230,118,0.1)' : 'rgba(255,61,113,0.1)';
-    }
+    el.textContent = online ? 'En ligne' : 'Hors ligne';
+    el.style.color = online ? 'var(--success)' : 'var(--danger)';
+    el.style.background = online ? 'rgba(0,230,118,0.1)' : 'rgba(255,61,113,0.1)';
   } catch {
-    const el = document.getElementById(elemId);
-    if (el) {
-      el.textContent = 'Hors ligne';
-      el.style.color = 'var(--danger)';
-      el.style.background = 'rgba(255,61,113,0.1)';
-    }
+    el.textContent = 'Hors ligne';
+    el.style.color = 'var(--danger)';
+    el.style.background = 'rgba(255,61,113,0.1)';
   }
 }
 
@@ -416,7 +419,6 @@ function renderInstitutes(insts) {
       <div class="inst-meta">
         <span>🚪 ${(inst.doors||[]).length} باب</span>
         <span>👥 ${(inst.users_count||0)} مستخدم</span>
-        <span style="cursor:pointer;text-decoration:underline dotted" onclick="openGpsModal('${inst.id}',${inst.gps?.range||100},${inst.gps?.lat||'null'},${inst.gps?.lng||'null'})">📡 GPS: ${inst.gps?.range||100}م</span>
       </div>
 
       <div class="section-label">سجلات الأبواب:</div>
@@ -424,9 +426,10 @@ function renderInstitutes(insts) {
         ${idx > 0 ? '<div style="border-top:1px solid var(--border);margin:10px 0"></div>' : ''}
         <div class="door-row">
           <div class="door-row-info">
-            <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <div class="door-row-name">⏳ ${door.name}</div>
               <span id="door-status-${door.id}" style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>
+              <span onclick="openGpsModal('${door.id}',${door.gps?.range ?? 100},${door.gps?.lat||'null'},${door.gps?.lng||'null'})" style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(0,212,255,0.1);color:var(--accent);cursor:pointer">📡 ${door.gps?.range ?? 100}م</span>
             </div>
             <div class="door-row-id">ID: ${door.device_id?.substring(0,16)}...</div>
           </div>
