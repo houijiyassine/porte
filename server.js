@@ -18,13 +18,13 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-const SUPABASE_URL      = process.env.SUPABASE_URL      || 'https://sjfaootvlxesdytdsknc.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZmFvb3R2bHhlc2R5dGRza25jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxODAyNTcsImV4cCI6MjA4ODc1NjI1N30.pEhpszTGygiR6brpWHglnpcASAPw7kyWl0qd5mFwwMQ';
+const SUPABASE_URL         = process.env.SUPABASE_URL      || 'https://sjfaootvlxesdytdsknc.supabase.co';
+const SUPABASE_ANON_KEY    = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZmFvb3R2bHhlc2R5dGRza25jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxODAyNTcsImV4cCI6MjA4ODc1NjI1N30.pEhpszTGygiR6brpWHglnpcASAPw7kyWl0qd5mFwwMQ';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 const TUYA = {
-  CLIENT_ID: process.env.TUYA_CLIENT_ID || '59gmr8xdf3m5vdt55c89',
-  SECRET:    process.env.TUYA_SECRET    || 'f551321a6229419098b3c40728460bdd',
+  CLIENT_ID: process.env.TUYA_CLIENT_ID || 'y85me8yq7d3vvk7vghuy',
+  SECRET:    process.env.TUYA_SECRET    || '59525637e59245bea73190da68e3c7e9',
   DEVICE_ID: process.env.TUYA_DEVICE_ID || 'bf7c670914391fc80cwayk',
   BASE_URL:  process.env.TUYA_BASE_URL  || 'https://openapi.tuyaeu.com',
 };
@@ -34,6 +34,9 @@ const VAPID_PRIVATE = process.env.VAPID_PRIVATE;
 
 const EMPTY_BODY_HASH = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
+// مدة الفتح الافتراضية بالثواني (يمكن تغييرها لكل باب)
+const DEFAULT_DURATION = parseInt(process.env.DEFAULT_DURATION || '5');
+
 // ─── Supabase ─────────────────────────────────────────────────────────────────
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY);
 
@@ -42,7 +45,7 @@ if (VAPID_PRIVATE) {
   webpush.setVapidDetails('mailto:admin@porte.app', VAPID_PUBLIC, VAPID_PRIVATE);
 }
 
-// ─── WebSocket broadcast ──────────────────────────────────────────────────────
+// ─── WebSocket ────────────────────────────────────────────────────────────────
 function broadcast(data) {
   const msg = JSON.stringify(data);
   wss.clients.forEach(client => {
@@ -50,50 +53,31 @@ function broadcast(data) {
   });
 }
 
-wss.on('connection', (ws, req) => {
-  // Extract token from query string for auth
-  const url   = new URL(req.url, 'http://localhost');
-  const token = url.searchParams.get('token');
-  console.log('[WS] Client connected, token present:', !!token);
-
-  ws.on('message', (msg) => {
-    try {
-      const data = JSON.parse(msg);
-      console.log('[WS] Received:', data);
-    } catch (e) { /* ignore */ }
-  });
-
+wss.on('connection', (ws) => {
+  console.log('[WS] Client connected');
+  ws.send(JSON.stringify({ type: 'connected' }));
   ws.on('close', () => console.log('[WS] Client disconnected'));
-
-  // Send current status on connect
-  ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket ready' }));
 });
 
-// ─── Tuya Token Cache ─────────────────────────────────────────────────────────
+// ─── Tuya Token ───────────────────────────────────────────────────────────────
 let tuyaTokenCache = { token: null, expiresAt: 0 };
 
 function hmacSign(str) {
   return crypto.createHmac('sha256', TUYA.SECRET).update(str).digest('hex').toUpperCase();
 }
 
-// ✅ التوقيع الصحيح لطلب التوكن (الخوارزمية الجديدة post-2021)
 function buildTokenSign(t) {
   const url          = '/v1.0/token?grant_type=1';
   const stringToSign = ['GET', EMPTY_BODY_HASH, '', url].join('\n');
-  const str          = TUYA.CLIENT_ID + t + '' + stringToSign;
-  console.log('[Tuya] Token signStr:', str);
-  return hmacSign(str);
+  return hmacSign(TUYA.CLIENT_ID + t + '' + stringToSign);
 }
 
-// ✅ التوقيع الصحيح للطلبات العادية
 function buildRequestSign({ token, t, nonce, method, urlPath, body = '' }) {
   const bodyHash     = body
     ? crypto.createHash('sha256').update(body).digest('hex')
     : EMPTY_BODY_HASH;
   const stringToSign = [method.toUpperCase(), bodyHash, '', urlPath].join('\n');
-  const str          = TUYA.CLIENT_ID + token + t + nonce + stringToSign;
-  console.log('[Tuya] Request signStr:', str);
-  return hmacSign(str);
+  return hmacSign(TUYA.CLIENT_ID + token + t + nonce + stringToSign);
 }
 
 async function getTuyaToken() {
@@ -113,9 +97,8 @@ async function getTuyaToken() {
   });
 
   const data = await res.json();
-  console.log('[Tuya] Token response:', JSON.stringify(data));
-
-  if (!data.success) throw new Error(`Tuya token error: ${data.msg} (code: ${data.code})`);
+  console.log('[Tuya] Token:', data.success ? '✅' : `❌ ${data.msg}`);
+  if (!data.success) throw new Error(`Tuya token error: ${data.msg}`);
 
   tuyaTokenCache = {
     token:     data.result.access_token,
@@ -124,11 +107,11 @@ async function getTuyaToken() {
   return tuyaTokenCache.token;
 }
 
-async function sendTuyaCommand(commands) {
+async function sendTuyaCommands(deviceId, commands) {
   const token   = await getTuyaToken();
   const t       = Date.now().toString();
   const nonce   = crypto.randomBytes(16).toString('hex');
-  const urlPath = `/v1.0/devices/${TUYA.DEVICE_ID}/commands`;
+  const urlPath = `/v1.0/devices/${deviceId}/commands`;
   const body    = JSON.stringify({ commands });
   const sign    = buildRequestSign({ token, t, nonce, method: 'POST', urlPath, body });
 
@@ -143,15 +126,15 @@ async function sendTuyaCommand(commands) {
   });
 
   const data = await res.json();
-  console.log('[Tuya] Command response:', JSON.stringify(data));
+  console.log('[Tuya] Commands:', JSON.stringify(data));
   return data;
 }
 
-async function getTuyaDeviceStatus() {
+async function getTuyaDeviceStatus(deviceId) {
   const token   = await getTuyaToken();
   const t       = Date.now().toString();
   const nonce   = crypto.randomBytes(16).toString('hex');
-  const urlPath = `/v1.0/devices/${TUYA.DEVICE_ID}/status`;
+  const urlPath = `/v1.0/devices/${deviceId}/status`;
   const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
 
   const res = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
@@ -164,8 +147,83 @@ async function getTuyaDeviceStatus() {
   });
 
   const data = await res.json();
-  console.log('[Tuya] Status response:', JSON.stringify(data));
   return data;
+}
+
+// ─── منطق الباب الذكي ─────────────────────────────────────────────────────────
+/**
+ * فتح الباب:
+ * 1. إذا R2 شغّال → أوقفه أولاً
+ * 2. شغّل R1 مع countdown بـ X ثانية (Tuya يوقفه تلقائياً)
+ *
+ * غلق الباب:
+ * 1. إذا R1 شغّال → أوقفه أولاً
+ * 2. شغّل R2 مع countdown بـ X ثانية (Tuya يوقفه تلقائياً)
+ */
+async function openDoor(deviceId, durationSeconds) {
+  // اقرأ الحالة الحالية
+  const statusData = await getTuyaDeviceStatus(deviceId);
+  const status     = statusData.result || [];
+  const r2Status   = status.find(s => s.code === 'switch_2')?.value;
+
+  console.log(`[Door] Open - R2 status: ${r2Status}, duration: ${durationSeconds}s`);
+
+  const commands = [];
+
+  // إذا R2 شغّال، أوقفه أولاً
+  if (r2Status === true) {
+    commands.push({ code: 'switch_2', value: false });
+  }
+
+  // شغّل R1 مع countdown
+  commands.push({ code: 'switch_1', value: true });
+  commands.push({ code: 'countdown_1', value: durationSeconds });
+
+  return await sendTuyaCommands(deviceId, commands);
+}
+
+async function closeDoor(deviceId, durationSeconds) {
+  // اقرأ الحالة الحالية
+  const statusData = await getTuyaDeviceStatus(deviceId);
+  const status     = statusData.result || [];
+  const r1Status   = status.find(s => s.code === 'switch_1')?.value;
+
+  console.log(`[Door] Close - R1 status: ${r1Status}, duration: ${durationSeconds}s`);
+
+  const commands = [];
+
+  // إذا R1 شغّال، أوقفه أولاً
+  if (r1Status === true) {
+    commands.push({ code: 'switch_1', value: false });
+  }
+
+  // شغّل R2 مع countdown
+  commands.push({ code: 'switch_2', value: true });
+  commands.push({ code: 'countdown_2', value: durationSeconds });
+
+  return await sendTuyaCommands(deviceId, commands);
+}
+
+async function stopDoor(deviceId) {
+  console.log('[Door] Stop - turning off both R1 and R2');
+  return await sendTuyaCommands(deviceId, [
+    { code: 'switch_1', value: false },
+    { code: 'switch_2', value: false },
+  ]);
+}
+
+// ─── جلب مدة الباب من Supabase ───────────────────────────────────────────────
+async function getDoorDuration(doorId) {
+  try {
+    const { data } = await supabase
+      .from('doors')
+      .select('duration_seconds')
+      .eq('id', doorId)
+      .single();
+    return data?.duration_seconds || DEFAULT_DURATION;
+  } catch {
+    return DEFAULT_DURATION;
+  }
 }
 
 // ─── Push ─────────────────────────────────────────────────────────────────────
@@ -192,111 +250,163 @@ async function sendPushToAll(notification) {
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-// فتح الباب
+// ✅ فتح الباب
 app.post('/api/door/open', async (req, res) => {
   try {
-    const { userId, reason } = req.body;
-    const result = await sendTuyaCommand([{ code: 'switch_1', value: true }]);
-    if (!result.success) return res.status(500).json({ success: false, error: result.msg });
-    await supabase.from('door_logs').insert({
-      user_id: userId || 'unknown', action: 'open', reason: reason || 'manual',
-      success: true, created_at: new Date().toISOString(),
-    });
-    broadcast({ type: 'door_event', action: 'open', userId });
-    await sendPushToAll({ title: '🚪 الباب مفتوح', body: `بواسطة ${userId || 'مجهول'}` });
-    res.json({ success: true, message: 'تم فتح الباب' });
-  } catch (err) {
-    console.error('[Door Open Error]', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
+    const { userId, doorId } = req.body;
+    const deviceId = req.body.deviceId || TUYA.DEVICE_ID;
+    const duration = doorId
+      ? await getDoorDuration(doorId)
+      : (req.body.duration || DEFAULT_DURATION);
 
-// إغلاق الباب
-app.post('/api/door/close', async (req, res) => {
-  try {
-    const { userId } = req.body;
-    const result = await sendTuyaCommand([{ code: 'switch_1', value: false }]);
+    const result = await openDoor(deviceId, duration);
     if (!result.success) return res.status(500).json({ success: false, error: result.msg });
+
     await supabase.from('door_logs').insert({
-      user_id: userId || 'unknown', action: 'close', success: true,
+      door_id: doorId || null,
+      user_id: userId || null,
+      action: 'open', source: 'app', success: true,
       created_at: new Date().toISOString(),
     });
-    broadcast({ type: 'door_event', action: 'close', userId });
-    res.json({ success: true, message: 'تم إغلاق الباب' });
+
+    broadcast({ type: 'door_event', action: 'open', doorId, userId, duration });
+    await sendPushToAll({ title: '🚪 الباب مفتوح', body: `سيُغلق بعد ${duration} ثانية` });
+
+    res.json({ success: true, message: `تم فتح الباب لمدة ${duration} ثانية` });
   } catch (err) {
-    console.error('[Door Close Error]', err);
+    console.error('[Open Error]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// ✅ endpoint جديد: /api/door/control (الذي يطلبه app.js)
+// ✅ غلق الباب
+app.post('/api/door/close', async (req, res) => {
+  try {
+    const { userId, doorId } = req.body;
+    const deviceId = req.body.deviceId || TUYA.DEVICE_ID;
+    const duration = doorId
+      ? await getDoorDuration(doorId)
+      : (req.body.duration || DEFAULT_DURATION);
+
+    const result = await closeDoor(deviceId, duration);
+    if (!result.success) return res.status(500).json({ success: false, error: result.msg });
+
+    await supabase.from('door_logs').insert({
+      door_id: doorId || null,
+      user_id: userId || null,
+      action: 'close', source: 'app', success: true,
+      created_at: new Date().toISOString(),
+    });
+
+    broadcast({ type: 'door_event', action: 'close', doorId, userId });
+
+    res.json({ success: true, message: 'تم غلق الباب' });
+  } catch (err) {
+    console.error('[Close Error]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ إيقاف فوري
+app.post('/api/door/stop', async (req, res) => {
+  try {
+    const { doorId } = req.body;
+    const deviceId = req.body.deviceId || TUYA.DEVICE_ID;
+
+    await stopDoor(deviceId);
+    broadcast({ type: 'door_event', action: 'stop', doorId });
+    res.json({ success: true, message: 'تم الإيقاف' });
+  } catch (err) {
+    console.error('[Stop Error]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ /api/door/control (يدعم open/close/stop/pulse)
 app.post('/api/door/control', async (req, res) => {
   try {
-    const { action, userId, duration } = req.body;
-    // action: 'open' | 'close' | 'stop' | 'pulse'
+    const { action, userId, doorId, duration: reqDuration } = req.body;
+    const deviceId = req.body.deviceId || TUYA.DEVICE_ID;
+    const duration = doorId
+      ? await getDoorDuration(doorId)
+      : (reqDuration || DEFAULT_DURATION);
 
-    if (action === 'open') {
-      const result = await sendTuyaCommand([{ code: 'switch_1', value: true }]);
-      if (!result.success) return res.status(500).json({ success: false, error: result.msg });
-      await supabase.from('door_logs').insert({
-        user_id: userId || 'unknown', action: 'open', success: true,
-        created_at: new Date().toISOString(),
-      });
-      broadcast({ type: 'door_event', action: 'open', userId });
-      await sendPushToAll({ title: '🚪 الباب مفتوح', body: `بواسطة ${userId || 'مجهول'}` });
-      return res.json({ success: true, message: 'تم فتح الباب' });
-    }
+    let result;
+    if (action === 'open')  result = await openDoor(deviceId, duration);
+    else if (action === 'close') result = await closeDoor(deviceId, duration);
+    else if (action === 'stop')  result = await stopDoor(deviceId);
+    else return res.status(400).json({ success: false, error: 'action غير معروف' });
 
-    if (action === 'close') {
-      const result = await sendTuyaCommand([{ code: 'switch_1', value: false }]);
-      if (!result.success) return res.status(500).json({ success: false, error: result.msg });
-      await supabase.from('door_logs').insert({
-        user_id: userId || 'unknown', action: 'close', success: true,
-        created_at: new Date().toISOString(),
-      });
-      broadcast({ type: 'door_event', action: 'close', userId });
-      return res.json({ success: true, message: 'تم إغلاق الباب' });
-    }
+    if (result && !result.success)
+      return res.status(500).json({ success: false, error: result.msg });
 
-    if (action === 'stop') {
-      // بعض الأجهزة تدعم stop
-      const result = await sendTuyaCommand([{ code: 'stop', value: true }]);
-      broadcast({ type: 'door_event', action: 'stop', userId });
-      return res.json({ success: result.success, message: 'تم إيقاف الباب' });
-    }
+    await supabase.from('door_logs').insert({
+      door_id: doorId || null, user_id: userId || null,
+      action, source: 'app', success: true,
+      created_at: new Date().toISOString(),
+    });
 
-    if (action === 'pulse') {
-      // فتح ثم إغلاق بعد مدة (افتراضي 40 ثانية)
-      const ms = (duration || 40) * 1000;
-      const r1 = await sendTuyaCommand([{ code: 'switch_1', value: true }]);
-      if (!r1.success) return res.status(500).json({ success: false, error: r1.msg });
-      broadcast({ type: 'door_event', action: 'open', userId });
-      setTimeout(async () => {
-        await sendTuyaCommand([{ code: 'switch_1', value: false }]);
-        broadcast({ type: 'door_event', action: 'close', userId: 'auto' });
-      }, ms);
-      return res.json({ success: true, message: `فتح لمدة ${duration || 40} ثانية` });
-    }
-
-    res.status(400).json({ success: false, error: 'action غير معروف' });
+    broadcast({ type: 'door_event', action, doorId, userId, duration });
+    res.json({ success: true, message: `تم تنفيذ: ${action}` });
   } catch (err) {
-    console.error('[Door Control Error]', err);
+    console.error('[Control Error]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// حالة الباب
+// ✅ حالة الباب
 app.get('/api/door/status', async (req, res) => {
   try {
-    const data = await getTuyaDeviceStatus();
-    res.json({ success: true, status: data.result });
+    const deviceId = req.query.deviceId || TUYA.DEVICE_ID;
+    const data     = await getTuyaDeviceStatus(deviceId);
+    const status   = data.result || [];
+
+    const r1 = status.find(s => s.code === 'switch_1')?.value;
+    const r2 = status.find(s => s.code === 'switch_2')?.value;
+    const c1 = status.find(s => s.code === 'countdown_1')?.value;
+    const c2 = status.find(s => s.code === 'countdown_2')?.value;
+
+    res.json({
+      success: true,
+      door: {
+        state: r1 ? 'opening' : r2 ? 'closing' : 'idle',
+        r1_on: r1,
+        r2_on: r2,
+        countdown_open:  c1,
+        countdown_close: c2,
+      },
+    });
   } catch (err) {
-    console.error('[Door Status Error]', err);
+    console.error('[Status Error]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// سجل العمليات
+// ✅ تحديث مدة باب (Super Admin)
+app.patch('/api/door/:doorId/duration', async (req, res) => {
+  try {
+    const { doorId } = req.params;
+    const { duration } = req.body; // بالثواني
+
+    if (!duration || duration < 1 || duration > 300)
+      return res.status(400).json({ success: false, error: 'المدة يجب أن تكون بين 1 و 300 ثانية' });
+
+    const { error } = await supabase
+      .from('doors')
+      .update({ duration_seconds: duration })
+      .eq('id', doorId);
+
+    if (error) throw error;
+
+    broadcast({ type: 'duration_updated', doorId, duration });
+    res.json({ success: true, duration, message: `تم تحديث المدة إلى ${duration} ثانية` });
+  } catch (err) {
+    console.error('[Duration Error]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ سجل العمليات
 app.get('/api/door/logs', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -305,12 +415,11 @@ app.get('/api/door/logs', async (req, res) => {
     if (error) throw error;
     res.json({ success: true, logs: data });
   } catch (err) {
-    console.error('[Logs Error]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Push subscribe
+// ✅ Push
 app.post('/api/push/subscribe', async (req, res) => {
   try {
     const sub = req.body;
@@ -320,14 +429,12 @@ app.post('/api/push/subscribe', async (req, res) => {
     }, { onConflict: 'endpoint' });
     res.json({ success: true });
   } catch (err) {
-    console.error('[Push Subscribe Error]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 app.get('/api/push/vapid-key', (req, res) => res.json({ publicKey: VAPID_PUBLIC }));
 
-// Fallback
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ─── Start ────────────────────────────────────────────────────────────────────
@@ -336,6 +443,7 @@ server.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
   console.log(`🔑 Tuya Client ID: ${TUYA.CLIENT_ID}`);
   console.log(`🌐 Tuya Base URL: ${TUYA.BASE_URL}`);
+  console.log(`⏱️  Default duration: ${DEFAULT_DURATION}s`);
   console.log(`📱 VAPID configured: ${!!VAPID_PRIVATE}`);
   console.log(`🔌 WebSocket ready`);
 });
