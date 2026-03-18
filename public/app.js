@@ -335,6 +335,65 @@ async function loadInstitutes() {
   } catch {}
 }
 
+// ─── GPS Modal ────────────────────────────────────────
+let currentGpsInstId = null;
+
+function openGpsModal(instId, range, lat, lng) {
+  currentGpsInstId = instId;
+  document.getElementById('gps-radius').value = range || 100;
+  document.getElementById('gps-radius-val').textContent = range || 100;
+  document.getElementById('gps-lat').value = lat || '';
+  document.getElementById('gps-lng').value = lng || '';
+  openModal('modal-gps');
+}
+
+async function saveGpsModal() {
+  const range = parseInt(document.getElementById('gps-radius').value);
+  const lat   = parseFloat(document.getElementById('gps-lat').value) || null;
+  const lng   = parseFloat(document.getElementById('gps-lng').value) || null;
+  try {
+    const inst = institutesCache.find(i => i.id === currentGpsInstId);
+    const gps  = { ...(inst?.gps||{}), range, lat, lng };
+    await apiFetch(`/api/institutes/${currentGpsInstId}`, 'PUT', { gps });
+    closeModal('modal-gps');
+    loadInstitutes();
+    toast('تم حفظ إعدادات GPS', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function useMyLocation() {
+  if (!navigator.geolocation) return toast('GPS غير متاح', 'error');
+  navigator.geolocation.getCurrentPosition(pos => {
+    document.getElementById('gps-lat').value = pos.coords.latitude.toFixed(6);
+    document.getElementById('gps-lng').value = pos.coords.longitude.toFixed(6);
+    toast('تم تحديد موقعك', 'success');
+  }, () => toast('تعذر تحديد الموقع', 'error'));
+}
+
+// ─── Door Online Status ────────────────────────────────
+const doorStatusCache = {};
+
+async function checkDoorStatus(deviceId, elemId) {
+  try {
+    const data = await apiFetch(`/api/door/status?deviceId=${deviceId}`);
+    const online = data.success !== false;
+    doorStatusCache[deviceId] = online;
+    const el = document.getElementById(elemId);
+    if (el) {
+      el.textContent = online ? 'En ligne' : 'Hors ligne';
+      el.style.color = online ? 'var(--success)' : 'var(--danger)';
+      el.style.background = online ? 'rgba(0,230,118,0.1)' : 'rgba(255,61,113,0.1)';
+    }
+  } catch {
+    const el = document.getElementById(elemId);
+    if (el) {
+      el.textContent = 'Hors ligne';
+      el.style.color = 'var(--danger)';
+      el.style.background = 'rgba(255,61,113,0.1)';
+    }
+  }
+}
+
 function renderInstitutes(insts) {
   const container = document.getElementById('institutes-list');
   if (!insts?.length) {
@@ -357,14 +416,18 @@ function renderInstitutes(insts) {
       <div class="inst-meta">
         <span>🚪 ${(inst.doors||[]).length} باب</span>
         <span>👥 ${(inst.users_count||0)} مستخدم</span>
-        <span>📡 GPS: ${inst.gps?.range||100}م</span>
+        <span style="cursor:pointer;text-decoration:underline dotted" onclick="openGpsModal('${inst.id}',${inst.gps?.range||100},${inst.gps?.lat||'null'},${inst.gps?.lng||'null'})">📡 GPS: ${inst.gps?.range||100}م</span>
       </div>
 
       <div class="section-label">سجلات الأبواب:</div>
-      ${(inst.doors||[]).map(door => `
+      ${(inst.doors||[]).map((door, idx) => `
+        ${idx > 0 ? '<div style="border-top:1px solid var(--border);margin:10px 0"></div>' : ''}
         <div class="door-row">
           <div class="door-row-info">
-            <div class="door-row-name">⏳ ${door.name}</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="door-row-name">⏳ ${door.name}</div>
+              <span id="door-status-${door.id}" style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>
+            </div>
             <div class="door-row-id">ID: ${door.device_id?.substring(0,16)}...</div>
           </div>
           <div class="door-row-btns">
@@ -386,7 +449,7 @@ function renderInstitutes(insts) {
             <span class="toggle-knob"></span>
           </label>
         </div>
-        <div class="gps-row" style="margin-top:4px;margin-bottom:8px">
+        <div class="gps-row" style="margin-top:4px;margin-bottom:4px">
           <div>
             <div class="gps-label">📍 GPS مستخدمين</div>
             <div class="toggle-status" style="color:${inst.gps?.user_required?'var(--success)':'var(--danger)'}">${inst.gps?.user_required?'ON':'OFF'}</div>
@@ -398,11 +461,20 @@ function renderInstitutes(insts) {
         </div>
       `).join('')}
 
-      <button class="door-action-btn dab-open" onclick="openAddDoor('${inst.id}')" style="margin-top:8px;width:100%;padding:10px;border-radius:10px;font-size:0.82rem">
+      <button class="door-action-btn dab-open" onclick="openAddDoor('${inst.id}')" style="margin-top:10px;width:100%;padding:10px;border-radius:10px;font-size:0.82rem">
         + إضافة باب
       </button>
     </div>
   `).join('');
+
+  // تحقق من حالة كل باب بعد الرندر
+  setTimeout(() => {
+    insts.forEach(inst => {
+      (inst.doors||[]).forEach(door => {
+        checkDoorStatus(door.device_id, `door-status-${door.id}`);
+      });
+    });
+  }, 300);
 }
 
 function openAddInst() {
