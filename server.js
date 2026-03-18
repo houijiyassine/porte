@@ -21,6 +21,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const SUPABASE_URL         = process.env.SUPABASE_URL      || 'https://sjfaootvlxesdytdsknc.supabase.co';
 const SUPABASE_ANON_KEY    = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZmFvb3R2bHhlc2R5dGRza25jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxODAyNTcsImV4cCI6MjA4ODc1NjI1N30.pEhpszTGygiR6brpWHglnpcASAPw7kyWl0qd5mFwwMQ';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const JWT_SECRET           = process.env.JWT_SECRET || 'porte-secret-key-2024';
 
 const TUYA = {
   CLIENT_ID: process.env.TUYA_CLIENT_ID || 'y85me8yq7d3vvk7vghuy',
@@ -31,7 +32,6 @@ const TUYA = {
 
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC  || 'BOfIw6laarxGfV8Ezc04YzfCzq4Njm7ewizkfnGDIWJGpsfHkqUHVG8SXGb8cJZJxOTIzFeauX4K0Z8oYdfgKTw';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE;
-
 const EMPTY_BODY_HASH  = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 const DEFAULT_DURATION = parseInt(process.env.DEFAULT_DURATION || '5');
 
@@ -44,6 +44,8 @@ if (VAPID_PRIVATE) {
 }
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
+const wsClients = new Map(); // userId → ws
+
 function broadcast(data) {
   const msg = JSON.stringify(data);
   wss.clients.forEach(client => {
@@ -51,13 +53,75 @@ function broadcast(data) {
   });
 }
 
-wss.on('connection', (ws) => {
-  console.log('[WS] Client connected');
+wss.on('connection', (ws, req) => {
+  const url   = new URL(req.url, 'http://localhost');
+  const token = url.searchParams.get('token');
+  let userId  = null;
+
+  if (token) {
+    try {
+      const payload = verifyToken(token);
+      userId = payload.id;
+      wsClients.set(userId, ws);
+    } catch {}
+  }
+
   ws.send(JSON.stringify({ type: 'connected' }));
-  ws.on('close', () => console.log('[WS] Client disconnected'));
+
+  ws.on('message', (raw) => {
+    try {
+      const msg = JSON.parse(raw);
+      if (msg.type === 'location' && userId) {
+        broadcast({ type: 'user_location', userId, coords: msg.coords });
+      }
+    } catch {}
+  });
+
+  ws.on('close', () => {
+    if (userId) wsClients.delete(userId);
+  });
 });
 
-// ─── Tuya Token ───────────────────────────────────────────────────────────────
+// ─── JWT ──────────────────────────────────────────────────────────────────────
+function signToken(payload) {
+  const header  = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body    = Buffer.from(JSON.stringify({ ...payload, iat: Date.now() })).toString('base64url');
+  const sig     = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+  return `${header}.${body}.${sig}`;
+}
+
+function verifyToken(token) {
+  const [header, body, sig] = token.split('.');
+  const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+  if (sig !== expected) throw new Error('Invalid token');
+  return JSON.parse(Buffer.from(body, 'base64url').toString());
+}
+
+// ─── Auth Middleware ──────────────────────────────────────────────────────────
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'غير مصرح' });
+  try {
+    req.user = verifyToken(authHeader.replace('Bearer ', ''));
+    next();
+  } catch {
+    res.status(401).json({ error: 'جلسة منتهية' });
+  }
+}
+
+function adminOnly(req, res, next) {
+  if (!['admin', 'super_admin'].includes(req.user.role))
+    return res.status(403).json({ error: 'غير مسموح' });
+  next();
+}
+
+function superAdminOnly(req, res, next) {
+  if (req.user.role !== 'super_admin')
+    return res.status(403).json({ error: 'للسوبر أدمن فقط' });
+  next();
+}
+
+// ─── Tuya ─────────────────────────────────────────────────────────────────────
 let tuyaTokenCache = { token: null, expiresAt: 0 };
 
 function hmacSign(str) {
@@ -65,15 +129,12 @@ function hmacSign(str) {
 }
 
 function buildTokenSign(t) {
-  const url          = '/v1.0/token?grant_type=1';
-  const stringToSign = ['GET', EMPTY_BODY_HASH, '', url].join('\n');
+  const stringToSign = ['GET', EMPTY_BODY_HASH, '', '/v1.0/token?grant_type=1'].join('\n');
   return hmacSign(TUYA.CLIENT_ID + t + '' + stringToSign);
 }
 
 function buildRequestSign({ token, t, nonce, method, urlPath, body = '' }) {
-  const bodyHash     = body
-    ? crypto.createHash('sha256').update(body).digest('hex')
-    : EMPTY_BODY_HASH;
+  const bodyHash     = body ? crypto.createHash('sha256').update(body).digest('hex') : EMPTY_BODY_HASH;
   const stringToSign = [method.toUpperCase(), bodyHash, '', urlPath].join('\n');
   return hmacSign(TUYA.CLIENT_ID + token + t + nonce + stringToSign);
 }
@@ -81,27 +142,15 @@ function buildRequestSign({ token, t, nonce, method, urlPath, body = '' }) {
 async function getTuyaToken() {
   const now = Date.now();
   if (tuyaTokenCache.token && now < tuyaTokenCache.expiresAt) return tuyaTokenCache.token;
-
   const t    = now.toString();
   const sign = buildTokenSign(t);
-
   const res  = await fetch(`${TUYA.BASE_URL}/v1.0/token?grant_type=1`, {
     method: 'GET',
-    headers: {
-      'client_id': TUYA.CLIENT_ID, 'sign': sign,
-      't': t, 'sign_method': 'HMAC-SHA256', 'nonce': '',
-      'Content-Type': 'application/json',
-    },
+    headers: { 'client_id': TUYA.CLIENT_ID, 'sign': sign, 't': t, 'sign_method': 'HMAC-SHA256', 'nonce': '', 'Content-Type': 'application/json' },
   });
-
   const data = await res.json();
-  console.log('[Tuya] Token:', data.success ? '✅' : `❌ ${data.msg}`);
   if (!data.success) throw new Error(`Tuya token error: ${data.msg}`);
-
-  tuyaTokenCache = {
-    token:     data.result.access_token,
-    expiresAt: now + (data.result.expire_time * 1000) - 60000,
-  };
+  tuyaTokenCache = { token: data.result.access_token, expiresAt: now + (data.result.expire_time * 1000) - 60000 };
   return tuyaTokenCache.token;
 }
 
@@ -112,20 +161,12 @@ async function sendTuyaCommands(deviceId, commands) {
   const urlPath = `/v1.0/devices/${deviceId}/commands`;
   const body    = JSON.stringify({ commands });
   const sign    = buildRequestSign({ token, t, nonce, method: 'POST', urlPath, body });
-
   const res = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
     method: 'POST',
-    headers: {
-      'client_id': TUYA.CLIENT_ID, 'access_token': token,
-      'sign': sign, 't': t, 'nonce': nonce,
-      'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
-    },
+    headers: { 'client_id': TUYA.CLIENT_ID, 'access_token': token, 'sign': sign, 't': t, 'nonce': nonce, 'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json' },
     body,
   });
-
-  const data = await res.json();
-  console.log('[Tuya] Commands result:', JSON.stringify(data));
-  return data;
+  return await res.json();
 }
 
 async function getTuyaDeviceStatus(deviceId) {
@@ -134,113 +175,53 @@ async function getTuyaDeviceStatus(deviceId) {
   const nonce   = crypto.randomBytes(16).toString('hex');
   const urlPath = `/v1.0/devices/${deviceId}/status`;
   const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
-
   const res = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
     method: 'GET',
-    headers: {
-      'client_id': TUYA.CLIENT_ID, 'access_token': token,
-      'sign': sign, 't': t, 'nonce': nonce,
-      'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
-    },
+    headers: { 'client_id': TUYA.CLIENT_ID, 'access_token': token, 'sign': sign, 't': t, 'nonce': nonce, 'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json' },
   });
-
   return await res.json();
 }
 
-// ─── منطق الباب مع setTimeout (بدل countdown) ────────────────────────────────
-
-// تتبع الـ timers لتجنب التضارب
+// ─── Door Logic ───────────────────────────────────────────────────────────────
 const doorTimers = {};
 
 async function openDoor(deviceId, durationSeconds) {
-  // إلغاء أي timer سابق لهذا الجهاز
-  if (doorTimers[deviceId]) {
-    clearTimeout(doorTimers[deviceId]);
-    delete doorTimers[deviceId];
-  }
-
-  // اقرأ حالة R2
+  if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
   const statusData = await getTuyaDeviceStatus(deviceId);
   const status     = statusData.result || [];
   const r2On       = status.find(s => s.code === 'switch_2')?.value;
-
-  console.log(`[Door] OPEN → R2=${r2On}, duration=${durationSeconds}s`);
-
-  // أوقف R2 إذا كان شغالاً، ثم شغّل R1
-  const commands = [];
+  const commands   = [];
   if (r2On) commands.push({ code: 'switch_2', value: false });
   commands.push({ code: 'switch_1', value: true });
-
   const result = await sendTuyaCommands(deviceId, commands);
-
-  // أوقف R1 بعد X ثانية باستخدام setTimeout
   doorTimers[deviceId] = setTimeout(async () => {
-    console.log(`[Door] Auto-stop R1 after ${durationSeconds}s`);
     await sendTuyaCommands(deviceId, [{ code: 'switch_1', value: false }]);
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
     delete doorTimers[deviceId];
   }, durationSeconds * 1000);
-
   return result;
 }
 
 async function closeDoor(deviceId, durationSeconds) {
-  // إلغاء أي timer سابق
-  if (doorTimers[deviceId]) {
-    clearTimeout(doorTimers[deviceId]);
-    delete doorTimers[deviceId];
-  }
-
-  // اقرأ حالة R1
+  if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
   const statusData = await getTuyaDeviceStatus(deviceId);
   const status     = statusData.result || [];
   const r1On       = status.find(s => s.code === 'switch_1')?.value;
-
-  console.log(`[Door] CLOSE → R1=${r1On}, duration=${durationSeconds}s`);
-
-  // أوقف R1 إذا كان شغالاً، ثم شغّل R2
-  const commands = [];
+  const commands   = [];
   if (r1On) commands.push({ code: 'switch_1', value: false });
   commands.push({ code: 'switch_2', value: true });
-
   const result = await sendTuyaCommands(deviceId, commands);
-
-  // أوقف R2 بعد X ثانية
   doorTimers[deviceId] = setTimeout(async () => {
-    console.log(`[Door] Auto-stop R2 after ${durationSeconds}s`);
     await sendTuyaCommands(deviceId, [{ code: 'switch_2', value: false }]);
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
     delete doorTimers[deviceId];
   }, durationSeconds * 1000);
-
   return result;
 }
 
 async function stopDoor(deviceId) {
-  // إلغاء أي timer
-  if (doorTimers[deviceId]) {
-    clearTimeout(doorTimers[deviceId]);
-    delete doorTimers[deviceId];
-  }
-  console.log('[Door] STOP → off R1 & R2');
-  return await sendTuyaCommands(deviceId, [
-    { code: 'switch_1', value: false },
-    { code: 'switch_2', value: false },
-  ]);
-}
-
-// ─── جلب مدة الباب من Supabase ───────────────────────────────────────────────
-async function getDoorDuration(doorId) {
-  try {
-    const { data } = await supabase
-      .from('doors')
-      .select('duration_seconds')
-      .eq('id', doorId)
-      .single();
-    return data?.duration_seconds || DEFAULT_DURATION;
-  } catch {
-    return DEFAULT_DURATION;
-  }
+  if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
+  return await sendTuyaCommands(deviceId, [{ code: 'switch_1', value: false }, { code: 'switch_2', value: false }]);
 }
 
 // ─── Push ─────────────────────────────────────────────────────────────────────
@@ -250,192 +231,260 @@ async function sendPushToAll(notification) {
     const { data: subs } = await supabase.from('push_subscriptions').select('*');
     if (!subs?.length) return;
     const payload = JSON.stringify(notification);
-    await Promise.allSettled(
-      subs.map(sub =>
-        webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          payload
-        ).catch(err => {
-          if (err.statusCode === 410)
-            supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
-        })
-      )
-    );
-  } catch (err) { console.error('[Push Error]', err); }
+    await Promise.allSettled(subs.map(sub =>
+      webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload)
+        .catch(err => { if (err.statusCode === 410) supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); })
+    ));
+  } catch {}
 }
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+// ═══════════════════════════════════════════════════════════════════════════════
+// API ROUTES
+// ═══════════════════════════════════════════════════════════════════════════════
 
-// فتح
-app.post('/api/door/open', async (req, res) => {
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+app.post('/api/auth/login', async (req, res) => {
   try {
-    const { userId, doorId } = req.body;
-    const deviceId = req.body.deviceId || TUYA.DEVICE_ID;
-    const duration = doorId ? await getDoorDuration(doorId) : (req.body.duration || DEFAULT_DURATION);
+    const { phone, pw } = req.body;
+    if (!phone || !pw) return res.status(400).json({ error: 'الهاتف وكلمة المرور مطلوبان' });
 
-    const result = await openDoor(deviceId, duration);
-    if (!result.success) return res.status(500).json({ success: false, error: result.msg });
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('phone', phone)
+      .eq('status', 'active')
+      .single();
 
-    await supabase.from('door_logs').insert({
-      door_id: doorId || null, user_id: userId || null,
-      action: 'open', source: 'app', success: true,
-      created_at: new Date().toISOString(),
+    if (error || !users) return res.status(401).json({ error: 'رقم الهاتف غير موجود أو الحساب محظور' });
+
+    const pwHash = crypto.createHash('sha256').update(pw).digest('hex');
+    if (users.pw_hash !== pwHash) return res.status(401).json({ error: 'كلمة المرور غير صحيحة' });
+
+    // تحقق من انتهاء الصلاحية
+    if (users.expire_date && new Date(users.expire_date) < new Date())
+      return res.status(401).json({ error: 'انتهت صلاحية الحساب' });
+
+    const token = signToken({ id: users.id, role: users.role, inst_id: users.inst_id, name: users.name });
+
+    res.json({
+      token,
+      user: { id: users.id, name: users.name, phone: users.phone, role: users.role, inst_id: users.inst_id }
     });
-
-    broadcast({ type: 'door_event', action: 'open', doorId, userId, duration });
-    await sendPushToAll({ title: '🚪 الباب مفتوح', body: `سيُغلق بعد ${duration} ثانية` });
-
-    res.json({ success: true, message: `تم فتح الباب لمدة ${duration} ثانية` });
   } catch (err) {
-    console.error('[Open Error]', err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[Login Error]', err);
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 
-// غلق
-app.post('/api/door/close', async (req, res) => {
-  try {
-    const { userId, doorId } = req.body;
-    const deviceId = req.body.deviceId || TUYA.DEVICE_ID;
-    const duration = doorId ? await getDoorDuration(doorId) : (req.body.duration || DEFAULT_DURATION);
-
-    const result = await closeDoor(deviceId, duration);
-    if (!result.success) return res.status(500).json({ success: false, error: result.msg });
-
-    await supabase.from('door_logs').insert({
-      door_id: doorId || null, user_id: userId || null,
-      action: 'close', source: 'app', success: true,
-      created_at: new Date().toISOString(),
-    });
-
-    broadcast({ type: 'door_event', action: 'close', doorId, userId });
-    res.json({ success: true, message: 'تم غلق الباب' });
-  } catch (err) {
-    console.error('[Close Error]', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// إيقاف
-app.post('/api/door/stop', async (req, res) => {
-  try {
-    const { doorId } = req.body;
-    const deviceId = req.body.deviceId || TUYA.DEVICE_ID;
-    await stopDoor(deviceId);
-    broadcast({ type: 'door_event', action: 'stop', doorId });
-    res.json({ success: true, message: 'تم الإيقاف' });
-  } catch (err) {
-    console.error('[Stop Error]', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// control موحّد
-app.post('/api/door/control', async (req, res) => {
-  try {
-    const { action, userId, doorId } = req.body;
-    const deviceId = req.body.deviceId || TUYA.DEVICE_ID;
-    const duration = doorId ? await getDoorDuration(doorId) : (req.body.duration || DEFAULT_DURATION);
-
-    let result;
-    if      (action === 'open')  result = await openDoor(deviceId, duration);
-    else if (action === 'close') result = await closeDoor(deviceId, duration);
-    else if (action === 'stop')  result = await stopDoor(deviceId);
-    else return res.status(400).json({ success: false, error: 'action غير معروف' });
-
-    if (result && !result.success)
-      return res.status(500).json({ success: false, error: result.msg });
-
-    await supabase.from('door_logs').insert({
-      door_id: doorId || null, user_id: userId || null,
-      action, source: 'app', success: true,
-      created_at: new Date().toISOString(),
-    });
-
-    broadcast({ type: 'door_event', action, doorId, userId, duration });
-    res.json({ success: true, message: `تم: ${action}`, duration });
-  } catch (err) {
-    console.error('[Control Error]', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// حالة الباب
-app.get('/api/door/status', async (req, res) => {
+// ─── DOOR STATUS ──────────────────────────────────────────────────────────────
+app.get('/api/door/status', authMiddleware, async (req, res) => {
   try {
     const deviceId = req.query.deviceId || TUYA.DEVICE_ID;
     const data     = await getTuyaDeviceStatus(deviceId);
     const status   = data.result || [];
-
     const r1 = status.find(s => s.code === 'switch_1')?.value;
     const r2 = status.find(s => s.code === 'switch_2')?.value;
+    const state = r1 ? 'open' : r2 ? 'close' : 'stop';
+    res.json({ value: state, r1_on: r1, r2_on: r2, timer_active: !!doorTimers[deviceId] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    res.json({
-      success: true,
-      door: {
-        state: r1 ? 'opening' : r2 ? 'closing' : 'idle',
-        r1_on: r1,
-        r2_on: r2,
-        timer_active: !!doorTimers[deviceId],
-      },
+// ─── DOOR CONTROL ─────────────────────────────────────────────────────────────
+app.post('/api/door/control', authMiddleware, async (req, res) => {
+  try {
+    const { action } = req.body;
+    const deviceId   = req.body.deviceId || TUYA.DEVICE_ID;
+    const duration   = req.body.duration || DEFAULT_DURATION;
+
+    let result;
+    if      (action === 'open')   result = await openDoor(deviceId, duration);
+    else if (action === 'open40') result = await openDoor(deviceId, 40);
+    else if (action === 'close')  result = await closeDoor(deviceId, duration);
+    else if (action === 'stop')   result = await stopDoor(deviceId);
+    else return res.status(400).json({ error: 'action غير معروف' });
+
+    if (result && !result.success)
+      return res.status(500).json({ error: result.msg });
+
+    // سجّل العملية
+    await supabase.from('door_logs').insert({
+      user_id: req.user.id, inst_id: req.user.inst_id,
+      value: action, source: req.user.name,
+      created_at: new Date().toISOString(),
     });
+
+    broadcast({ type: 'door_event', action, userId: req.user.id });
+    await sendPushToAll({ title: `🚪 ${action === 'open' || action === 'open40' ? 'فتح الباب' : 'غلق الباب'}`, body: `بواسطة ${req.user.name}` });
+
+    res.json({ success: true, action });
   } catch (err) {
-    console.error('[Status Error]', err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[Control Error]', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// تحديث مدة الباب
-app.patch('/api/door/:doorId/duration', async (req, res) => {
+// ─── HISTORY ──────────────────────────────────────────────────────────────────
+app.get('/api/history', authMiddleware, async (req, res) => {
   try {
-    const { doorId } = req.params;
-    const { duration } = req.body;
-
-    if (!duration || duration < 1 || duration > 300)
-      return res.status(400).json({ success: false, error: 'المدة بين 1 و 300 ثانية' });
-
-    const { error } = await supabase
-      .from('doors').update({ duration_seconds: duration }).eq('id', doorId);
+    let query = supabase.from('door_logs').select('*').order('created_at', { ascending: false }).limit(100);
+    if (req.user.role !== 'super_admin') query = query.eq('inst_id', req.user.inst_id);
+    const { data, error } = await query;
     if (error) throw error;
-
-    broadcast({ type: 'duration_updated', doorId, duration });
-    res.json({ success: true, duration, message: `المدة: ${duration} ثانية` });
+    res.json(data);
   } catch (err) {
-    console.error('[Duration Error]', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// سجل
-app.get('/api/door/logs', async (req, res) => {
+// ─── STATS ────────────────────────────────────────────────────────────────────
+app.get('/api/stats', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('door_logs').select('*')
-      .order('created_at', { ascending: false }).limit(50);
+    const today = new Date().toISOString().split('T')[0];
+
+    let logsQuery = supabase.from('door_logs').select('id', { count: 'exact' }).gte('created_at', today);
+    let usersQuery = supabase.from('users').select('id,status', { count: 'exact' });
+
+    if (req.user.role !== 'super_admin') {
+      logsQuery  = logsQuery.eq('inst_id', req.user.inst_id);
+      usersQuery = usersQuery.eq('inst_id', req.user.inst_id);
+    }
+
+    const [{ count: todayActions }, { data: usersData }] = await Promise.all([logsQuery, usersQuery]);
+
+    const activeUsers  = usersData?.filter(u => u.status === 'active').length || 0;
+    const totalUsers   = usersData?.length || 0;
+
+    res.json({ today_actions: todayActions || 0, active_users: activeUsers, total_users: totalUsers });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── USERS ────────────────────────────────────────────────────────────────────
+app.get('/api/users', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    let query = supabase.from('users').select('id,name,phone,role,status,expire_date,note,inst_id').order('created_at', { ascending: false });
+    if (req.user.role !== 'super_admin') query = query.eq('inst_id', req.user.inst_id);
+    const { data, error } = await query;
     if (error) throw error;
-    res.json({ success: true, logs: data });
+    res.json(data);
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Push
-app.post('/api/push/subscribe', async (req, res) => {
+app.post('/api/users', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const sub = req.body;
+    const { name, phone, pw, role, expire_date, note } = req.body;
+    if (!name || !phone || !pw) return res.status(400).json({ error: 'الاسم والهاتف وكلمة المرور مطلوبة' });
+
+    const pw_hash = crypto.createHash('sha256').update(pw).digest('hex');
+    const inst_id = req.user.role === 'super_admin' ? req.body.inst_id : req.user.inst_id;
+
+    const { data, error } = await supabase.from('users').insert({
+      name, phone, pw_hash,
+      role: role || 'user',
+      status: 'active',
+      inst_id, expire_date, note,
+      created_at: new Date().toISOString(),
+    }).select().single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = {};
+    const allowed = ['name', 'phone', 'role', 'status', 'expire_date', 'note'];
+    allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
+    if (req.body.pw) updates.pw_hash = crypto.createHash('sha256').update(req.body.pw).digest('hex');
+
+    const { data, error } = await supabase.from('users').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── INSTITUTES ───────────────────────────────────────────────────────────────
+app.get('/api/institutes', authMiddleware, async (req, res) => {
+  try {
+    let query = supabase.from('institutes').select('*').order('created_at', { ascending: false });
+    if (req.user.role !== 'super_admin') query = query.eq('id', req.user.inst_id);
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/institutes', authMiddleware, superAdminOnly, async (req, res) => {
+  try {
+    const { name, code } = req.body;
+    if (!name || !code) return res.status(400).json({ error: 'الاسم والكود مطلوبان' });
+    const { data, error } = await supabase.from('institutes').insert({ name, code, created_at: new Date().toISOString() }).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/institutes/:id', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = {};
+    if (req.body.schedule !== undefined) updates.schedule = req.body.schedule;
+    if (req.body.gps !== undefined)      updates.gps      = req.body.gps;
+    if (req.body.name !== undefined)     updates.name     = req.body.name;
+    const { data, error } = await supabase.from('institutes').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/institutes/:id', authMiddleware, superAdminOnly, async (req, res) => {
+  try {
+    await supabase.from('institutes').delete().eq('id', req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PUSH ─────────────────────────────────────────────────────────────────────
+app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
+  try {
+    const sub = req.body.subscription || req.body;
     await supabase.from('push_subscriptions').upsert({
-      endpoint: sub.endpoint, p256dh: sub.keys?.p256dh, auth: sub.keys?.auth,
+      user_id: req.user.id,
+      endpoint: sub.endpoint,
+      p256dh:   sub.keys?.p256dh,
+      auth:     sub.keys?.auth,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'endpoint' });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
 app.get('/api/push/vapid-key', (req, res) => res.json({ publicKey: VAPID_PUBLIC }));
 
+// ─── Fallback ─────────────────────────────────────────────────────────────────
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ─── Start ────────────────────────────────────────────────────────────────────
