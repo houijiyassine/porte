@@ -423,7 +423,17 @@ app.get('/api/institutes', authMiddleware, async (req, res) => {
     if (req.user.role !== 'super_admin') query = query.eq('id', req.user.inst_id);
     const { data, error } = await query;
     if (error) throw error;
-    res.json(data);
+
+    // إضافة الأبواب والمستخدمين لكل مؤسسة
+    const enriched = await Promise.all((data||[]).map(async inst => {
+      const [{ data: doors }, { count: usersCount }] = await Promise.all([
+        supabase.from('doors').select('*').eq('inst_id', inst.id),
+        supabase.from('users').select('id', { count: 'exact' }).eq('inst_id', inst.id),
+      ]);
+      return { ...inst, doors: doors||[], users_count: usersCount||0 };
+    }));
+
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -485,6 +495,51 @@ app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
 app.get('/api/push/vapid-key', (req, res) => res.json({ publicKey: VAPID_PUBLIC }));
 
 // ─── Fallback ─────────────────────────────────────────────────────────────────
+
+// ─── DOORS ────────────────────────────────────────────────────────────────────
+app.get('/api/doors', authMiddleware, async (req, res) => {
+  try {
+    let query = supabase.from('doors').select('*').order('created_at');
+    if (req.user.role !== 'super_admin') query = query.eq('inst_id', req.user.inst_id);
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/doors', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { inst_id, name, location, device_id, duration_seconds } = req.body;
+    const { data, error } = await supabase.from('doors').insert({
+      inst_id: inst_id || req.user.inst_id,
+      name, location, device_id,
+      duration_seconds: duration_seconds || 5,
+      created_at: new Date().toISOString(),
+    }).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/doors/:id', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const updates = {};
+    ['name','location','device_id','duration_seconds','is_active'].forEach(k => {
+      if (req.body[k] !== undefined) updates[k] = req.body[k];
+    });
+    const { data, error } = await supabase.from('doors').update(updates).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/doors/:id', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    await supabase.from('doors').delete().eq('id', req.params.id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ─── Start ────────────────────────────────────────────────────────────────────
