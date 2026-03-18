@@ -423,8 +423,9 @@ function renderInstitutes(insts) {
 
       <div class="section-label">سجلات الأبواب:</div>
       ${(inst.doors||[]).map((door, idx) => `
-        ${idx > 0 ? '<div style="border-top:1px solid var(--border);margin:10px 0"></div>' : ''}
-        <div class="door-row">
+        ${idx > 0 ? '<div style="margin:10px 0"></div>' : ''}
+        <div style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.15);border-radius:14px;padding:12px;margin-bottom:4px">
+        <div class="door-row" style="background:transparent;border-radius:0;padding:0;margin-bottom:8px">
           <div class="door-row-info">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <div class="door-row-name">⏳ ${door.name}</div>
@@ -461,6 +462,7 @@ function renderInstitutes(insts) {
             <input type="checkbox" ${inst.gps?.user_required?'checked':''} onchange="toggleGps('${inst.id}','user_required',this.checked)">
             <span class="toggle-knob"></span>
           </label>
+        </div>
         </div>
       `).join('')}
 
