@@ -540,6 +540,33 @@ app.delete('/api/doors/:id', authMiddleware, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+
+// ─── DEVICE ONLINE STATUS ─────────────────────────────────────────────────────
+app.get('/api/device/status/:deviceId', authMiddleware, async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const token   = await getTuyaToken();
+    const t       = Date.now().toString();
+    const nonce   = crypto.randomBytes(16).toString('hex');
+    const urlPath = `/v1.0/devices/${deviceId}`;
+    const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
+
+    const r = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
+      method: 'GET',
+      headers: {
+        'client_id': TUYA.CLIENT_ID, 'access_token': token,
+        'sign': sign, 't': t, 'nonce': nonce,
+        'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
+      },
+    });
+    const data = await r.json();
+    const online = data.result?.online === true;
+    res.json({ success: true, online, device_id: deviceId });
+  } catch (err) {
+    res.json({ success: false, online: false });
+  }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ─── Start ────────────────────────────────────────────────────────────────────
