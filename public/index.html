@@ -460,7 +460,7 @@
   <header class="header">
     <div class="header-logo">P<span>O</span>RTE</div>
     <div class="header-user">
-      <button class="theme-toggle" id="theme-btn" title="Mode Sombre/Clair" onclick="(function(){var h=document.documentElement,c=h.getAttribute('data-theme'),n=c==='light'?'dark':'light';n==='dark'?h.removeAttribute('data-theme'):h.setAttribute('data-theme','light');document.getElementById('theme-btn').textContent=n==='light'?'☀️':'🌙';localStorage.setItem('porte_theme',n)})()">🌙</button>
+      <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()" title="Mode Sombre/Clair">🌙</button>
       <span class="role-badge" id="header-role-badge"></span>
       <div class="header-avatar" id="header-avatar" onclick="showLogout()">؟</div>
     </div>
