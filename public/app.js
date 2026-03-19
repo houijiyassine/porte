@@ -84,9 +84,6 @@ function bootApp() {
     document.getElementById('nav-map').style.display = 'flex';
   }
   if (isAdmin) {
-    document.getElementById('schedule-section').style.display = 'block';
-    document.getElementById('gps-section').style.display = 'block';
-    initScheduleUI();
     loadStats();
   }
 
@@ -354,11 +351,22 @@ async function saveGpsModal() {
   const lat   = parseFloat(document.getElementById('gps-lat').value) || null;
   const lng   = parseFloat(document.getElementById('gps-lng').value) || null;
   try {
-    await apiFetch(`/api/doors/${currentGpsDoorId}`, 'PUT', {
+    await apiFetch('/api/doors/' + currentGpsDoorId, 'PUT', {
       gps: { range, lat, lng }
     });
     closeModal('modal-gps');
-    loadInstitutes();
+    // تحديث الـ badge مباشرة بدون إعادة تحميل كاملة
+    document.querySelectorAll('[data-gps-door="' + currentGpsDoorId + '"]').forEach(el => {
+      el.textContent = '📡 ' + range + 'م';
+    });
+    // تحديث الكاش
+    institutesCache.forEach(inst => {
+      (inst.doors||[]).forEach(door => {
+        if (door.id === currentGpsDoorId) {
+          door.gps = { ...(door.gps||{}), range, lat, lng };
+        }
+      });
+    });
     toast('تم حفظ إعدادات GPS', 'success');
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -422,7 +430,7 @@ async function openDoorLogs(doorId, doorName) {
 }
 
 // ─── Door Schedule ─────────────────────────────────────
-const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const DAYS_AR = ['الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت','الأحد'];
 let currentScheduleDoorId = null;
 let doorSchedule = {};
 
@@ -504,7 +512,7 @@ function renderInstitutes(insts) {
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
             <button onclick="openEditDoor('${inst.id}','${doorId}','${doorName}','${location}','${deviceId}',${duration})" style="background:rgba(124,92,252,0.15);border:1px solid rgba(124,92,252,0.3);border-radius:12px;padding:12px 6px;cursor:pointer;font-size:1.1rem" title="تعديل">✏️</button>
             <button onclick="deleteDoor('${doorId}','${inst.id}')" style="background:rgba(255,61,113,0.1);border:1px solid rgba(255,61,113,0.2);border-radius:12px;padding:12px 6px;cursor:pointer;font-size:1.1rem" title="حذف">🗑</button>
-            <button onclick="openGpsModal('${doorId}',${gpsRange},${gpsLat},${gpsLng})" style="background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:12px;padding:8px 4px;cursor:pointer;font-size:0.7rem;font-weight:700;color:var(--accent);font-family:Cairo,sans-serif" title="GPS">📡 ${gpsRange}م</button>
+            <button onclick="openGpsModal('${doorId}',${gpsRange},${gpsLat},${gpsLng})" style="background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:12px;padding:8px 4px;cursor:pointer;font-size:0.7rem;font-weight:700;color:var(--accent);font-family:Cairo,sans-serif" title="GPS" data-gps-door="${doorId}">📡 ${gpsRange}م</button>
           </div>
 
           <!-- زر السجل + جدول الأوقات -->
@@ -546,9 +554,10 @@ function renderInstitutes(insts) {
           <div class="inst-name">🏫 ${inst.name}</div>
           <div class="inst-code">🔑 ${inst.code}</div>
         </div>
-        <div style="display:flex;gap:8px">
-          <button onclick="editInst(${JSON.stringify(inst).replace(/"/g,'&quot;')})" class="door-action-btn dab-edit">تعديل</button>
-          <button onclick="deleteInst('${inst.id}')" class="door-action-btn dab-del">حذف</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="openInstSchedule('${inst.id}','${inst.name}',${JSON.stringify(inst.schedule||{}).replace(/"/g,'&quot;')})" class="door-action-btn dab-timer">🕐</button>
+          <button onclick="editInst(${JSON.stringify(inst).replace(/"/g,'&quot;')})" class="door-action-btn dab-edit">✏️</button>
+          <button onclick="deleteInst('${inst.id}')" class="door-action-btn dab-del">🗑</button>
         </div>
       </div>
       <div class="inst-meta">
@@ -624,15 +633,20 @@ async function toggleGps(instId, key, value) {
 
 async function toggleDoorGps(doorId, key, value) {
   try {
-    // Find door in cache
     let doorGps = {};
     institutesCache.forEach(inst => {
       const door = (inst.doors||[]).find(d => d.id === doorId);
       if (door) doorGps = door.gps || {};
     });
     const gps = { ...doorGps, [key]: value };
-    await apiFetch(`/api/doors/${doorId}`, 'PUT', { gps });
-    loadInstitutes();
+    await apiFetch('/api/doors/' + doorId, 'PUT', { gps });
+    // تحديث الكاش فقط بدون إعادة رندر
+    institutesCache.forEach(inst => {
+      (inst.doors||[]).forEach(door => {
+        if (door.id === doorId) door.gps = gps;
+      });
+    });
+    toast('تم التحديث', 'success');
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -699,7 +713,7 @@ async function deleteDoor(doorId, instId) {
 }
 
 // ─── Schedule ─────────────────────────────────
-const DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const DAYS = ['الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت','الأحد'];
 let schedule = {};
 
 async function initScheduleUI() {
