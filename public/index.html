@@ -415,6 +415,12 @@
       .door-btn.open40 { grid-column:auto; }
     }
   </style>
+  <script>
+    (function(){
+      var t = localStorage.getItem('porte_theme');
+      if(t==='light') document.documentElement.setAttribute('data-theme','light');
+    })();
+  </script>
 </head>
 <body>
 
@@ -454,7 +460,7 @@
   <header class="header">
     <div class="header-logo">P<span>O</span>RTE</div>
     <div class="header-user">
-      <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="تغيير الوضع">🌙</button>
+      <button class="theme-toggle" id="theme-btn" title="Mode Sombre/Clair" onclick="(function(){var h=document.documentElement,c=h.getAttribute('data-theme'),n=c==='light'?'dark':'light';n==='dark'?h.removeAttribute('data-theme'):h.setAttribute('data-theme','light');document.getElementById('theme-btn').textContent=n==='light'?'☀️':'🌙';localStorage.setItem('porte_theme',n)})()">🌙</button>
       <span class="role-badge" id="header-role-badge"></span>
       <div class="header-avatar" id="header-avatar" onclick="showLogout()">؟</div>
     </div>
@@ -567,22 +573,6 @@
     <div id="map-users-list"></div>
   </div>
 
-  <!-- ── SETTINGS ── -->
-  <div class="page" id="page-settings">
-    <div class="page-title"><span>الإعدادات</span></div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">الحساب</span></div>
-      <div class="card-body">
-        <p id="profile-name" style="font-weight:700;margin-bottom:4px"></p>
-        <p id="profile-role" style="color:var(--muted);font-size:0.88rem;margin-bottom:20px"></p>
-        <button class="btn btn-outline" onclick="logout()" style="max-width:200px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-          تسجيل الخروج
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- ── BOTTOM NAV ── -->
   <nav class="bottom-nav">
     <button class="nav-item active" onclick="showPage('institutes',this)" id="nav-institutes">
@@ -596,10 +586,6 @@
     <button class="nav-item" onclick="showPage('map',this)" id="nav-map" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
       المواقع
-    </button>
-    <button class="nav-item" onclick="showPage('settings',this)" id="nav-settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-      الإعدادات
     </button>
   </nav>
 </div><!-- /main-app -->
