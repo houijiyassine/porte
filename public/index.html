@@ -534,35 +534,6 @@
   <!-- ── SETTINGS ── -->
   <div class="page" id="page-settings">
     <div class="page-title"><span>الإعدادات</span></div>
-
-    <div id="schedule-section" style="display:none">
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-header">
-          <span class="card-title">جدول أوقات العمل</span>
-          <button class="btn btn-primary btn-sm" onclick="saveSchedule()" style="width:auto;padding:8px 16px">حفظ</button>
-        </div>
-        <div class="card-body">
-          <div class="schedule-grid" id="schedule-grid"></div>
-        </div>
-      </div>
-    </div>
-
-    <div id="gps-section" style="display:none">
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-header">
-          <span class="card-title">نطاق GPS</span>
-          <button class="btn btn-primary btn-sm" onclick="saveGps()" style="width:auto;padding:8px 16px">حفظ</button>
-        </div>
-        <div class="card-body">
-          <div class="form-group">
-            <label>نطاق السماح (متر)</label>
-            <input type="number" id="gps-range" value="100" min="10" max="5000"
-              style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 14px;font-family:Cairo,sans-serif;font-size:1rem;width:100%">
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="card">
       <div class="card-header"><span class="card-title">الحساب</span></div>
       <div class="card-body">
@@ -758,6 +729,25 @@
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeModal('modal-door-schedule')">إلغاء</button>
       <button class="btn btn-primary btn-sm" onclick="saveDoorSchedule()" style="flex:1">حفظ</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Modal: Institute Schedule -->
+<div class="modal-overlay" id="modal-inst-schedule">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="inst-schedule-title">جدول أوقات المؤسسة</span>
+      <button class="modal-close" onclick="closeModal('modal-inst-schedule')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.82rem;color:var(--muted);margin-bottom:16px">أوقات العمل الرسمية للمؤسسة</p>
+      <div id="inst-schedule-grid" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-inst-schedule')">إلغاء</button>
+      <button class="btn btn-primary btn-sm" onclick="saveInstSchedule()" style="flex:1">حفظ</button>
     </div>
   </div>
 </div>
