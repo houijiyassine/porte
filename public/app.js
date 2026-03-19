@@ -85,16 +85,16 @@ function bootApp() {
   }
   // إظهار المؤسسات للأدمن والسوبر أدمن
   // nav-institutes ظاهر دائماً
-  if (isAdmin) {
-    loadStats();
-  }
+  loadStats();
 
   connectWS();
   subscribePush();
   startLocationTracking();
-  // تطبيق الثيم
-  const savedTheme = localStorage.getItem('porte_theme');
-  if (savedTheme === 'light') document.getElementById('theme-btn').textContent = '☀️';
+  // تطبيق أيقونة الثيم
+  if (localStorage.getItem('porte_theme') === 'light') {
+    const btn = document.getElementById('theme-btn');
+    if (btn) btn.textContent = '☀️';
+  }
   // افتح صفحة المؤسسات افتراضياً
   showPage('institutes', document.getElementById('nav-institutes'));
 }
@@ -809,7 +809,7 @@ function showPage(name, btn) {
   if (page) page.classList.add('active');
   if (btn) btn.classList.add('active');
 
-  if (name === 'dashboard')   { loadRecentHistory(); loadStats(); }
+  if (name === 'dashboard')   { loadStats(); }
   if (name === 'users')       loadUsers();
   if (name === 'institutes')  loadInstitutes();
   if (name === 'map')         initMap();
