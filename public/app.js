@@ -801,6 +801,55 @@ function updateUserMarker(userId, coords) {
   console.log('User location:', userId, coords);
 }
 
+// ─── Institute Schedule ───────────────────────────────
+let currentScheduleInstId = null;
+let instSchedule = {};
+
+function openInstSchedule(instId, instName, schedData) {
+  currentScheduleInstId = instId;
+  try { instSchedule = (schedData && typeof schedData === 'object') ? schedData : {}; }
+  catch(e) { instSchedule = {}; }
+  document.getElementById('inst-schedule-title').textContent = 'جدول: ' + instName;
+  const grid = document.getElementById('inst-schedule-grid');
+  const days = ['الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت','الأحد'];
+  grid.innerHTML = days.map(function(day, i) {
+    const d = instSchedule[i] || { enabled: false, start: '08:00', end: '18:00' };
+    return '<div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border-radius:12px;padding:12px 14px">' +
+      '<span style="width:76px;font-weight:600;font-size:0.85rem">' + day + '</span>' +
+      '<label class="day-toggle"><input type="checkbox" ' + (d.enabled?'checked':'') +
+      ' onchange="instSchedule[' + i + ']={...(instSchedule[' + i + ']||{}),enabled:this.checked}"><span class="toggle-slider"></span></label>' +
+      '<div style="display:flex;align-items:center;gap:6px;flex:1">' +
+      '<input type="time" value="' + d.start + '" onchange="instSchedule[' + i + ']={...(instSchedule[' + i + ']||{}),start:this.value}" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:5px 8px;font-size:0.8rem;font-family:JetBrains Mono;width:84px">' +
+      '<span style="color:var(--muted)">→</span>' +
+      '<input type="time" value="' + d.end + '" onchange="instSchedule[' + i + ']={...(instSchedule[' + i + ']||{}),end:this.value}" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:5px 8px;font-size:0.8rem;font-family:JetBrains Mono;width:84px">' +
+      '</div></div>';
+  }).join('');
+  openModal('modal-inst-schedule');
+}
+
+async function saveInstSchedule() {
+  try {
+    await apiFetch('/api/institutes/' + currentScheduleInstId, 'PUT', { schedule: instSchedule });
+    closeModal('modal-inst-schedule');
+    toast('تم حفظ جدول المؤسسة', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─── Theme Toggle ──────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  if (isLight) {
+    html.removeAttribute('data-theme');
+    document.getElementById('theme-btn').textContent = '🌙';
+    localStorage.setItem('porte_theme', 'dark');
+  } else {
+    html.setAttribute('data-theme', 'light');
+    document.getElementById('theme-btn').textContent = '☀️';
+    localStorage.setItem('porte_theme', 'light');
+  }
+}
+
 // ─── Navigation ───────────────────────────────
 function showPage(name, btn) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
