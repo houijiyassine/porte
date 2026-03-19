@@ -83,6 +83,8 @@ function bootApp() {
   if (isSuperAdmin) {
     document.getElementById('nav-map').style.display = 'flex';
   }
+  // إظهار المؤسسات للأدمن والسوبر أدمن
+  // nav-institutes ظاهر دائماً
   if (isAdmin) {
     loadStats();
   }
@@ -90,6 +92,9 @@ function bootApp() {
   connectWS();
   subscribePush();
   startLocationTracking();
+  // تطبيق الثيم
+  const savedTheme = localStorage.getItem('porte_theme');
+  if (savedTheme === 'light') document.getElementById('theme-btn').textContent = '☀️';
   // افتح صفحة المؤسسات افتراضياً
   showPage('institutes', document.getElementById('nav-institutes'));
 }
