@@ -311,9 +311,14 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
       return res.status(500).json({ error: result.msg });
 
     // سجّل العملية
+    const deviceId2 = req.body.deviceId || TUYA.DEVICE_ID;
+    const { data: doorData } = await supabase.from('doors').select('id').eq('device_id', deviceId2).single();
     await supabase.from('door_logs').insert({
-      user_id: req.user.id, inst_id: req.user.inst_id,
-      value: action, source: req.user.name,
+      user_id: req.user.id,
+      inst_id: req.user.inst_id,
+      door_id: doorData?.id || null,
+      value: action,
+      source: req.user.name,
       created_at: new Date().toISOString(),
     });
 
@@ -524,12 +529,26 @@ app.post('/api/doors', authMiddleware, adminOnly, async (req, res) => {
 app.put('/api/doors/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
     const updates = {};
-    ['name','location','device_id','duration_seconds','is_active'].forEach(k => {
+    ['name','location','device_id','duration_seconds','is_active','gps','schedule'].forEach(k => {
       if (req.body[k] !== undefined) updates[k] = req.body[k];
     });
     const { data, error } = await supabase.from('doors').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// سجل باب محدد
+app.get('/api/doors/:id/logs', authMiddleware, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('door_logs')
+      .select('*')
+      .eq('door_id', req.params.id)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    res.json(data || []);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
