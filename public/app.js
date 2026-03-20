@@ -620,25 +620,27 @@ function renderInstList(insts) {
 
     wrapper.appendChild(card);
 
-    // عرض من الكاش فقط — يتحدث بعد فتح التفاصيل
+    // جلب حالة كل باب مباشرة
     (function(instRef) {
-      setTimeout(function() {
-        var el = document.getElementById('enligne-' + instRef.id);
-        if (!el) return;
-        var total = (instRef.doors||[]).length;
-        var known = (instRef.doors||[]).filter(function(d) {
-          return d.device_id in doorStatusCache;
-        }).length;
-        if (known === 0) {
-          // لا توجد معلومات بعد — لا نستدعي Tuya، فقط نعرض الحالة الأولية
-          el.textContent = '?/' + total;
-          return;
-        }
-        var count = (instRef.doors||[]).filter(function(d) {
-          return doorStatusCache[d.device_id] === true;
-        }).length;
-        el.textContent = count + '/' + total;
-      }, 200);
+      var doors = instRef.doors || [];
+      var total = doors.length;
+      if (!total) return;
+      doors.forEach(function(door) {
+        apiFetch('/api/device/status/' + door.device_id)
+          .then(function(data) {
+            doorStatusCache[door.device_id] = data.online === true;
+            var el = document.getElementById('enligne-' + instRef.id);
+            if (el) {
+              var count = doors.filter(function(d) {
+                return doorStatusCache[d.device_id] === true;
+              }).length;
+              el.textContent = count + '/' + total;
+            }
+          })
+          .catch(function() {
+            doorStatusCache[door.device_id] = false;
+          });
+      });
     })(inst);
   });
 
