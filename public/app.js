@@ -327,15 +327,31 @@ async function toggleBlock(id, status) {
 let institutesCache = [];
 
 async function loadInstitutes() {
+  // انتظر حتى يكون institutes-list موجوداً وظاهراً
+  const container = await waitForElement('institutes-list');
+  if (!container) return;
   try {
     const data = await apiFetch('/api/institutes');
     institutesCache = data || [];
     renderInstitutes(data);
   } catch(e) {
     console.error('[loadInstitutes]', e);
-    const c = document.getElementById('institutes-list');
-    if (c) c.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
+    container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
   }
+}
+
+function waitForElement(id, timeout) {
+  return new Promise(function(resolve) {
+    var el = document.getElementById(id);
+    if (el) { resolve(el); return; }
+    var t = 0;
+    var interval = setInterval(function() {
+      el = document.getElementById(id);
+      t += 50;
+      if (el) { clearInterval(interval); resolve(el); }
+      else if (t > (timeout || 3000)) { clearInterval(interval); resolve(null); }
+    }, 50);
+  });
 }
 
 // ─── GPS Modal ────────────────────────────────────────
