@@ -660,6 +660,8 @@ function openAddInst() {
   document.getElementById('edit-inst-id').value = '';
   document.getElementById('inst-name').value = '';
   document.getElementById('inst-code').value = '';
+  document.getElementById('inst-admin-phone').value = '';
+  document.getElementById('inst-admin-pw').value = '';
   document.getElementById('inst-modal-title').textContent = 'إضافة مؤسسة';
   openModal('modal-inst');
 }
@@ -668,17 +670,32 @@ function editInst(inst) {
   document.getElementById('edit-inst-id').value = inst.id;
   document.getElementById('inst-name').value = inst.name;
   document.getElementById('inst-code').value = inst.code;
+  document.getElementById('inst-admin-phone').value = inst.admin_phone || '';
+  document.getElementById('inst-admin-pw').value = '';
   document.getElementById('inst-modal-title').textContent = 'تعديل مؤسسة';
   openModal('modal-inst');
 }
 
 async function saveInstitute() {
-  const id   = document.getElementById('edit-inst-id').value;
-  const name = document.getElementById('inst-name').value;
-  const code = document.getElementById('inst-code').value;
+  const id         = document.getElementById('edit-inst-id').value;
+  const name       = document.getElementById('inst-name').value.trim();
+  const code       = document.getElementById('inst-code').value.trim();
+  const adminPhone = document.getElementById('inst-admin-phone').value.trim();
+  const adminPw    = document.getElementById('inst-admin-pw').value;
+
+  if (!name || !code) return toast('الاسم والكود مطلوبان', 'error');
+
+  const body = { name, code };
+  if (adminPhone) body.admin_phone = adminPhone;
+  if (adminPw)    body.admin_pw    = adminPw;
+
   try {
-    if (id) { await apiFetch(`/api/institutes/${id}`, 'PUT', { name, code }); }
-    else    { await apiFetch('/api/institutes', 'POST', { name, code }); }
+    if (id) {
+      await apiFetch('/api/institutes/' + id, 'PUT', body);
+    } else {
+      if (!adminPhone || !adminPw) return toast('هاتف وكلمة مرور المسؤول مطلوبان عند الإنشاء', 'error');
+      await apiFetch('/api/institutes', 'POST', body);
+    }
     closeModal('modal-inst');
     loadInstitutes();
     toast('تم الحفظ', 'success');
