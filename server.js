@@ -628,8 +628,9 @@ app.get('/api/device/status/:deviceId', authMiddleware, async (req, res) => {
       },
     });
     const data = await r.json();
+    console.log('[Device Status]', deviceId, JSON.stringify(data?.result)?.slice(0,100));
     const online = data.result?.online === true;
-    res.json({ success: true, online, device_id: deviceId });
+    res.json({ success: true, online, device_id: deviceId, result: data.result });
   } catch (err) {
     res.json({ success: false, online: false });
   }
