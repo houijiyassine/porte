@@ -579,6 +579,17 @@ function renderInstList(insts) {
       deleteInst(inst.id);
     };
 
+    const btnUsers = document.createElement('button');
+    btnUsers.className = 'door-action-btn dab-timer';
+    btnUsers.style.cssText = 'padding:6px 10px';
+    btnUsers.textContent = '👥';
+    btnUsers.title = 'مستخدمو المؤسسة';
+    btnUsers.onclick = function(e) {
+      e.stopPropagation();
+      openInstUsers(inst.id, inst.name);
+    };
+
+    btns.appendChild(btnUsers);
     btns.appendChild(btnSched);
     btns.appendChild(btnEdit);
     btns.appendChild(btnDel);
@@ -592,7 +603,7 @@ function renderInstList(insts) {
 
     [[doorsCount, '🚪 أبواب', 'var(--accent)'],
      [usersCount, '👥 مستخدمون', 'var(--success)'],
-     ['0/' + doorsCount, '📡 En ligne', 'var(--warning)']
+     ["<span id='enligne-" + inst.id + "'>0/" + doorsCount + "</span>", '📡 En ligne', 'var(--warning)']
     ].forEach(function(item) {
       const s = document.createElement('div');
       s.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px;text-align:center';
@@ -608,6 +619,19 @@ function renderInstList(insts) {
     });
 
     wrapper.appendChild(card);
+
+    // تحديث En ligne بعد جلب الحالة
+    (inst.doors||[]).forEach(function(door) {
+      checkDoorStatus(door.device_id, null, function(online) {
+        if (online) doorStatusCache[door.device_id] = true;
+        // تحديث العداد
+        var enligneEl = document.getElementById('enligne-' + inst.id);
+        if (enligneEl) {
+          var count = (inst.doors||[]).filter(function(d) { return doorStatusCache[d.device_id] === true; }).length;
+          enligneEl.textContent = count + '/' + (inst.doors||[]).length;
+        }
+      });
+    });
   });
 
   container.appendChild(wrapper);
@@ -1001,6 +1025,75 @@ function toggleTheme() {
     document.getElementById('theme-btn').textContent = '☀️';
     localStorage.setItem('porte_theme', 'light');
   }
+}
+
+
+// ─── Institute Users ──────────────────────────────────
+async function openInstUsers(instId, instName) {
+  document.getElementById('inst-users-title').textContent = 'مستخدمو: ' + instName;
+  document.getElementById('inst-users-body').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">جاري التحميل...</p>';
+  openModal('modal-inst-users');
+  try {
+    const data = await apiFetch('/api/users?inst_id=' + instId);
+    const statusLabels = { pending:'انتظار', approved:'موافق', rejected:'مرفوض' };
+    const statusColors = { pending:'var(--warning)', approved:'var(--success)', rejected:'var(--danger)' };
+    const roleLabels = { user:'مستخدم', admin:'مدير', super_admin:'سوبر أدمن' };
+    const filtered = (data||[]).filter(function(u) { return u.role !== 'super_admin'; });
+    if (!filtered.length) {
+      document.getElementById('inst-users-body').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">لا يوجد مستخدمون</p>';
+      return;
+    }
+    document.getElementById('inst-users-body').innerHTML = filtered.map(function(u) {
+      var status = u.request_status || 'approved';
+      var name = (u.name||'').replace(/'/g,'');
+      return '<div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:10px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">' +
+          '<div>' +
+            '<div style="font-weight:700">' + u.name + '</div>' +
+            '<div style="font-family:JetBrains Mono,monospace;font-size:0.78rem;color:var(--muted)">' + u.phone + '</div>' +
+            '<div style="font-size:0.72rem;color:var(--accent2)">' + (roleLabels[u.role]||u.role) + '</div>' +
+          '</div>' +
+          '<span style="font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+          '<button onclick="changeUserStatus('' + u.id + '','approved','' + instId + '','' + name + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(0,230,118,0.15);color:var(--success);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">موافقة</button>' +
+          '<button onclick="changeUserStatus('' + u.id + '','pending','' + instId + '','' + name + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(255,179,0,0.15);color:var(--warning);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">انتظار</button>' +
+          '<button onclick="changeUserStatus('' + u.id + '','rejected','' + instId + '','' + name + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(255,61,113,0.15);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">رفض</button>' +
+          '<button onclick="resetUserPw('' + u.id + '')" style="padding:7px 10px;border-radius:8px;border:none;background:rgba(124,92,252,0.15);color:var(--accent2);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">🔑</button>' +
+          '<button onclick="deleteUser('' + u.id + '','' + instId + '')" style="padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">🗑</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    document.getElementById('inst-users-body').innerHTML = '<p style="color:var(--danger);text-align:center;padding:20px">' + e.message + '</p>';
+  }
+}
+
+async function changeUserStatus(userId, status, instId, name) {
+  try {
+    await apiFetch('/api/users/' + userId, 'PUT', { request_status: status });
+    var labels = { approved:'موافق', pending:'انتظار', rejected:'مرفوض' };
+    toast(name + ' → ' + (labels[status]||status), 'success');
+    openInstUsers(instId, document.getElementById('inst-users-title').textContent.replace('مستخدمو: ',''));
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function resetUserPw(userId) {
+  var pw = prompt('كلمة المرور الجديدة:');
+  if (!pw) return;
+  try {
+    await apiFetch('/api/users/' + userId, 'PUT', { pw });
+    toast('تم تغيير كلمة المرور', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteUser(userId, instId) {
+  if (!confirm('هل تريد حذف المستخدم؟')) return;
+  try {
+    await apiFetch('/api/users/' + userId, 'DELETE');
+    toast('تم الحذف', 'success');
+    openInstUsers(instId, document.getElementById('inst-users-title').textContent.replace('مستخدمو: ',''));
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 // ─── Navigation ───────────────────────────────
