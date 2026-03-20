@@ -435,7 +435,9 @@ app.get('/api/institutes', authMiddleware, async (req, res) => {
         supabase.from('doors').select('*').eq('inst_id', inst.id),
         supabase.from('users').select('id', { count: 'exact' }).eq('inst_id', inst.id),
       ]);
-      return { ...inst, doors: doors||[], users_count: usersCount||0 };
+      const { data: adminUser } = await supabase
+        .from('users').select('phone').eq('inst_id', inst.id).eq('role', 'admin').single();
+      return { ...inst, doors: doors||[], users_count: usersCount||0, admin_phone: adminUser?.phone };
     }));
 
     res.json(enriched);
@@ -446,11 +448,25 @@ app.get('/api/institutes', authMiddleware, async (req, res) => {
 
 app.post('/api/institutes', authMiddleware, superAdminOnly, async (req, res) => {
   try {
-    const { name, code } = req.body;
+    const { name, code, admin_phone, admin_pw } = req.body;
     if (!name || !code) return res.status(400).json({ error: 'الاسم والكود مطلوبان' });
-    const { data, error } = await supabase.from('institutes').insert({ name, code, created_at: new Date().toISOString() }).select().single();
+
+    const { data: inst, error } = await supabase
+      .from('institutes').insert({ name, code, created_at: new Date().toISOString() })
+      .select().single();
     if (error) throw error;
-    res.json(data);
+
+    // إنشاء حساب المسؤول تلقائياً
+    if (admin_phone && admin_pw) {
+      const pw_hash = crypto.createHash('sha256').update(admin_pw).digest('hex');
+      await supabase.from('users').insert({
+        inst_id: inst.id, name: 'مسؤول ' + name,
+        phone: admin_phone, pw_hash, role: 'admin', status: 'active',
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    res.json(inst);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -460,12 +476,38 @@ app.put('/api/institutes/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = {};
-    if (req.body.schedule !== undefined) updates.schedule = req.body.schedule;
-    if (req.body.gps !== undefined)      updates.gps      = req.body.gps;
-    if (req.body.name !== undefined)     updates.name     = req.body.name;
+    ['schedule','gps','name','code'].forEach(k => {
+      if (req.body[k] !== undefined) updates[k] = req.body[k];
+    });
+
     const { data, error } = await supabase.from('institutes').update(updates).eq('id', id).select().single();
     if (error) throw error;
-    res.json(data);
+
+    // تحديث أو إنشاء حساب المسؤول
+    if (req.body.admin_phone || req.body.admin_pw) {
+      const { data: existingAdmin } = await supabase
+        .from('users').select('id').eq('inst_id', id).eq('role', 'admin').single();
+
+      if (existingAdmin) {
+        const adminUpdates = {};
+        if (req.body.admin_phone) adminUpdates.phone = req.body.admin_phone;
+        if (req.body.admin_pw)    adminUpdates.pw_hash = crypto.createHash('sha256').update(req.body.admin_pw).digest('hex');
+        await supabase.from('users').update(adminUpdates).eq('id', existingAdmin.id);
+      } else if (req.body.admin_phone && req.body.admin_pw) {
+        const pw_hash = crypto.createHash('sha256').update(req.body.admin_pw).digest('hex');
+        await supabase.from('users').insert({
+          inst_id: id, name: 'مسؤول ' + (req.body.name || data.name),
+          phone: req.body.admin_phone, pw_hash, role: 'admin', status: 'active',
+          created_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    // جلب بيانات المسؤول لإرجاعها
+    const { data: adminData } = await supabase
+      .from('users').select('phone').eq('inst_id', id).eq('role', 'admin').single();
+
+    res.json({ ...data, admin_phone: adminData?.phone });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
