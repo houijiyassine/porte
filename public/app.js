@@ -621,17 +621,20 @@ function renderInstList(insts) {
     wrapper.appendChild(card);
 
     // تحديث En ligne بعد جلب الحالة
-    (inst.doors||[]).forEach(function(door) {
-      checkDoorStatus(door.device_id, null, function(online) {
-        if (online) doorStatusCache[door.device_id] = true;
-        // تحديث العداد
-        var enligneEl = document.getElementById('enligne-' + inst.id);
-        if (enligneEl) {
-          var count = (inst.doors||[]).filter(function(d) { return doorStatusCache[d.device_id] === true; }).length;
-          enligneEl.textContent = count + '/' + (inst.doors||[]).length;
-        }
+    (function(instRef) {
+      (instRef.doors||[]).forEach(function(door) {
+        checkDoorStatus(door.device_id, null, function(online) {
+          doorStatusCache[door.device_id] = online;
+          var enligneEl = document.getElementById('enligne-' + instRef.id);
+          if (enligneEl) {
+            var count = (instRef.doors||[]).filter(function(d) {
+              return doorStatusCache[d.device_id] === true;
+            }).length;
+            enligneEl.textContent = count + '/' + (instRef.doors||[]).length;
+          }
+        });
       });
-    });
+    })(inst);
   });
 
   container.appendChild(wrapper);
