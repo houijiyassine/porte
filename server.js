@@ -372,8 +372,15 @@ app.get('/api/stats', authMiddleware, adminOnly, async (req, res) => {
 // ─── USERS ────────────────────────────────────────────────────────────────────
 app.get('/api/users', authMiddleware, adminOnly, async (req, res) => {
   try {
-    let query = supabase.from('users').select('id,name,phone,role,status,expire_date,note,inst_id').order('created_at', { ascending: false });
-    if (req.user.role !== 'super_admin') query = query.eq('inst_id', req.user.inst_id);
+    let query = supabase.from('users')
+      .select('id,name,phone,role,status,request_status,expire_date,note,inst_id')
+      .order('created_at', { ascending: false });
+    // فلتر حسب المؤسسة
+    if (req.query.inst_id) {
+      query = query.eq('inst_id', req.query.inst_id);
+    } else if (req.user.role !== 'super_admin') {
+      query = query.eq('inst_id', req.user.inst_id);
+    }
     const { data, error } = await query;
     if (error) throw error;
     res.json(data);
