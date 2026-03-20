@@ -330,9 +330,13 @@ async function toggleBlock(id, status) {
 // ─── Institutes ───────────────────────────────
 let institutesCache = [];
 
+let _loadingInstitutes = false;
+
 async function loadInstitutes() {
+  if (_loadingInstitutes) return;
+  _loadingInstitutes = true;
   const container = document.getElementById('institutes-list');
-  if (container && !institutesCache.length) {
+  if (container && !institutesCache.length && !container.children.length) {
     container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">⏳ جاري التحميل...</p>';
   }
   try {
@@ -344,6 +348,8 @@ async function loadInstitutes() {
   } catch(e) {
     console.error('[loadInstitutes error]', e);
     if (container) container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
+  } finally {
+    _loadingInstitutes = false;
   }
 }
 
