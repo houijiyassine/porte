@@ -95,12 +95,12 @@ function bootApp() {
     const btn = document.getElementById('theme-btn');
     if (btn) btn.textContent = '☀️';
   }
-  // تحميل المؤسسات مباشرة عند الدخول
-  loadInstitutes();
   // تفعيل زر المؤسسات
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const navInst = document.getElementById('nav-institutes');
   if (navInst) navInst.classList.add('active');
+  // تحميل المؤسسات بعد تأخير بسيط لضمان جاهزية DOM
+  setTimeout(loadInstitutes, 100);
 }
 
 // ─── WebSocket ────────────────────────────────
@@ -331,6 +331,10 @@ async function toggleBlock(id, status) {
 let institutesCache = [];
 
 async function loadInstitutes() {
+  const container = document.getElementById('institutes-list');
+  if (container && !institutesCache.length) {
+    container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">⏳ جاري التحميل...</p>';
+  }
   try {
     const data = await apiFetch('/api/institutes');
     institutesCache = data || [];
@@ -339,6 +343,7 @@ async function loadInstitutes() {
     renderInstitutes(data);
   } catch(e) {
     console.error('[loadInstitutes error]', e);
+    if (container) container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
   }
 }
 
