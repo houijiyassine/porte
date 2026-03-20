@@ -1035,46 +1035,73 @@ async function openInstUsers(instId, instName) {
   openModal('modal-inst-users');
   try {
     const data = await apiFetch('/api/users?inst_id=' + instId);
-    const statusLabels = { pending:'انتظار', approved:'موافق', rejected:'مرفوض' };
-    const statusColors = { pending:'var(--warning)', approved:'var(--success)', rejected:'var(--danger)' };
-    const roleLabels = { user:'مستخدم', admin:'مدير', super_admin:'سوبر أدمن' };
     const filtered = (data||[]).filter(function(u) { return u.role !== 'super_admin'; });
+    const body = document.getElementById('inst-users-body');
     if (!filtered.length) {
-      document.getElementById('inst-users-body').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">لا يوجد مستخدمون</p>';
+      body.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">لا يوجد مستخدمون</p>';
       return;
     }
-    document.getElementById('inst-users-body').innerHTML = filtered.map(function(u) {
+    body.innerHTML = '';
+    filtered.forEach(function(u) {
       var status = u.request_status || 'approved';
-      var name = (u.name||'').replace(/'/g,'');
-      return '<div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:10px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">' +
-          '<div>' +
-            '<div style="font-weight:700">' + u.name + '</div>' +
-            '<div style="font-family:JetBrains Mono,monospace;font-size:0.78rem;color:var(--muted)">' + u.phone + '</div>' +
-            '<div style="font-size:0.72rem;color:var(--accent2)">' + (roleLabels[u.role]||u.role) + '</div>' +
-          '</div>' +
-          '<span style="font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>' +
+      var statusLabel = { pending:'انتظار', approved:'موافق', rejected:'مرفوض' }[status] || status;
+      var statusColor = { pending:'var(--warning)', approved:'var(--success)', rejected:'var(--danger)' }[status] || 'var(--muted)';
+      var roleLabel = { user:'مستخدم', admin:'مدير' }[u.role] || u.role;
+      var card = document.createElement('div');
+      card.style.cssText = 'background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:10px';
+      // Header
+      var header = document.createElement('div');
+      header.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px';
+      header.innerHTML =
+        '<div>' +
+          '<div style="font-weight:700">' + u.name + '</div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:0.78rem;color:var(--muted)">' + u.phone + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--accent2)">' + roleLabel + '</div>' +
         '</div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-          '<button onclick="changeUserStatus('' + u.id + '','approved','' + instId + '','' + name + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(0,230,118,0.15);color:var(--success);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">موافقة</button>' +
-          '<button onclick="changeUserStatus('' + u.id + '','pending','' + instId + '','' + name + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(255,179,0,0.15);color:var(--warning);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">انتظار</button>' +
-          '<button onclick="changeUserStatus('' + u.id + '','rejected','' + instId + '','' + name + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(255,61,113,0.15);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">رفض</button>' +
-          '<button onclick="resetUserPw('' + u.id + '')" style="padding:7px 10px;border-radius:8px;border:none;background:rgba(124,92,252,0.15);color:var(--accent2);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">🔑</button>' +
-          '<button onclick="deleteUser('' + u.id + '','' + instId + '')" style="padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">🗑</button>' +
-        '</div>' +
-      '</div>';
-    }).join('');
+        '<span style="font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColor + '">' + statusLabel + '</span>';
+      card.appendChild(header);
+      // Buttons
+      var btns = document.createElement('div');
+      btns.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+      [
+        ['موافقة', 'approved', 'rgba(0,230,118,0.15)', 'var(--success)', 'flex:1'],
+        ['انتظار', 'pending', 'rgba(255,179,0,0.15)', 'var(--warning)', 'flex:1'],
+        ['رفض', 'rejected', 'rgba(255,61,113,0.15)', 'var(--danger)', 'flex:1'],
+      ].forEach(function(item) {
+        var btn = document.createElement('button');
+        btn.style.cssText = item[4] + ';padding:7px;border-radius:8px;border:none;background:' + item[2] + ';color:' + item[3] + ';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+        btn.textContent = item[0];
+        btn.addEventListener('click', (function(uid, st, iid) {
+          return function() { changeUserStatus(uid, st, iid, instName); };
+        })(u.id, item[1], instId));
+        btns.appendChild(btn);
+      });
+      // Reset pw button
+      var btnPw = document.createElement('button');
+      btnPw.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(124,92,252,0.15);color:var(--accent2);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+      btnPw.textContent = '🔑';
+      btnPw.addEventListener('click', (function(uid) { return function() { resetUserPw(uid); }; })(u.id));
+      btns.appendChild(btnPw);
+      // Delete button
+      var btnDel = document.createElement('button');
+      btnDel.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+      btnDel.textContent = '🗑';
+      btnDel.addEventListener('click', (function(uid, iid) { return function() { deleteUser(uid, iid, instName); }; })(u.id, instId));
+      btns.appendChild(btnDel);
+      card.appendChild(btns);
+      body.appendChild(card);
+    });
   } catch(e) {
     document.getElementById('inst-users-body').innerHTML = '<p style="color:var(--danger);text-align:center;padding:20px">' + e.message + '</p>';
   }
 }
 
-async function changeUserStatus(userId, status, instId, name) {
+async function changeUserStatus(userId, status, instId, instName) {
   try {
     await apiFetch('/api/users/' + userId, 'PUT', { request_status: status });
     var labels = { approved:'موافق', pending:'انتظار', rejected:'مرفوض' };
-    toast(name + ' → ' + (labels[status]||status), 'success');
-    openInstUsers(instId, document.getElementById('inst-users-title').textContent.replace('مستخدمو: ',''));
+    toast(labels[status] || status, 'success');
+    openInstUsers(instId, instName);
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -1087,14 +1114,15 @@ async function resetUserPw(userId) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-async function deleteUser(userId, instId) {
+async function deleteUser(userId, instId, instName) {
   if (!confirm('هل تريد حذف المستخدم؟')) return;
   try {
     await apiFetch('/api/users/' + userId, 'DELETE');
     toast('تم الحذف', 'success');
-    openInstUsers(instId, document.getElementById('inst-users-title').textContent.replace('مستخدمو: ',''));
+    openInstUsers(instId, instName || '');
   } catch(e) { toast(e.message, 'error'); }
 }
+
 
 // ─── Navigation ───────────────────────────────
 function showPage(name, btn) {
