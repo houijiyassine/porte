@@ -100,7 +100,7 @@ function bootApp() {
   const navInst = document.getElementById('nav-institutes');
   if (navInst) navInst.classList.add('active');
   // تحميل المؤسسات بعد تأخير بسيط لضمان جاهزية DOM
-  setTimeout(loadInstitutes, 100);
+  setTimeout(loadInstitutes, 300);
 }
 
 // ─── WebSocket ────────────────────────────────
@@ -330,26 +330,15 @@ async function toggleBlock(id, status) {
 // ─── Institutes ───────────────────────────────
 let institutesCache = [];
 
-let _loadingInstitutes = false;
-
 async function loadInstitutes() {
-  if (_loadingInstitutes) return;
-  _loadingInstitutes = true;
-  const container = document.getElementById('institutes-list');
-  if (container && !institutesCache.length && !container.children.length) {
-    container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">⏳ جاري التحميل...</p>';
-  }
   try {
     const data = await apiFetch('/api/institutes');
     institutesCache = data || [];
-    const statEl = document.getElementById('stat-inst');
-    if (statEl) statEl.textContent = data.length;
     renderInstitutes(data);
   } catch(e) {
-    console.error('[loadInstitutes error]', e);
-    if (container) container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
-  } finally {
-    _loadingInstitutes = false;
+    console.error('[loadInstitutes]', e);
+    const c = document.getElementById('institutes-list');
+    if (c) c.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
   }
 }
 
@@ -1010,7 +999,7 @@ function showPage(name, btn) {
 
   if (name === 'dashboard')   { loadStats(); }
   if (name === 'users')       loadUsers();
-  if (name === 'institutes')  loadInstitutes();
+  // institutes loads via bootApp only
   if (name === 'map')         initMap();
 }
 
