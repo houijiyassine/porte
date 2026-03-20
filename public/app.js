@@ -334,9 +334,12 @@ async function loadInstitutes() {
   try {
     const data = await apiFetch('/api/institutes');
     institutesCache = data || [];
-    document.getElementById('stat-inst').textContent = data.length;
+    const statEl = document.getElementById('stat-inst');
+    if (statEl) statEl.textContent = data.length;
     renderInstitutes(data);
-  } catch {}
+  } catch(e) {
+    console.error('[loadInstitutes error]', e);
+  }
 }
 
 // ─── GPS Modal ────────────────────────────────────────
