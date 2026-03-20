@@ -620,17 +620,25 @@ function renderInstList(insts) {
 
     wrapper.appendChild(card);
 
-    // تحديث En ligne بعد جلب الحالة
+    // عرض ما في الكاش فوراً
     (function(instRef) {
+      var enligneEl = document.getElementById('enligne-' + instRef.id);
+      if (enligneEl) {
+        var cachedCount = (instRef.doors||[]).filter(function(d) {
+          return doorStatusCache[d.device_id] === true;
+        }).length;
+        enligneEl.textContent = cachedCount + '/' + (instRef.doors||[]).length;
+      }
+      // تحديث من Tuya API
       (instRef.doors||[]).forEach(function(door) {
         checkDoorStatus(door.device_id, null, function(online) {
           doorStatusCache[door.device_id] = online;
-          var enligneEl = document.getElementById('enligne-' + instRef.id);
-          if (enligneEl) {
+          var el = document.getElementById('enligne-' + instRef.id);
+          if (el) {
             var count = (instRef.doors||[]).filter(function(d) {
               return doorStatusCache[d.device_id] === true;
             }).length;
-            enligneEl.textContent = count + '/' + (instRef.doors||[]).length;
+            el.textContent = count + '/' + (instRef.doors||[]).length;
           }
         });
       });
@@ -651,10 +659,14 @@ function selectInstitute(instId) {
 
 function backToInstList() {
   selectedInstId = null;
-  document.getElementById('inst-page-title').textContent = 'المؤسسات';
-  document.getElementById('inst-back-btn').style.display = 'none';
-  document.getElementById('inst-add-btn').style.display = 'flex';
-  loadInstitutes();
+  var titleEl = document.getElementById('inst-page-title');
+  var backBtn = document.getElementById('inst-back-btn');
+  var addBtn  = document.getElementById('inst-add-btn');
+  if (titleEl) titleEl.textContent = 'المؤسسات';
+  if (backBtn) backBtn.style.display = 'none';
+  if (addBtn)  addBtn.style.display  = 'flex';
+  // استخدام الكاش مباشرة بدل إعادة الجلب
+  renderInstitutes(institutesCache);
 }
 
 function renderInstDetail(inst) {
