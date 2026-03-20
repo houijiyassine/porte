@@ -469,6 +469,9 @@ async function saveDoorSchedule() {
   } catch(e) { toast(e.message, 'error'); }
 }
 
+// ─── Selected Institute ───────────────────────────────
+let selectedInstId = null;
+
 function renderInstitutes(insts) {
   const container = document.getElementById('institutes-list');
   if (!insts?.length) {
@@ -476,118 +479,182 @@ function renderInstitutes(insts) {
     return;
   }
 
-  let html = '';
+  // إذا كان هناك مؤسسة مختارة — اعرض تفاصيلها فقط
+  if (selectedInstId) {
+    const inst = insts.find(i => i.id === selectedInstId);
+    if (inst) { renderInstDetail(inst); return; }
+    selectedInstId = null;
+  }
+
+  // قائمة المؤسسات
+  renderInstList(insts);
+}
+
+function renderInstList(insts) {
+  const container = document.getElementById('institutes-list');
+  let html = '<div style="display:flex;flex-direction:column;gap:12px">';
+
   insts.forEach(function(inst) {
-    let doorsHtml = '';
-    (inst.doors||[]).forEach(function(door, idx) {
-      const doorId     = door.id;
-      const deviceId   = door.device_id;
-      const doorName   = door.name;
-      const location   = door.location || '';
-      const duration   = door.duration_seconds || 5;
-      const gpsRange   = (door.gps && door.gps.range !== undefined) ? door.gps.range : 100;
-      const gpsLat     = door.gps?.lat || null;
-      const gpsLng     = door.gps?.lng || null;
-      const adminReq   = door.gps?.admin_required || false;
-      const userReq    = door.gps?.user_required || false;
-      const schedData  = JSON.stringify(door.schedule || {}).replace(/"/g, '&quot;');
-
-      if (idx > 0) doorsHtml += '<div style="margin:10px 0"></div>';
-
-      doorsHtml += `
-        <div style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:14px;margin-bottom:4px">
-          <!-- Header الباب -->
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px">
-            <div>
-              <div style="font-weight:800;font-size:0.95rem">⏳ ${doorName}</div>
-              <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-top:2px">ID: ${deviceId.substring(0,16)}...</div>
-            </div>
-            <span id="door-status-${doorId}" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>
-          </div>
-
-          <!-- أزرار التحكم -->
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
-            <button onclick="sendDoorAction('${deviceId}','open',${duration})" style="background:rgba(0,230,118,0.15);border:1px solid rgba(0,230,118,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--success)">🟢<span>فتح</span></button>
-            <button onclick="sendDoorAction('${deviceId}','close',${duration})" style="background:rgba(255,61,113,0.15);border:1px solid rgba(255,61,113,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--danger)">🔴<span>غلق</span></button>
-            <button onclick="sendDoorAction('${deviceId}','stop',0)" style="background:rgba(255,179,0,0.15);border:1px solid rgba(255,179,0,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--warning)">🟡<span>إيقاف</span></button>
-            <button onclick="sendDoorAction('${deviceId}','open40',40)" style="background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--accent)">⏱<span>40ث</span></button>
-          </div>
-
-          <!-- أزرار الإدارة -->
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
-            <button onclick="openEditDoor('${inst.id}','${doorId}','${doorName}','${location}','${deviceId}',${duration})" style="background:rgba(124,92,252,0.15);border:1px solid rgba(124,92,252,0.3);border-radius:12px;padding:12px 6px;cursor:pointer;font-size:1.1rem" title="تعديل">✏️</button>
-            <button onclick="deleteDoor('${doorId}','${inst.id}')" style="background:rgba(255,61,113,0.1);border:1px solid rgba(255,61,113,0.2);border-radius:12px;padding:12px 6px;cursor:pointer;font-size:1.1rem" title="حذف">🗑</button>
-            <button onclick="openGpsModal('${doorId}',${gpsRange},${gpsLat},${gpsLng})" style="background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:12px;padding:8px 4px;cursor:pointer;font-size:0.7rem;font-weight:700;color:var(--accent);font-family:Cairo,sans-serif" title="GPS" data-gps-door="${doorId}">📡 ${gpsRange}م</button>
-          </div>
-
-          <!-- زر السجل + جدول الأوقات -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-            <button onclick="openDoorLogs('${doorId}','${doorName}')" style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:12px;padding:10px 6px;cursor:pointer;font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;color:var(--accent);display:flex;align-items:center;justify-content:center;gap:6px">📋 سجل الباب</button>
-            <button onclick="openDoorSchedule('${doorId}','${doorName}',${schedData === '&quot;{}&quot;' ? '{}' : schedData})" style="background:rgba(255,179,0,0.08);border:1px solid rgba(255,179,0,0.2);border-radius:12px;padding:10px 6px;cursor:pointer;font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;color:var(--warning);display:flex;align-items:center;justify-content:center;gap:6px">🕐 جدول الأوقات</button>
-          </div>
-
-          <!-- GPS toggles -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">
-              <div>
-                <div style="font-size:0.72rem;font-weight:700;color:var(--muted)">🏢 GPS مسؤول</div>
-                <div style="font-size:0.7rem;font-weight:700;margin-top:2px;color:${adminReq?'var(--success)':'var(--danger)'}">${adminReq?'ON':'OFF'}</div>
-              </div>
-              <label class="toggle-switch">
-                <input type="checkbox" ${adminReq?'checked':''} onchange="toggleDoorGps('${doorId}','admin_required',this.checked)">
-                <span class="toggle-knob"></span>
-              </label>
-            </div>
-            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">
-              <div>
-                <div style="font-size:0.72rem;font-weight:700;color:var(--muted)">📍 GPS مستخدمين</div>
-                <div style="font-size:0.7rem;font-weight:700;margin-top:2px;color:${userReq?'var(--success)':'var(--danger)'}">${userReq?'ON':'OFF'}</div>
-              </div>
-              <label class="toggle-switch">
-                <input type="checkbox" ${userReq?'checked':''} onchange="toggleDoorGps('${doorId}','user_required',this.checked)">
-                <span class="toggle-knob"></span>
-              </label>
-            </div>
-          </div>
-        </div>`;
-    });
+    const doorsCount = (inst.doors||[]).length;
+    const onlineCount = (inst.doors||[]).filter(d => doorStatusCache[d.device_id] === true).length;
 
     html += `
-    <div class="inst-card">
-      <div class="inst-header">
-        <div>
-          <div class="inst-name">🏫 ${inst.name}</div>
-          <div class="inst-code">🔑 ${inst.code}</div>
+      <div onclick="selectInstitute('${inst.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden" onmouseover="this.style.borderColor='rgba(0,212,255,0.3)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
+          <div>
+            <div style="font-size:1.1rem;font-weight:800">🏫 ${inst.name}</div>
+            <div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:4px">🔑 ${inst.code}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button onclick="event.stopPropagation();openInstSchedule('${inst.id}','${inst.name}',${JSON.stringify(inst.schedule||{}).replace(/"/g,'&quot;')})" class="door-action-btn dab-timer" style="padding:6px 10px">🕐</button>
+            <button onclick="event.stopPropagation();editInst(${JSON.stringify(inst).replace(/"/g,'&quot;')})" class="door-action-btn dab-edit" style="padding:6px 10px">✏️</button>
+            <button onclick="event.stopPropagation();deleteInst('${inst.id}')" class="door-action-btn dab-del" style="padding:6px 10px">🗑</button>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button onclick="openInstSchedule('${inst.id}','${inst.name}',${JSON.stringify(inst.schedule||{}).replace(/"/g,'&quot;')})" class="door-action-btn dab-timer">🕐</button>
-          <button onclick="editInst(${JSON.stringify(inst).replace(/"/g,'&quot;')})" class="door-action-btn dab-edit">✏️</button>
-          <button onclick="deleteInst('${inst.id}')" class="door-action-btn dab-del">🗑</button>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <div style="background:var(--surface2);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:1.4rem;font-weight:900;font-family:JetBrains Mono;color:var(--accent)">${doorsCount}</div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px">🚪 أبواب</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:1.4rem;font-weight:900;font-family:JetBrains Mono;color:var(--success)">${inst.users_count||0}</div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px">👥 مستخدمون</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:1.4rem;font-weight:900;font-family:JetBrains Mono;color:var(--success)">${onlineCount}/${doorsCount}</div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px">📡 En ligne</div>
+          </div>
         </div>
-      </div>
-      <div class="inst-meta">
-        <span>🚪 ${(inst.doors||[]).length} باب</span>
-        <span>👥 ${inst.users_count||0} مستخدم</span>
-      </div>
-      <div class="section-label" style="margin-bottom:8px">الأبواب:</div>
-      ${doorsHtml}
-      <button onclick="openAddDoor('${inst.id}')" style="margin-top:10px;width:100%;padding:10px;border-radius:10px;font-size:0.82rem;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.2);color:var(--success);font-family:Cairo,sans-serif;font-weight:700;cursor:pointer">
-        + إضافة باب
-      </button>
-    </div>`;
+        <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:0 3px 3px 0"></div>
+      </div>`;
   });
 
+  html += '</div>';
   container.innerHTML = html;
 
-  // تحقق من حالة كل باب
+  // تحقق من حالة الأجهزة
   setTimeout(function() {
     insts.forEach(function(inst) {
       (inst.doors||[]).forEach(function(door) {
-        checkDoorStatus(door.device_id, 'door-status-' + door.id);
+        checkDoorStatus(door.device_id, null, function(online) {
+          // تحديث عداد المتصلة
+        });
       });
+    });
+  }, 500);
+}
+
+function selectInstitute(instId) {
+  selectedInstId = instId;
+  loadInstitutes();
+  // تحديث عنوان الصفحة
+  document.getElementById('inst-page-title').textContent = 'تفاصيل المؤسسة';
+  document.getElementById('inst-back-btn').style.display = 'flex';
+  document.getElementById('inst-add-btn').style.display = 'none';
+}
+
+function backToInstList() {
+  selectedInstId = null;
+  document.getElementById('inst-page-title').textContent = 'المؤسسات';
+  document.getElementById('inst-back-btn').style.display = 'none';
+  document.getElementById('inst-add-btn').style.display = 'flex';
+  loadInstitutes();
+}
+
+function renderInstDetail(inst) {
+  const container = document.getElementById('institutes-list');
+  let doorsHtml = '';
+
+  (inst.doors||[]).forEach(function(door, idx) {
+    const doorId   = door.id;
+    const deviceId = door.device_id;
+    const doorName = door.name;
+    const location = door.location || '';
+    const duration = door.duration_seconds || 5;
+    const gpsRange = (door.gps && door.gps.range !== undefined) ? door.gps.range : 100;
+    const gpsLat   = door.gps?.lat || null;
+    const gpsLng   = door.gps?.lng || null;
+    const adminReq = door.gps?.admin_required || false;
+    const userReq  = door.gps?.user_required || false;
+    const schedData = JSON.stringify(door.schedule || {}).replace(/"/g, '&quot;');
+
+    if (idx > 0) doorsHtml += '<div style="margin:10px 0"></div>';
+
+    doorsHtml += `
+      <div style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:14px;margin-bottom:4px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px">
+          <div>
+            <div style="font-weight:800;font-size:0.95rem">⏳ ${doorName}</div>
+            <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-top:2px">ID: ${deviceId.substring(0,16)}...</div>
+          </div>
+          <span id="door-status-${doorId}" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+          <button onclick="sendDoorAction('${deviceId}','open',${duration})" style="background:rgba(0,230,118,0.15);border:1px solid rgba(0,230,118,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--success)">🟢<span>فتح</span></button>
+          <button onclick="sendDoorAction('${deviceId}','close',${duration})" style="background:rgba(255,61,113,0.15);border:1px solid rgba(255,61,113,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--danger)">🔴<span>غلق</span></button>
+          <button onclick="sendDoorAction('${deviceId}','stop',0)" style="background:rgba(255,179,0,0.15);border:1px solid rgba(255,179,0,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--warning)">🟡<span>إيقاف</span></button>
+          <button onclick="sendDoorAction('${deviceId}','open40',40)" style="background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--accent)">⏱<span>40ث</span></button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+          <button onclick="openEditDoor('${inst.id}','${doorId}','${doorName}','${location}','${deviceId}',${duration})" style="background:rgba(124,92,252,0.15);border:1px solid rgba(124,92,252,0.3);border-radius:12px;padding:12px 6px;cursor:pointer;font-size:1.1rem" title="تعديل">✏️</button>
+          <button onclick="deleteDoor('${doorId}','${inst.id}')" style="background:rgba(255,61,113,0.1);border:1px solid rgba(255,61,113,0.2);border-radius:12px;padding:12px 6px;cursor:pointer;font-size:1.1rem" title="حذف">🗑</button>
+          <button onclick="openGpsModal('${doorId}',${gpsRange},${gpsLat},${gpsLng})" data-gps-door="${doorId}" style="background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:12px;padding:8px 4px;cursor:pointer;font-size:0.7rem;font-weight:700;color:var(--accent);font-family:Cairo,sans-serif">📡 ${gpsRange}م</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <button onclick="openDoorLogs('${doorId}','${doorName}')" style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:12px;padding:10px 6px;cursor:pointer;font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;color:var(--accent);display:flex;align-items:center;justify-content:center;gap:6px">📋 سجل الباب</button>
+          <button onclick="openDoorSchedule('${doorId}','${doorName}',${schedData === '&quot;{}&quot;' ? '{}' : schedData})" style="background:rgba(255,179,0,0.08);border:1px solid rgba(255,179,0,0.2);border-radius:12px;padding:10px 6px;cursor:pointer;font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;color:var(--warning);display:flex;align-items:center;justify-content:center;gap:6px">🕐 جدول الأوقات</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:0.72rem;font-weight:700;color:var(--muted)">🏢 GPS مسؤول</div>
+              <div style="font-size:0.7rem;font-weight:700;margin-top:2px;color:${adminReq?'var(--success)':'var(--danger)'}">${adminReq?'ON':'OFF'}</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" ${adminReq?'checked':''} onchange="toggleDoorGps('${doorId}','admin_required',this.checked)">
+              <span class="toggle-knob"></span>
+            </label>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:0.72rem;font-weight:700;color:var(--muted)">📍 GPS مستخدمين</div>
+              <div style="font-size:0.7rem;font-weight:700;margin-top:2px;color:${userReq?'var(--success)':'var(--danger)'}">${userReq?'ON':'OFF'}</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" ${userReq?'checked':''} onchange="toggleDoorGps('${doorId}','user_required',this.checked)">
+              <span class="toggle-knob"></span>
+            </label>
+          </div>
+        </div>
+      </div>`;
+  });
+
+  container.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:1.15rem;font-weight:800">🏫 ${inst.name}</div>
+          <div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:3px">🔑 ${inst.code}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="openInstSchedule('${inst.id}','${inst.name}',${JSON.stringify(inst.schedule||{}).replace(/"/g,'&quot;')})" class="door-action-btn dab-timer">🕐 جدول</button>
+          <button onclick="editInst(${JSON.stringify(inst).replace(/"/g,'&quot;')})" class="door-action-btn dab-edit">✏️</button>
+        </div>
+      </div>
+    </div>
+    <div class="section-label" style="margin-bottom:8px">الأبواب (${(inst.doors||[]).length}):</div>
+    ${doorsHtml}
+    <button onclick="openAddDoor('${inst.id}')" style="margin-top:10px;width:100%;padding:12px;border-radius:12px;font-size:0.85rem;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.2);color:var(--success);font-family:Cairo,sans-serif;font-weight:700;cursor:pointer">
+      + إضافة باب
+    </button>`;
+
+  setTimeout(function() {
+    (inst.doors||[]).forEach(function(door) {
+      checkDoorStatus(door.device_id, 'door-status-' + door.id);
     });
   }, 300);
 }
+
 
 function openAddInst() {
   document.getElementById('edit-inst-id').value = '';
