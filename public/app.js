@@ -90,13 +90,17 @@ function bootApp() {
   connectWS();
   subscribePush();
   startLocationTracking();
-  // تطبيق أيقونة الثيم
+  // أيقونة الثيم
   if (localStorage.getItem('porte_theme') === 'light') {
     const btn = document.getElementById('theme-btn');
     if (btn) btn.textContent = '☀️';
   }
-  // افتح صفحة المؤسسات افتراضياً
-  showPage('institutes', document.getElementById('nav-institutes'));
+  // تحميل المؤسسات مباشرة عند الدخول
+  loadInstitutes();
+  // تفعيل زر المؤسسات
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navInst = document.getElementById('nav-institutes');
+  if (navInst) navInst.classList.add('active');
 }
 
 // ─── WebSocket ────────────────────────────────
