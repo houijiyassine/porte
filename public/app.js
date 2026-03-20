@@ -71,8 +71,10 @@ function bootApp() {
   roleBadge.className = 'role-badge ' +
     (user.role==='super_admin' ? 'role-super' : user.role==='admin' ? 'role-admin' : 'role-user');
 
-  document.getElementById('profile-name').textContent = user.name;
-  document.getElementById('profile-role').textContent = roleLabels[user.role];
+  const pname = document.getElementById('profile-name');
+  const prole = document.getElementById('profile-role');
+  if (pname) pname.textContent = user.name;
+  if (prole) prole.textContent = roleLabels[user.role];
 
   const isAdmin      = ['admin','super_admin'].includes(user.role);
   const isSuperAdmin = user.role === 'super_admin';
