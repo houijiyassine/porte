@@ -504,56 +504,104 @@ function renderInstitutes(insts) {
 
 function renderInstList(insts) {
   const container = document.getElementById('institutes-list');
-  let html = '<div style="display:flex;flex-direction:column;gap:12px">';
+  if (!container) return;
+  if (!insts || !insts.length) {
+    container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">لا توجد مؤسسات</p>';
+    return;
+  }
+
+  container.innerHTML = '';
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'display:flex;flex-direction:column;gap:12px';
 
   insts.forEach(function(inst) {
-    const doorsCount = (inst.doors||[]).length;
-    const onlineCount = (inst.doors||[]).filter(d => doorStatusCache[d.device_id] === true).length;
+    const doorsCount = (inst.doors || []).length;
+    const usersCount = inst.users_count || 0;
 
-    html += `
-      <div onclick="selectInstitute('${inst.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden" onmouseover="this.style.borderColor='rgba(0,212,255,0.3)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
-          <div>
-            <div style="font-size:1.1rem;font-weight:800">🏫 ${inst.name}</div>
-            <div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:4px">🔑 ${inst.code}</div>
-          </div>
-          <div style="display:flex;gap:6px">
-            <button onclick="event.stopPropagation();openInstSchedule('${inst.id}','${inst.name}',${JSON.stringify(inst.schedule||{}).replace(/"/g,'&quot;')})" class="door-action-btn dab-timer" style="padding:6px 10px">🕐</button>
-            <button onclick="event.stopPropagation();editInst(${JSON.stringify(inst).replace(/"/g,'&quot;')})" class="door-action-btn dab-edit" style="padding:6px 10px">✏️</button>
-            <button onclick="event.stopPropagation();deleteInst('${inst.id}')" class="door-action-btn dab-del" style="padding:6px 10px">🗑</button>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-          <div style="background:var(--surface2);border-radius:10px;padding:10px;text-align:center">
-            <div style="font-size:1.4rem;font-weight:900;font-family:JetBrains Mono;color:var(--accent)">${doorsCount}</div>
-            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px">🚪 أبواب</div>
-          </div>
-          <div style="background:var(--surface2);border-radius:10px;padding:10px;text-align:center">
-            <div style="font-size:1.4rem;font-weight:900;font-family:JetBrains Mono;color:var(--success)">${inst.users_count||0}</div>
-            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px">👥 مستخدمون</div>
-          </div>
-          <div style="background:var(--surface2);border-radius:10px;padding:10px;text-align:center">
-            <div style="font-size:1.4rem;font-weight:900;font-family:JetBrains Mono;color:var(--success)">${onlineCount}/${doorsCount}</div>
-            <div style="font-size:0.7rem;color:var(--muted);margin-top:2px">📡 En ligne</div>
-          </div>
-        </div>
-        <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:0 3px 3px 0"></div>
-      </div>`;
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;cursor:pointer;transition:border-color 0.2s;position:relative;overflow:hidden';
+
+    // الخط الجانبي
+    const line = document.createElement('div');
+    line.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:0 3px 3px 0';
+    card.appendChild(line);
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px';
+
+    const nameDiv = document.createElement('div');
+    const nameEl = document.createElement('div');
+    nameEl.style.cssText = 'font-size:1.1rem;font-weight:800';
+    nameEl.textContent = '🏫 ' + inst.name;
+    const codeEl = document.createElement('div');
+    codeEl.style.cssText = 'font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:4px';
+    codeEl.textContent = '🔑 ' + inst.code;
+    nameDiv.appendChild(nameEl);
+    nameDiv.appendChild(codeEl);
+
+    const btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:6px';
+
+    const btnSched = document.createElement('button');
+    btnSched.className = 'door-action-btn dab-timer';
+    btnSched.style.cssText = 'padding:6px 10px';
+    btnSched.textContent = '🕐';
+    btnSched.onclick = function(e) {
+      e.stopPropagation();
+      openInstSchedule(inst.id, inst.name, inst.schedule || {});
+    };
+
+    const btnEdit = document.createElement('button');
+    btnEdit.className = 'door-action-btn dab-edit';
+    btnEdit.style.cssText = 'padding:6px 10px';
+    btnEdit.textContent = '✏️';
+    btnEdit.onclick = function(e) {
+      e.stopPropagation();
+      editInst(inst);
+    };
+
+    const btnDel = document.createElement('button');
+    btnDel.className = 'door-action-btn dab-del';
+    btnDel.style.cssText = 'padding:6px 10px';
+    btnDel.textContent = '🗑';
+    btnDel.onclick = function(e) {
+      e.stopPropagation();
+      deleteInst(inst.id);
+    };
+
+    btns.appendChild(btnSched);
+    btns.appendChild(btnEdit);
+    btns.appendChild(btnDel);
+    header.appendChild(nameDiv);
+    header.appendChild(btns);
+    card.appendChild(header);
+
+    // Stats
+    const stats = document.createElement('div');
+    stats.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:8px';
+
+    [[doorsCount, '🚪 أبواب', 'var(--accent)'],
+     [usersCount, '👥 مستخدمون', 'var(--success)'],
+     ['0/' + doorsCount, '📡 En ligne', 'var(--warning)']
+    ].forEach(function(item) {
+      const s = document.createElement('div');
+      s.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px;text-align:center';
+      s.innerHTML = '<div style="font-size:1.4rem;font-weight:900;font-family:JetBrains Mono;color:' + item[2] + '">' + item[0] + '</div><div style="font-size:0.7rem;color:var(--muted);margin-top:2px">' + item[1] + '</div>';
+      stats.appendChild(s);
+    });
+
+    card.appendChild(stats);
+
+    // Click → open detail
+    card.addEventListener('click', function() {
+      selectInstitute(inst.id);
+    });
+
+    wrapper.appendChild(card);
   });
 
-  html += '</div>';
-  container.innerHTML = html;
-
-  // تحقق من حالة الأجهزة
-  setTimeout(function() {
-    insts.forEach(function(inst) {
-      (inst.doors||[]).forEach(function(door) {
-        checkDoorStatus(door.device_id, null, function(online) {
-          // تحديث عداد المتصلة
-        });
-      });
-    });
-  }, 500);
+  container.appendChild(wrapper);
 }
 
 function selectInstitute(instId) {
