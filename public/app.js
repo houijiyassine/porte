@@ -95,12 +95,8 @@ function bootApp() {
     const btn = document.getElementById('theme-btn');
     if (btn) btn.textContent = '☀️';
   }
-  // تفعيل زر المؤسسات
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const navInst = document.getElementById('nav-institutes');
-  if (navInst) navInst.classList.add('active');
-  // تحميل المؤسسات بعد تأخير بسيط لضمان جاهزية DOM
-  setTimeout(loadInstitutes, 300);
+  // افتح صفحة المؤسسات — showPage ستستدعي loadInstitutes
+  showPage('institutes', document.getElementById('nav-institutes'));
 }
 
 // ─── WebSocket ────────────────────────────────
@@ -999,7 +995,7 @@ function showPage(name, btn) {
 
   if (name === 'dashboard')   { loadStats(); }
   if (name === 'users')       loadUsers();
-  // institutes loads via bootApp only
+  if (name === 'institutes') loadInstitutes();
   if (name === 'map')         initMap();
 }
 
