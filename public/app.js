@@ -89,6 +89,17 @@ function bootApp() {
   connectWS();
   subscribePush();
   startLocationTracking();
+  // إرسال fingerprint الجهاز
+  setTimeout(function() {
+    var fp = {
+      ua:       navigator.userAgent,
+      lang:     navigator.language,
+      tz:       Intl.DateTimeFormat().resolvedOptions().timeZone,
+      screen:   screen.width + 'x' + screen.height,
+      platform: navigator.platform || '',
+    };
+    apiFetch('/api/device/fingerprint', 'POST', fp).catch(function(){});
+  }, 2000);
   // أيقونة الثيم
   if (localStorage.getItem('porte_theme') === 'light') {
     const btn = document.getElementById('theme-btn');
@@ -198,7 +209,7 @@ async function sendDoorAction(deviceId, action, duration) {
   try {
     var body = { action, deviceId, duration };
     // أرسل الموقع دائماً إذا كان متوفراً
-    if (userLocation) { body.lat = userLocation.lat; body.lng = userLocation.lng; }
+    if (userLocation) { body.lat = userLocation.lat; body.lng = userLocation.lng; body.accuracy = userLocation.accuracy || 999; }
     await apiFetch('/api/door/control', 'POST', body);
     toast(`تم: ${action}`, 'success');
   } catch(e) {
@@ -1262,9 +1273,15 @@ function startUserLocationTracking() {
   if (!navigator.geolocation) return;
 
   function sendLocation() {
+    var t = Date.now();
     navigator.geolocation.getCurrentPosition(
       function(pos) {
-        userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+        userLocation = {
+          lat: pos.coords.latitude, lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy, altitude: pos.coords.altitude,
+          altAccuracy: pos.coords.altitudeAccuracy,
+          responseTime: Date.now() - t,
+        };
         if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'location', coords: userLocation }));
         updateAllGpsBadges();
       },
@@ -1283,14 +1300,23 @@ function startUserLocationTracking() {
 // جلب الموقع عند الضغط على زر — دقة عالية لمرة واحدة
 function getUserLocationOnDemand(callback) {
   if (!navigator.geolocation) { callback(null); return; }
+  var requestTime = Date.now();
   navigator.geolocation.getCurrentPosition(
     function(pos) {
-      userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+      var responseTime = Date.now() - requestTime; // زمن الاستجابة
+      userLocation = {
+        lat:          pos.coords.latitude,
+        lng:          pos.coords.longitude,
+        accuracy:     pos.coords.accuracy,
+        altitude:     pos.coords.altitude,
+        altAccuracy:  pos.coords.altitudeAccuracy,
+        responseTime: responseTime,
+      };
       if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'location', coords: userLocation }));
       updateAllGpsBadges();
       callback(userLocation);
     },
-    function() { callback(userLocation); }, // استخدم الأخير المتاح
+    function() { callback(userLocation); },
     { enableHighAccuracy: true, timeout: 6000, maximumAge: 30000 }
   );
 }
