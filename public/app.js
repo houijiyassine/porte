@@ -97,8 +97,25 @@ function bootApp() {
     const btn = document.getElementById('theme-btn');
     if (btn) btn.textContent = '☀️';
   }
-  // افتح صفحة المؤسسات — showPage ستستدعي loadInstitutes
-  showPage('institutes', document.getElementById('nav-institutes'));
+  // توجيه حسب الدور
+  if (user.role === 'super_admin') {
+    showPage('institutes', document.getElementById('nav-institutes'));
+  } else if (user.role === 'admin') {
+    document.querySelectorAll('.nav-item').forEach(function(n){ n.style.display = 'none'; });
+    document.getElementById('nav-institutes').style.display = 'flex';
+    document.getElementById('nav-institutes').classList.add('active');
+    document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+    document.getElementById('page-institutes').classList.add('active');
+    loadAdminDoors();
+  } else {
+    document.querySelectorAll('.nav-item').forEach(function(n){ n.style.display = 'none'; });
+    document.getElementById('nav-institutes').style.display = 'flex';
+    document.getElementById('nav-institutes').classList.add('active');
+    document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+    document.getElementById('page-institutes').classList.add('active');
+    startUserLocationTracking();
+    loadUserDoors();
+  }
 }
 
 // ─── WebSocket ────────────────────────────────
@@ -165,7 +182,10 @@ async function sendAction(action) {
 // إرسال أمر لباب محدد من صفحة المؤسسات
 async function sendDoorAction(deviceId, action, duration) {
   try {
-    await apiFetch('/api/door/control', 'POST', { action, deviceId, duration });
+    var body = { action, deviceId, duration };
+    // أرسل الموقع دائماً إذا كان متوفراً
+    if (userLocation) { body.lat = userLocation.lat; body.lng = userLocation.lng; }
+    await apiFetch('/api/door/control', 'POST', body);
     toast(`تم: ${action}`, 'success');
   } catch(e) {
     toast(e.message, 'error');
@@ -1093,7 +1113,7 @@ async function openInstUsers(instId, instName) {
       var btnPw = document.createElement('button');
       btnPw.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(124,92,252,0.15);color:var(--accent2);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
       btnPw.textContent = '🔑';
-      btnPw.addEventListener('click', (function(uid) { return function() { resetUserPw(uid); }; })(u.id));
+      btnPw.addEventListener('click', (function(uid, uname) { return function() { resetUserPw(uid, uname); }; })(u.id, u.name));
       btns.appendChild(btnPw);
       // Delete button
       var btnDel = document.createElement('button');
@@ -1118,12 +1138,20 @@ async function changeUserStatus(userId, status, instId, instName) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-async function resetUserPw(userId) {
-  var pw = prompt('كلمة المرور الجديدة:');
-  if (!pw) return;
+async function resetUserPw(userId, userName) {
+  // عرض كلمة المرور الحالية للسوبر أدمن
+  var currentInfo = '';
+  if (user && user.role === 'super_admin') {
+    try {
+      var pwData = await apiFetch('/api/users/' + userId + '/pw');
+      currentInfo = '\n[Hash الحالي: ' + (pwData.pw_hash||'').slice(0,12) + '...]';
+    } catch(e) {}
+  }
+  var pw = prompt('كلمة المرور الجديدة لـ ' + (userName||'المستخدم') + ':' + currentInfo);
+  if (!pw || pw.trim() === '') return;
   try {
-    await apiFetch('/api/users/' + userId, 'PUT', { pw });
-    toast('تم تغيير كلمة المرور', 'success');
+    await apiFetch('/api/users/' + userId, 'PUT', { pw: pw.trim() });
+    toast('✅ تم تغيير كلمة المرور', 'success');
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -1137,6 +1165,197 @@ async function deleteUser(userId, instId, instName) {
 }
 
 
+
+// ─── User Interface ────────────────────────────────────
+let userLocation = null;
+
+function startUserLocationTracking() {
+  if (!navigator.geolocation) return;
+  var opts = { enableHighAccuracy: true, timeout: 10000 };
+  var update = function() {
+    navigator.geolocation.getCurrentPosition(
+      function(pos) { userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+      function() {}
+    , opts);
+  };
+  update();
+  setInterval(update, 30000);
+}
+
+async function loadUserDoors() {
+  var container = document.getElementById('institutes-list');
+  if (!container) return;
+  container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">⏳ جاري التحميل...</p>';
+  try {
+    var insts = await apiFetch('/api/institutes');
+    var inst = Array.isArray(insts) ? insts[0] : null;
+    if (!inst || !(inst.doors||[]).length) {
+      container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">لا توجد أبواب متاحة</p>';
+      return;
+    }
+    container.innerHTML = '';
+
+    // عنوان المؤسسة
+    var instTitle = document.createElement('div');
+    instTitle.style.cssText = 'text-align:center;margin-bottom:20px';
+    instTitle.innerHTML = '<div style="font-size:1rem;font-weight:800;color:var(--accent)">🏫 ' + inst.name + '</div>';
+    container.appendChild(instTitle);
+
+    inst.doors.forEach(function(door) {
+      var card = document.createElement('div');
+      card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;margin-bottom:16px;position:relative;overflow:hidden';
+
+      // خط جانبي
+      var line = document.createElement('div');
+      line.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--accent),var(--accent2))';
+      card.appendChild(line);
+
+      // Header: اسم + En ligne
+      var hdr = document.createElement('div');
+      hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
+      hdr.innerHTML =
+        '<div>' +
+          '<div style="font-size:1.05rem;font-weight:800">🚪 ' + door.name + '</div>' +
+          (door.location ? '<div style="font-size:0.75rem;color:var(--muted);margin-top:3px">📍 ' + door.location + '</div>' : '') +
+        '</div>' +
+        '<span id="user-online-' + door.id + '" style="font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface2);color:var(--muted)">...</span>';
+      card.appendChild(hdr);
+
+      // حالة الباب
+      var state = document.createElement('div');
+      state.id = 'user-state-' + door.id;
+      state.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border-radius:10px;margin-bottom:14px;font-weight:600;font-size:0.9rem';
+      state.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:var(--muted);display:inline-block"></span><span style="color:var(--muted)">جاري التحقق...</span>';
+      card.appendChild(state);
+
+      // أزرار
+      var btns = document.createElement('div');
+      btns.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px';
+
+      var bOpen = document.createElement('button');
+      bOpen.style.cssText = 'padding:16px;border-radius:14px;border:1px solid rgba(0,230,118,0.3);background:rgba(0,230,118,0.1);color:var(--success);font-family:Cairo,sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer';
+      bOpen.innerHTML = '🟢 فتح';
+      bOpen.addEventListener('click', (function(d){ return function(){ userDoorAction(d,'open'); }; })(door));
+
+      var bClose = document.createElement('button');
+      bClose.style.cssText = 'padding:16px;border-radius:14px;border:1px solid rgba(255,61,113,0.3);background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer';
+      bClose.innerHTML = '🔴 غلق';
+      bClose.addEventListener('click', (function(d){ return function(){ userDoorAction(d,'close'); }; })(door));
+
+      btns.appendChild(bOpen);
+      btns.appendChild(bClose);
+      card.appendChild(btns);
+      container.appendChild(card);
+
+      checkDoorStatus(door.device_id, 'user-online-' + door.id);
+      fetchUserDoorState(door);
+    });
+  } catch(e) {
+    container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
+  }
+}
+
+async function fetchUserDoorState(door) {
+  var el = document.getElementById('user-state-' + door.id);
+  if (!el) return;
+  try {
+    var data = await apiFetch('/api/door/status?deviceId=' + door.device_id);
+    var r1 = data.r1_on, r2 = data.r2_on;
+    var text, color;
+    if (r1)      { text = 'مفتوح';  color = 'var(--success)'; }
+    else if (r2) { text = 'مغلق';   color = 'var(--danger)';  }
+    else         { text = 'متوقف';  color = 'var(--muted)';   }
+    el.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span><span style="color:' + color + '">' + text + '</span>';
+  } catch(e) {
+    el.innerHTML = '<span style="color:var(--muted)">—</span>';
+  }
+}
+
+async function userDoorAction(door, action) {
+  var body = { action: action, deviceId: door.device_id, duration: door.duration_seconds || 5 };
+  // GPS مطلوب للمستخدم أو المدير حسب الإعداد
+  var gpsNeeded = (user.role === 'user' && door.gps && door.gps.user_required) ||
+                  (user.role === 'admin' && door.gps && door.gps.admin_required);
+  if (gpsNeeded) {
+    if (!userLocation) {
+      toast('📍 يجب تفعيل GPS للوصول إلى هذا الباب', 'error');
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          function(pos) { userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; toast('تم تحديد موقعك، حاول مرة أخرى', 'info'); },
+          function() { toast('تعذر تحديد موقعك', 'error'); }
+        );
+      }
+      return;
+    }
+    body.lat = userLocation.lat;
+    body.lng = userLocation.lng;
+  }
+  try {
+    await apiFetch('/api/door/control', 'POST', body);
+    toast(action === 'open' ? '✅ تم فتح الباب' : '✅ تم غلق الباب', 'success');
+    setTimeout(function(){ fetchUserDoorState(door); }, 1500);
+  } catch(e) {
+    var msg = e.message || 'خطأ غير معروف';
+    if (msg.includes('GPS') || msg.includes('بعيد')) toast('📍 ' + msg, 'error');
+    else if (msg.includes('وقت') || msg.includes('مسموح') || msg.includes('اليوم')) toast('⏰ ' + msg, 'error');
+    else toast('❌ ' + msg, 'error');
+  }
+}
+
+// ─── Admin Interface ───────────────────────────────────
+async function loadAdminDoors() {
+  var container = document.getElementById('institutes-list');
+  if (!container) return;
+  container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">⏳ جاري التحميل...</p>';
+  try {
+    var insts = await apiFetch('/api/institutes');
+    var inst = Array.isArray(insts) ? insts[0] : null;
+    if (!inst) { container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">لا توجد مؤسسة</p>'; return; }
+    container.innerHTML = '';
+
+    var instCard = document.createElement('div');
+    instCard.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:16px 20px;margin-bottom:16px';
+    instCard.innerHTML = '<div style="font-size:1.1rem;font-weight:800">🏫 ' + inst.name + '</div><div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:3px">🔑 ' + inst.code + '</div>';
+    container.appendChild(instCard);
+
+    (inst.doors||[]).forEach(function(door) {
+      var card = document.createElement('div');
+      card.style.cssText = 'background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:16px;margin-bottom:12px';
+
+      var hdr = document.createElement('div');
+      hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px';
+      hdr.innerHTML = '<div><div style="font-weight:800">⏳ ' + door.name + '</div><div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted)">ID: ' + (door.device_id||'').substring(0,16) + '...</div></div><span id="adm-status-' + door.id + '" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>';
+      card.appendChild(hdr);
+
+      var grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px';
+      [['🟢','فتح','open','rgba(0,230,118,0.15)','rgba(0,230,118,0.3)','var(--success)'],
+       ['🔴','غلق','close','rgba(255,61,113,0.15)','rgba(255,61,113,0.3)','var(--danger)'],
+       ['🟡','إيقاف','stop','rgba(255,179,0,0.15)','rgba(255,179,0,0.3)','var(--warning)'],
+       ['⏱','40ث','open40','rgba(0,212,255,0.15)','rgba(0,212,255,0.3)','var(--accent)']
+      ].forEach(function(item) {
+        var btn = document.createElement('button');
+        btn.style.cssText = 'padding:12px 4px;border-radius:12px;border:1px solid ' + item[4] + ';background:' + item[3] + ';color:' + item[5] + ';font-family:Cairo,sans-serif;font-weight:700;font-size:0.8rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px';
+        btn.innerHTML = item[0] + '<span>' + item[1] + '</span>';
+        btn.addEventListener('click', (function(did, act, dur){ return function(){ sendDoorAction(did, act, dur); }; })(door.device_id, item[2], door.duration_seconds||5));
+        grid.appendChild(btn);
+      });
+      card.appendChild(grid);
+
+      var btnLog = document.createElement('button');
+      btnLog.style.cssText = 'width:100%;padding:10px;border-radius:10px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.82rem;font-weight:700;cursor:pointer';
+      btnLog.textContent = '📋 سجل الباب — من فتح ومتى';
+      btnLog.addEventListener('click', (function(id, name){ return function(){ openDoorLogs(id, name); }; })(door.id, door.name));
+      card.appendChild(btnLog);
+
+      container.appendChild(card);
+      checkDoorStatus(door.device_id, 'adm-status-' + door.id);
+    });
+  } catch(e) {
+    container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
+  }
+}
+
 // ─── Navigation ───────────────────────────────
 function showPage(name, btn) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1147,7 +1366,7 @@ function showPage(name, btn) {
 
   if (name === 'dashboard')   { loadStats(); }
   if (name === 'users')       loadUsers();
-  if (name === 'institutes') loadInstitutes();
+  if (name === 'institutes') { if (user && user.role === 'super_admin') loadInstitutes(); else if (user && user.role === 'admin') loadAdminDoors(); else if (user) loadUserDoors(); }
   if (name === 'map')         initMap();
 }
 
