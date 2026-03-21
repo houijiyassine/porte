@@ -1127,19 +1127,11 @@ async function checkDeviceOnline(deviceId) {
 async function pollAllDoors() {
   try {
     const { data: doors } = await supabase
-      .from('doors').select('id,inst_id,name,device_id').eq('is_active', true);
+      .from('doors').select('id,inst_id,name,device_id');
     if (!doors?.length) return;
 
     for (const door of doors) {
       try {
-        // فحص الاتصال أولاً — إذا Hors ligne تخطى
-        const online = await checkDeviceOnline(door.device_id);
-        if (!online) {
-          console.log(`[Polling] ⚫ ${door.name} hors ligne - skip`);
-          continue;
-        }
-        console.log(`[Polling] 🔍 فحص ${door.name}...`);
-
         const token   = await getTuyaToken();
         const t       = Date.now().toString();
         const nonce   = crypto.randomBytes(8).toString('hex');
@@ -1154,11 +1146,10 @@ async function pollAllDoors() {
           },
         });
         const data = await r.json();
-        if (!data.result) {
-          console.log(`[Polling] ❌ لا نتيجة لـ ${door.name}:`, JSON.stringify(data).slice(0,100));
-          continue;
-        }
-        console.log(`[Polling] ✅ ${door.name} result:`, JSON.stringify(data.result).slice(0,100));
+        if (!data.result) continue;
+        // تحقق من الاتصال من نتيجة الـ status
+        const isOnline = data.success === true;
+        if (!isOnline) continue;
 
         const sm = {};
         data.result.forEach(s => { sm[s.code] = s.value; });
@@ -1167,7 +1158,6 @@ async function pollAllDoors() {
 
         const prev    = doorStateCache.get(door.device_id);
         const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
-        console.log(`[Polling] ${door.name}: R1=${r1} R2=${r2} prev=${JSON.stringify(prev)} changed=${changed}`);
 
         // دائماً حدّث الـ cache
         doorStateCache.set(door.device_id, { r1, r2 });
@@ -1177,29 +1167,13 @@ async function pollAllDoors() {
         const lastApp    = appLastAction.get(door.device_id);
         const isFromApp  = lastApp && (Date.now() - lastApp.time) < 15000;
 
-        // تسجيل RC فقط إذا:
-        // 1. تغيرت الحالة فعلاً
-        // 2. الأمر ليس من التطبيق
-        // 3. الباب مفتوح أو مغلق (r1 أو r2 = true)
         if (changed && !isFromApp && (r1 || r2)) {
-          // تحقق من أن آخر سجل ليس نفس الحالة (تجنب التكرار)
-          const { data: lastLog } = await supabase.from('door_logs')
-            .select('value,source,created_at')
-            .eq('door_id', door.id)
-            .order('created_at', { ascending: false })
-            .limit(1).single().catch(() => ({ data: null }));
-
-          const isRecent = lastLog && (Date.now() - new Date(lastLog.created_at).getTime()) < 10000;
-          const isSameAction = lastLog?.value === doorAction;
-
-          if (!isRecent || !isSameAction) {
-            await supabase.from('door_logs').insert({
-              door_id: door.id, inst_id: door.inst_id,
-              value: doorAction, source: 'RC (جهاز تحكم)',
-              created_at: new Date().toISOString(),
-            }).catch(() => {});
-            console.log(`[Polling] 📻 RC → ${door.name}: ${doorAction}`);
-          }
+          await supabase.from('door_logs').insert({
+            door_id: door.id, inst_id: door.inst_id,
+            value: doorAction, source: 'RC (جهاز تحكم)',
+            created_at: new Date().toISOString(),
+          }).catch(() => {});
+          console.log(`[Polling] 📻 RC → ${door.name}: ${doorAction}`);
         }
 
         // بث تحديث الحالة فقط إذا تغيرت
@@ -1220,6 +1194,13 @@ setTimeout(function() {
   console.log('[Polling] ✅ بدأ مراقبة الأبواب كل 3 ثوانٍ');
   setInterval(pollAllDoors, 3000);
 }, 5000);
+
+// مسار Webhook القديم كـ alias
+app.post('/api/webhook/tuya', async (req, res) => {
+  // redirect to new handler
+  req.url = '/api/tuya/webhook';
+  app.handle(req, res);
+});
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
