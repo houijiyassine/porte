@@ -267,11 +267,66 @@ async function loadStats() {
 
 // ─── Users ────────────────────────────────────
 async function loadUsers() {
+  if (user && user.role === 'super_admin') {
+    await loadUsersForSuperAdmin();
+    return;
+  }
   try {
     const data = await apiFetch('/api/users');
     usersCache = data || [];
     renderUsersTable(usersCache);
   } catch {}
+}
+
+async function loadUsersForSuperAdmin() {
+  const container = document.getElementById('users-list-super');
+  if (!container) {
+    // fallback to old table
+    try {
+      const data = await apiFetch('/api/users');
+      usersCache = data || [];
+      renderUsersTable(usersCache);
+    } catch {}
+    return;
+  }
+  container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:30px">⏳ جاري التحميل...</p>';
+  try {
+    const insts = await apiFetch('/api/institutes');
+    if (!insts.length) {
+      container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:30px">لا توجد مؤسسات</p>';
+      return;
+    }
+    container.innerHTML = '';
+    insts.forEach(function(inst) {
+      var card = document.createElement('div');
+      card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;cursor:pointer;transition:border-color 0.2s';
+      card.onmouseenter = function() { card.style.borderColor = 'rgba(0,212,255,0.3)'; };
+      card.onmouseleave = function() { card.style.borderColor = 'var(--border)'; };
+
+      var usersCount = inst.users_count || 0;
+      card.innerHTML =
+        '<div style="display:flex;align-items:center;justify-content:space-between">' +
+          '<div>' +
+            '<div style="font-weight:800;font-size:0.95rem">🏫 ' + inst.name + '</div>' +
+            '<div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:3px">🔑 ' + inst.code + '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:10px">' +
+            '<div style="text-align:center">' +
+              '<div style="font-size:1.3rem;font-weight:900;color:var(--success)">' + usersCount + '</div>' +
+              '<div style="font-size:0.68rem;color:var(--muted)">مستخدم</div>' +
+            '</div>' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--muted)"><polyline points="9 18 15 12 9 6"/></svg>' +
+          '</div>' +
+        '</div>';
+
+      card.addEventListener('click', function() {
+        openInstUsersList(inst.id, inst.name);
+      });
+      container.appendChild(card);
+    });
+  } catch(e) {
+    container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:30px">' + e.message + '</p>';
+  }
 }
 
 function renderUsersTable(users) {
@@ -1142,14 +1197,20 @@ async function changeUserStatus(userId, status, instId, instName) {
 
 async function resetUserPw(userId, userName) {
   // عرض كلمة المرور الحالية للسوبر أدمن
-  var currentInfo = '';
   if (user && user.role === 'super_admin') {
     try {
       var pwData = await apiFetch('/api/users/' + userId + '/pw');
-      currentInfo = '\n[Hash الحالي: ' + (pwData.pw_hash||'').slice(0,12) + '...]';
+      if (pwData.pw) {
+        var action = confirm(
+          'مستخدم: ' + (pwData.name || userName) + '\n' +
+          'كلمة المرور الحالية: ' + pwData.pw + '\n\n' +
+          'هل تريد تغييرها؟'
+        );
+        if (!action) return;
+      }
     } catch(e) {}
   }
-  var pw = prompt('كلمة المرور الجديدة لـ ' + (userName||'المستخدم') + ':' + currentInfo);
+  var pw = prompt('كلمة المرور الجديدة لـ ' + (userName||'المستخدم') + ':');
   if (!pw || pw.trim() === '') return;
   try {
     await apiFetch('/api/users/' + userId, 'PUT', { pw: pw.trim() });
