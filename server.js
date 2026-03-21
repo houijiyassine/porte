@@ -68,7 +68,7 @@ wss.on('connection', (ws, req) => {
 
   ws.send(JSON.stringify({ type: 'connected' }));
 
-  ws.on('message', (raw) => {
+  ws.on('message', async (raw) => {
     try {
       const msg = JSON.parse(raw);
       if (msg.type === 'location' && userId) {
