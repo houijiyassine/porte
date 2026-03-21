@@ -356,8 +356,10 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
         const gpsRequired = role === 'user' ? door.gps?.user_required : door.gps?.admin_required;
 
         if (gpsRequired && door.gps?.lat && door.gps?.lng) {
-          const userLat = parseFloat(req.body.lat);
-          const userLng = parseFloat(req.body.lng);
+          const userLat  = parseFloat(req.body.lat);
+          const userLng  = parseFloat(req.body.lng);
+          const accuracy = parseFloat(req.body.accuracy) || 999;
+
           if (!userLat || !userLng) {
             await supabase.from('access_alerts').insert({
               user_id: req.user.id, inst_id: req.user.inst_id,
@@ -367,6 +369,78 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
             }).catch(()=>{});
             return res.status(403).json({ error: 'يجب تفعيل GPS للوصول إلى هذا الباب', code: 'GPS_REQUIRED' });
           }
+
+          // ─── كشف Fake GPS ───────────────────────────────
+          const altitude     = req.body.altitude;
+          const altAccuracy  = req.body.altAccuracy;
+          const responseTime = parseInt(req.body.responseTime) || 0;
+
+          // 1. زمن استجابة سريع جداً (أقل من 50ms = fake)
+          if (responseTime > 0 && responseTime < 50) {
+            await supabase.from('access_alerts').insert({
+              user_id: req.user.id, inst_id: req.user.inst_id,
+              type: 'fake_gps_suspected', action: action,
+              lat: userLat, lng: userLng,
+              message: `GPS استجاب في ${responseTime}ms — سرعة مريبة (Fake GPS)`,
+              created_at: new Date().toISOString(),
+            }).catch(()=>{});
+            return res.status(403).json({ error: 'تم اكتشاف موقع غير حقيقي (استجابة فورية).', code: 'FAKE_GPS' });
+          }
+
+          // 2. دقة مريبة جداً (أقل من 3م = مشبوه)
+          if (accuracy < 3) {
+            await supabase.from('access_alerts').insert({
+              user_id: req.user.id, inst_id: req.user.inst_id,
+              type: 'fake_gps_suspected', action: action,
+              lat: userLat, lng: userLng,
+              message: `دقة GPS مريبة: ${accuracy}م — محتمل fake GPS`,
+              created_at: new Date().toISOString(),
+            }).catch(()=>{});
+            return res.status(403).json({ error: 'تم اكتشاف موقع غير حقيقي. تواصل مع المسؤول.', code: 'FAKE_GPS' });
+          }
+
+          // 2. فحص سرعة التنقل مقارنة بآخر موقع
+          const { data: lastLoc } = await supabase.from('user_locations')
+            .select('lat,lng,created_at')
+            .eq('user_id', req.user.id)
+            .order('created_at', { ascending: false })
+            .limit(1).single().catch(()=>({ data: null }));
+
+          if (lastLoc) {
+            const timeDiff = (Date.now() - new Date(lastLoc.created_at).getTime()) / 1000; // بالثواني
+            if (timeDiff < 300 && timeDiff > 0) { // آخر 5 دقائق
+              const R2 = 6371000;
+              const dLat2 = (userLat - lastLoc.lat) * Math.PI / 180;
+              const dLng2 = (userLng - lastLoc.lng) * Math.PI / 180;
+              const a2 = Math.sin(dLat2/2)**2 + Math.cos(lastLoc.lat*Math.PI/180)*Math.cos(userLat*Math.PI/180)*Math.sin(dLng2/2)**2;
+              const dist2 = R2 * 2 * Math.atan2(Math.sqrt(a2), Math.sqrt(1-a2));
+              const speedMs = dist2 / timeDiff; // متر/ثانية
+              // أكثر من 50م/ث = 180كم/ساعة = مستحيل مشياً
+              if (speedMs > 50) {
+                await supabase.from('access_alerts').insert({
+                  user_id: req.user.id, inst_id: req.user.inst_id,
+                  type: 'fake_gps_teleport', action: action,
+                  lat: userLat, lng: userLng,
+                  message: `تنقل مشبوه: ${Math.round(dist2)}م في ${Math.round(timeDiff)}ث (${Math.round(speedMs*3.6)}كم/س)`,
+                  created_at: new Date().toISOString(),
+                }).catch(()=>{});
+                return res.status(403).json({ error: 'تم اكتشاف تنقل غير طبيعي. تواصل مع المسؤول.', code: 'FAKE_GPS_TELEPORT' });
+              }
+            }
+          }
+          // 4. altitude = null أو 0 مع accuracy ممتاز = مشبوه
+          if (accuracy < 10 && (altitude === null || altitude === 0) && altAccuracy === null) {
+            await supabase.from('access_alerts').insert({
+              user_id: req.user.id, inst_id: req.user.inst_id,
+              type: 'fake_gps_suspected', action: action,
+              lat: userLat, lng: userLng,
+              message: `GPS بدون ارتفاع مع دقة ${accuracy}م — محتمل fake GPS`,
+              created_at: new Date().toISOString(),
+            }).catch(()=>{});
+            return res.status(403).json({ error: 'تم اكتشاف موقع غير حقيقي (بيانات ناقصة).', code: 'FAKE_GPS' });
+          }
+          // ────────────────────────────────────────────────
+
           const R = 6371000;
           const dLat = (userLat - door.gps.lat) * Math.PI / 180;
           const dLng = (userLng - door.gps.lng) * Math.PI / 180;
@@ -843,6 +917,72 @@ app.get('/api/stats/full', authMiddleware, adminOnly, async (req, res) => {
       active_users:  (users.data||[]).filter(u => u.status === 'active').length,
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// ─── طلب موقع مستخدم فوري ────────────────────────────────────────────────────
+app.post('/api/users/:id/request-location', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin' && req.user.role !== 'admin')
+    return res.status(403).json({ error: 'غير مسموح' });
+  try {
+    const targetId = req.params.id;
+    // إرسال طلب عبر WebSocket إذا كان المستخدم متصلاً
+    const targetWs = wsClients.get(targetId);
+    if (targetWs && targetWs.readyState === 1) {
+      targetWs.send(JSON.stringify({
+        type: 'location_request',
+        from: req.user.name,
+        requestId: Date.now().toString()
+      }));
+      res.json({ success: true, method: 'websocket' });
+    } else {
+      // المستخدم غير متصل — إرجاع آخر موقع معروف
+      const { data } = await supabase.from('users')
+        .select('last_location,last_seen,name').eq('id', targetId).single();
+      res.json({
+        success: false,
+        offline: true,
+        last_location: data?.last_location,
+        last_seen: data?.last_seen,
+        name: data?.name
+      });
+    }
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// ─── Device Fingerprint ───────────────────────────────────────────────────────
+app.post('/api/device/fingerprint', authMiddleware, async (req, res) => {
+  try {
+    const fp = {
+      ua: req.body.ua, lang: req.body.lang,
+      tz: req.body.tz, screen: req.body.screen,
+      platform: req.body.platform,
+      ip: req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress,
+    };
+    // حفظ أو تحديث fingerprint
+    const { data: existing } = await supabase.from('users')
+      .select('device_fp').eq('id', req.user.id).single();
+
+    if (!existing?.device_fp) {
+      // أول مرة — حفظ
+      await supabase.from('users').update({ device_fp: fp }).eq('id', req.user.id);
+    } else {
+      // فحص تغيير الجهاز
+      const prev = existing.device_fp;
+      if (prev.ua !== fp.ua || prev.screen !== fp.screen) {
+        // تنبيه تغيير الجهاز
+        await supabase.from('access_alerts').insert({
+          user_id: req.user.id, inst_id: req.user.inst_id,
+          type: 'device_changed',
+          message: `تغيير جهاز: ${prev.screen}→${fp.screen} / ${prev.ua?.slice(0,30)}→${fp.ua?.slice(0,30)}`,
+          created_at: new Date().toISOString(),
+        }).catch(()=>{});
+        await supabase.from('users').update({ device_fp: fp }).eq('id', req.user.id);
+      }
+    }
+    res.json({ ok: true });
+  } catch(e) { res.json({ ok: false }); }
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
