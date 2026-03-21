@@ -280,15 +280,13 @@ async function loadUsers() {
 
 async function loadUsersForSuperAdmin() {
   const container = document.getElementById('users-list-super');
-  if (!container) {
-    // fallback to old table
-    try {
-      const data = await apiFetch('/api/users');
-      usersCache = data || [];
-      renderUsersTable(usersCache);
-    } catch {}
-    return;
-  }
+  const tableSection = document.getElementById('users-table-section');
+  if (!container) return;
+
+  // إظهار القائمة وإخفاء الجدول
+  container.style.display = 'block';
+  if (tableSection) tableSection.style.display = 'none';
+
   container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:30px">⏳ جاري التحميل...</p>';
   try {
     const insts = await apiFetch('/api/institutes');
