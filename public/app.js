@@ -606,7 +606,7 @@ function renderInstList(insts) {
     btnUsers.title = 'مستخدمو المؤسسة';
     btnUsers.onclick = function(e) {
       e.stopPropagation();
-      openInstUsers(inst.id, inst.name);
+      openInstUsersList(inst.id, inst.name);
     };
 
     btns.appendChild(btnUsers);
@@ -1176,7 +1176,17 @@ function startUserLocationTracking() {
   var opts = { enableHighAccuracy: true, timeout: 10000 };
   var update = function() {
     navigator.geolocation.getCurrentPosition(
-      function(pos) { userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+      function(pos) {
+        userLocation = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy
+        };
+        // إرسال الموقع للسيرفر عبر WebSocket
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'location', coords: userLocation }));
+        }
+      },
       function() {}
     , opts);
   };
@@ -1355,6 +1365,160 @@ async function loadAdminDoors() {
     });
   } catch(e) {
     container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
+  }
+}
+
+
+// ─── Institute Users List (Super Admin) ───────────────
+async function openInstUsersList(instId, instName) {
+  document.getElementById('inst-users-title').textContent = 'مستخدمو: ' + instName;
+  document.getElementById('inst-users-body').innerHTML =
+    '<p style="color:var(--muted);text-align:center;padding:20px">⏳ جاري التحميل...</p>';
+  openModal('modal-inst-users');
+
+  try {
+    const users = await apiFetch('/api/institutes/' + instId + '/users');
+    const body  = document.getElementById('inst-users-body');
+
+    if (!users.length) {
+      body.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">لا يوجد مستخدمون</p>';
+      return;
+    }
+
+    const statusColors = { pending:'var(--warning)', approved:'var(--success)', rejected:'var(--danger)' };
+    const statusLabels = { pending:'انتظار', approved:'موافق', rejected:'مرفوض' };
+    const roleLabels   = { user:'مستخدم', admin:'مدير' };
+
+    body.innerHTML = '';
+    users.forEach(function(u) {
+      var status   = u.request_status || 'approved';
+      var lastSeen = u.last_seen ? formatTime(u.last_seen) : '—';
+      var hasLoc   = u.last_location && u.last_location.lat;
+
+      var card = document.createElement('div');
+      card.style.cssText = 'background:var(--surface2);border-radius:14px;padding:14px;margin-bottom:10px';
+
+      // Row 1: الاسم + الوضعية
+      var row1 = document.createElement('div');
+      row1.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px';
+      row1.innerHTML =
+        '<div>' +
+          '<div style="font-weight:700;font-size:0.92rem">' + u.name + '</div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem;color:var(--muted);margin-top:2px">📞 ' + u.phone + '</div>' +
+          '<div style="font-size:0.7rem;color:var(--accent2);margin-top:2px">' + (roleLabels[u.role]||u.role) + '</div>' +
+        '</div>' +
+        '<span style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>';
+      card.appendChild(row1);
+
+      // Row 2: تاريخ الإضافة + آخر ظهور
+      var row2 = document.createElement('div');
+      row2.style.cssText = 'display:flex;gap:16px;font-size:0.72rem;color:var(--muted);margin-bottom:10px';
+      row2.innerHTML =
+        '<span>📅 ' + formatTime(u.created_at) + '</span>' +
+        '<span>👁 ' + lastSeen + '</span>';
+      card.appendChild(row2);
+
+      // Row 3: أزرار الإجراءات
+      var row3 = document.createElement('div');
+      row3.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+
+      // زر الموقع
+      var btnLoc = document.createElement('button');
+      btnLoc.style.cssText = 'padding:7px 12px;border-radius:8px;border:none;background:' +
+        (hasLoc ? 'rgba(0,212,255,0.15)' : 'var(--surface)') +
+        ';color:' + (hasLoc ? 'var(--accent)' : 'var(--muted)') +
+        ';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:' +
+        (hasLoc ? 'pointer' : 'default');
+      btnLoc.textContent = hasLoc ? '📍 الموقع' : '📍 غير متاح';
+      btnLoc.addEventListener('click', (function(uid, uname) {
+        return function() { showUserLocation(uid, uname); };
+      })(u.id, u.name));
+      row3.appendChild(btnLoc);
+
+      // أزرار الوضعية
+      [['موافقة','approved','rgba(0,230,118,0.15)','var(--success)'],
+       ['رفض','rejected','rgba(255,61,113,0.15)','var(--danger)'],
+       ['🔑','pw','rgba(124,92,252,0.15)','var(--accent2)'],
+       ['🗑','del','rgba(255,61,113,0.1)','var(--danger)']
+      ].forEach(function(item) {
+        var btn = document.createElement('button');
+        btn.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:' + item[2] + ';color:' + item[3] + ';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+        btn.textContent = item[0];
+        btn.addEventListener('click', (function(uid, act, uname, iid) {
+          return function() {
+            if (act === 'pw') resetUserPw(uid, uname);
+            else if (act === 'del') deleteUser(uid, iid, instName);
+            else changeUserStatus(uid, act, iid, instName);
+          };
+        })(u.id, item[1], u.name, instId));
+        row3.appendChild(btn);
+      });
+
+      card.appendChild(row3);
+      body.appendChild(card);
+    });
+  } catch(e) {
+    document.getElementById('inst-users-body').innerHTML =
+      '<p style="color:var(--danger);text-align:center;padding:20px">' + e.message + '</p>';
+  }
+}
+
+async function showUserLocation(userId, name) {
+  // فتح modal التاريخ
+  document.getElementById('loc-modal-title').textContent = '📍 مواقع: ' + name;
+  document.getElementById('loc-modal-body').innerHTML =
+    '<p style="color:var(--muted);text-align:center;padding:20px">⏳ جاري التحميل...</p>';
+  openModal('modal-user-location');
+
+  try {
+    const locs = await apiFetch('/api/users/' + userId + '/locations?days=30');
+    const body = document.getElementById('loc-modal-body');
+
+    if (!locs.length) {
+      body.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">لا توجد مواقع محفوظة</p>';
+      return;
+    }
+
+    body.innerHTML = '';
+
+    // آخر موقع — رابط Google Maps
+    var latest = locs[0];
+    var latestCard = document.createElement('div');
+    latestCard.style.cssText = 'background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:12px;padding:14px;margin-bottom:14px';
+    latestCard.innerHTML =
+      '<div style="font-weight:700;margin-bottom:8px;color:var(--accent)">📍 آخر موقع معروف</div>' +
+      '<div style="font-size:0.8rem;color:var(--muted);margin-bottom:10px">' + formatTime(latest.created_at) + '</div>' +
+      '<a href="https://www.google.com/maps?q=' + latest.lat + ',' + latest.lng + '" target="_blank" ' +
+      'style="display:block;padding:10px;border-radius:8px;background:var(--accent);color:#000;font-family:Cairo,sans-serif;font-weight:700;font-size:0.85rem;text-align:center;text-decoration:none">' +
+      '🗺 فتح في Google Maps</a>';
+    body.appendChild(latestCard);
+
+    // قائمة التاريخ
+    var histTitle = document.createElement('div');
+    histTitle.style.cssText = 'font-weight:700;font-size:0.85rem;color:var(--muted);margin-bottom:10px';
+    histTitle.textContent = 'سجل المواقع (' + locs.length + ' نقطة — آخر 30 يوم)';
+    body.appendChild(histTitle);
+
+    locs.forEach(function(loc) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)';
+      row.innerHTML =
+        '<div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem">' +
+            loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) +
+          '</div>' +
+          (loc.accuracy ? '<div style="font-size:0.7rem;color:var(--muted)">دقة: ±' + Math.round(loc.accuracy) + 'م</div>' : '') +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<span style="font-size:0.72rem;color:var(--muted)">' + formatTime(loc.created_at) + '</span>' +
+          '<a href="https://www.google.com/maps?q=' + loc.lat + ',' + loc.lng + '" target="_blank" ' +
+          'style="font-size:0.75rem;color:var(--accent);text-decoration:none">🗺</a>' +
+        '</div>';
+      body.appendChild(row);
+    });
+  } catch(e) {
+    document.getElementById('loc-modal-body').innerHTML =
+      '<p style="color:var(--danger);text-align:center;padding:20px">' + e.message + '</p>';
   }
 }
 
