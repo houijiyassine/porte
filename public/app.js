@@ -1566,22 +1566,38 @@ async function loadAdminUsers() {
       var card = document.createElement('div');
       card.style.cssText = 'background:var(--surface2);border-radius:14px;padding:14px;margin-bottom:10px';
 
-      card.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">' +
-          '<div>' +
-            '<div style="font-weight:700;font-size:0.92rem">' + u.name + '</div>' +
-            '<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem;color:var(--muted);margin-top:2px">📞 ' + u.phone + '</div>' +
-            '<div style="font-size:0.7rem;color:var(--accent2);margin-top:2px">' + (roleLabels[u.role]||u.role) + '</div>' +
-          '</div>' +
-          '<span style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>' +
+      // Info row
+      var infoRow = document.createElement('div');
+      infoRow.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px';
+      infoRow.innerHTML =
+        '<div>' +
+          '<div style="font-weight:700;font-size:0.92rem">' + u.name + '</div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem;color:var(--muted);margin-top:2px">📞 ' + u.phone + '</div>' +
+          '<div style="font-size:0.7rem;color:var(--accent2);margin-top:2px">' + (roleLabels[u.role]||u.role) + '</div>' +
         '</div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-          '<button onclick="changeUserStatus('' + u.id + '','approved','' + inst.id + '','' + (u.name||'').replace(/'/g,'') + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(0,230,118,0.15);color:var(--success);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">✅ موافقة</button>' +
-          '<button onclick="changeUserStatus('' + u.id + '','pending','' + inst.id + '','' + (u.name||'').replace(/'/g,'') + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(255,179,0,0.15);color:var(--warning);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">⏳ انتظار</button>' +
-          '<button onclick="changeUserStatus('' + u.id + '','rejected','' + inst.id + '','' + (u.name||'').replace(/'/g,'') + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(255,61,113,0.15);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">❌ رفض</button>' +
-          '<button onclick="deleteUser('' + u.id + '','' + inst.id + '','')" style="padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">🗑</button>' +
-        '</div>';
+        '<span style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>';
+      card.appendChild(infoRow);
 
+      // Buttons row
+      var bRow = document.createElement('div');
+      bRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+      [['✅ موافقة','approved','rgba(0,230,118,0.15)','var(--success)','flex:1'],
+       ['⏳ انتظار','pending','rgba(255,179,0,0.15)','var(--warning)','flex:1'],
+       ['❌ رفض','rejected','rgba(255,61,113,0.15)','var(--danger)','flex:1'],
+       ['🗑','del','rgba(255,61,113,0.1)','var(--danger)','']
+      ].forEach(function(item) {
+        var b = document.createElement('button');
+        b.style.cssText = (item[4]?item[4]+';':'') + 'padding:7px 8px;border-radius:8px;border:none;background:' + item[2] + ';color:' + item[3] + ';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+        b.textContent = item[0];
+        b.addEventListener('click', (function(uid, act, iid, uname) {
+          return function() {
+            if (act === 'del') deleteUser(uid, iid, uname);
+            else changeUserStatus(uid, act, iid, uname);
+          };
+        })(u.id, item[1], inst.id, u.name));
+        bRow.appendChild(b);
+      });
+      card.appendChild(bRow);
       container.appendChild(card);
     });
   } catch(e) {
