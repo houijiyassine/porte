@@ -1134,7 +1134,11 @@ async function pollAllDoors() {
       try {
         // فحص الاتصال أولاً — إذا Hors ligne تخطى
         const online = await checkDeviceOnline(door.device_id);
-        if (!online) continue;
+        if (!online) {
+          console.log(`[Polling] ⚫ ${door.name} hors ligne - skip`);
+          continue;
+        }
+        console.log(`[Polling] 🔍 فحص ${door.name}...`);
 
         const token   = await getTuyaToken();
         const t       = Date.now().toString();
@@ -1150,7 +1154,11 @@ async function pollAllDoors() {
           },
         });
         const data = await r.json();
-        if (!data.result) continue;
+        if (!data.result) {
+          console.log(`[Polling] ❌ لا نتيجة لـ ${door.name}:`, JSON.stringify(data).slice(0,100));
+          continue;
+        }
+        console.log(`[Polling] ✅ ${door.name} result:`, JSON.stringify(data.result).slice(0,100));
 
         const sm = {};
         data.result.forEach(s => { sm[s.code] = s.value; });
@@ -1159,6 +1167,7 @@ async function pollAllDoors() {
 
         const prev    = doorStateCache.get(door.device_id);
         const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
+        console.log(`[Polling] ${door.name}: R1=${r1} R2=${r2} prev=${JSON.stringify(prev)} changed=${changed}`);
 
         // دائماً حدّث الـ cache
         doorStateCache.set(door.device_id, { r1, r2 });
