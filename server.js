@@ -1116,8 +1116,9 @@ async function checkDeviceOnline(deviceId) {
 
 async function pollAllDoors() {
   try {
-    const { data: doors } = await supabase
+    const { data: doors, error: doorsErr } = await supabase
       .from('doors').select('id,inst_id,name,device_id');
+    console.log('[Polling] أبواب:', doors?.length, doorsErr?.message);
     if (!doors?.length) return;
 
     for (const door of doors) {
