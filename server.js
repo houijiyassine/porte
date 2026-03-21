@@ -1175,7 +1175,7 @@ async function pollAllDoors() {
 // يستقبل أحداث Tuya فور حدوثها بدون polling
 async function startTuyaMessageQueue() {
   try {
-    // جلب بيانات الاشتراك من Tuya
+    // Tuya MQ - جلب بيانات الاتصال
     const token   = await getTuyaToken();
     const t       = Date.now().toString();
     const nonce   = crypto.randomBytes(8).toString('hex');
@@ -1191,18 +1191,22 @@ async function startTuyaMessageQueue() {
       },
     });
     const data = await r.json();
+    console.log('[MQ] Config response:', JSON.stringify(data).slice(0, 300));
 
     if (!data.result) {
-      console.log('[MQ] فشل جلب بيانات Pulsar:', data.msg);
-      console.log('[MQ] تفعيل Polling كـ fallback');
+      console.log('[MQ] فشل — تفعيل Polling');
       startPollingFallback();
       return;
     }
 
-    const { url, accessId, accessKey, topic } = data.result;
-    console.log('[MQ] بيانات Pulsar:', { url, topic });
+    // بناء Pulsar URL يدوياً
+    // Tuya EU: pulsar+ssl://mqe.tuyaeu.com:7285/persistent/...
+    const mqUrl   = data.result.url || 'pulsar+ssl://mqe.tuyaeu.com:7285';
+    const mqTopic = data.result.sinkTopic ||
+      `persistent://` + TUYA.CLIENT_ID + `/out/event`;
 
-    // استيراد pulsar-client ديناميكياً
+    console.log('[MQ] URL:', mqUrl, 'Topic:', mqTopic);
+
     let Pulsar;
     try {
       Pulsar = (await import('pulsar-client')).default;
@@ -1212,26 +1216,34 @@ async function startTuyaMessageQueue() {
       return;
     }
 
-    const client = new Pulsar.Client({ serviceUrl: url });
+    const client = new Pulsar.Client({
+      serviceUrl: mqUrl,
+      tlsAllowInsecureConnection: false,
+      operationTimeoutSeconds: 30,
+      authentication: new Pulsar.AuthenticationToken({
+        token: Buffer.from(TUYA.CLIENT_ID + ':' + TUYA.SECRET).toString('base64')
+      }),
+    });
+
     const consumer = await client.subscribe({
-      topic:            topic,
+      topic:            mqTopic,
       subscription:     'y85me8yq7d3vvk7vghuy-sub',
       subscriptionType: 'Shared',
+      ackTimeoutMs:     10000,
     });
 
     console.log('[MQ] ✅ متصل بـ Tuya Message Queue');
 
-    // استقبال الرسائل
     while (true) {
       try {
         const msg  = await consumer.receive();
         const raw  = msg.getData().toString();
         consumer.acknowledge(msg);
-
         const event = JSON.parse(raw);
         await handleTuyaEvent(event);
       } catch(e) {
-        console.error('[MQ] خطأ في استقبال الرسالة:', e.message);
+        console.error('[MQ] خطأ:', e.message);
+        await new Promise(r => setTimeout(r, 1000));
       }
     }
   } catch(e) {
