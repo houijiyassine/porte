@@ -534,22 +534,29 @@
   <!-- ── USERS ── -->
   <div class="page" id="page-users">
     <div class="page-title">إدارة <span>المستخدمين</span></div>
-    <div style="margin-bottom:14px">
-      <button class="btn btn-primary btn-sm" onclick="openAddUser()" style="width:auto;padding:11px 22px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        مستخدم جديد
-      </button>
-    </div>
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">المستخدمون</span>
-        <input type="search" id="user-search" class="search-input" placeholder="بحث...">
+
+    <!-- قائمة المؤسسات للسوبر أدمن -->
+    <div id="users-list-super" style="display:none"></div>
+
+    <!-- الجدول للمدير العادي -->
+    <div id="users-table-section">
+      <div style="margin-bottom:14px">
+        <button class="btn btn-primary btn-sm" onclick="openAddUser()" style="width:auto;padding:11px 22px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          مستخدم جديد
+        </button>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>الاسم</th><th>الهاتف</th><th>الدور</th><th>الحالة</th><th></th></tr></thead>
-          <tbody id="users-tbody"></tbody>
-        </table>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">المستخدمون</span>
+          <input type="search" id="user-search" class="search-input" placeholder="بحث...">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>الاسم</th><th>الهاتف</th><th>الدور</th><th>الحالة</th><th></th></tr></thead>
+            <tbody id="users-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
