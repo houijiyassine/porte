@@ -1370,19 +1370,22 @@ async function loadUserDoors() {
     container.innerHTML = '';
 
     // بطاقة معلومات المستخدم
+    var initials = (user.name||'?').split(' ').map(function(n){return n[0]||'';}).join('').slice(0,2).toUpperCase();
     var userCard = document.createElement('div');
-    userCard.style.cssText = 'background:linear-gradient(135deg,rgba(0,212,255,0.1),rgba(124,92,252,0.1));border:1px solid rgba(0,212,255,0.2);border-radius:20px;padding:18px 20px;margin-bottom:20px';
-    userCard.innerHTML =
-      '<div style="display:flex;align-items:center;gap:14px">' +
-        '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:900;color:#000">' +
-          (user.name||'?').split(' ').map(function(n){return n[0];}).join('').slice(0,2).toUpperCase() +
-        '</div>' +
-        '<div>' +
-          '<div style="font-size:1rem;font-weight:800">' + (user.name||'') + '</div>' +
-          '<div style="font-size:0.78rem;color:var(--muted);margin-top:2px">🏫 ' + inst.name + '</div>' +
-          '<div style="font-size:0.72rem;color:var(--accent);margin-top:2px">📱 ' + (user.phone||'') + '</div>' +
-        '</div>' +
-      '</div>';
+    userCard.style.cssText = 'background:var(--surface);border:1px solid rgba(0,212,255,0.25);border-radius:20px;padding:18px 20px;margin-bottom:20px';
+    var userCardInner = document.createElement('div');
+    userCardInner.style.cssText = 'display:flex;align-items:center;gap:14px';
+    var avatar = document.createElement('div');
+    avatar.style.cssText = 'width:50px;height:50px;border-radius:50%;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:900;color:#fff;flex-shrink:0';
+    avatar.textContent = initials;
+    var userInfo = document.createElement('div');
+    userInfo.innerHTML =
+      '<div style="font-size:1rem;font-weight:800;color:var(--text)">' + (user.name||'') + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--muted);margin-top:3px">🏫 ' + inst.name + '</div>' +
+      '<div style="font-size:0.72rem;color:var(--accent);margin-top:2px">📱 ' + (user.phone||'') + '</div>';
+    userCardInner.appendChild(avatar);
+    userCardInner.appendChild(userInfo);
+    userCard.appendChild(userCardInner);
     container.appendChild(userCard);
 
     // الأبواب
@@ -1441,7 +1444,7 @@ async function loadUserDoors() {
         gpsBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(255,179,0,0.1);border:1px solid rgba(255,179,0,0.2);font-size:0.78rem;font-weight:700;text-align:center;color:var(--warning)';
         gpsBadge.textContent = '📍 لم يُحدد موقع الباب';
       } else {
-        gpsBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.15);font-size:0.78rem;font-weight:700;text-align:center;color:var(--success)';
+        gpsBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.2);font-size:0.78rem;font-weight:700;text-align:center;color:#00e676';
         gpsBadge.textContent = '📍 GPS غير مطلوب';
       }
       badges.appendChild(gpsBadge);
@@ -1450,13 +1453,13 @@ async function loadUserDoors() {
       var timeBadge = document.createElement('div');
       timeBadge.id = 'time-badge-' + door.id;
       if (Object.keys(schedule).length === 0) {
-        timeBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.15);font-size:0.78rem;font-weight:700;text-align:center;color:var(--success)';
+        timeBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.2);font-size:0.78rem;font-weight:700;text-align:center;color:#00e676';
         timeBadge.textContent = '⏰ متاح دائماً';
       } else if (timeCheck.allowed) {
-        timeBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.15);font-size:0.78rem;font-weight:700;text-align:center;color:var(--success)';
+        timeBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.2);font-size:0.78rem;font-weight:700;text-align:center;color:#00e676';
         timeBadge.innerHTML = '⏰ متاح<br><span style="font-size:0.68rem;font-weight:600">' + timeCheck.reason + '</span>';
       } else {
-        timeBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(255,61,113,0.08);border:1px solid rgba(255,61,113,0.15);font-size:0.78rem;font-weight:700;text-align:center;color:var(--danger)';
+        timeBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(255,61,113,0.1);border:1px solid rgba(255,61,113,0.2);font-size:0.78rem;font-weight:700;text-align:center;color:#ff3d71';
         timeBadge.innerHTML = '⛔ مغلق الآن<br><span style="font-size:0.68rem;font-weight:600">' + (timeCheck.reason||'خارج أوقات العمل') + '</span>';
       }
       badges.appendChild(timeBadge);
@@ -1470,14 +1473,15 @@ async function loadUserDoors() {
         var todayIdx = dayMap[now.getDay()];
         var schedEl = document.createElement('div');
         schedEl.style.cssText = 'background:var(--surface2);border-radius:12px;padding:12px;margin-bottom:12px';
-        var schedHtml = '<div style="font-size:0.75rem;font-weight:700;color:var(--muted);margin-bottom:8px">📅 جدول الأوقات</div>';
+        var schedHtml = '<div style="font-size:0.75rem;font-weight:700;color:#8892b0;margin-bottom:8px">📅 الأوقات المسموحة</div>';
         DAYS_LABELS.forEach(function(day, i) {
           var d = schedule[i];
           var isToday = i === todayIdx;
-          if (!d) return;
-          schedHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;' + (isToday?'font-weight:700;color:var(--accent)':'color:var(--muted)') + ';font-size:0.78rem">' +
-            '<span>' + (isToday?'▶ ':'') + day + '</span>' +
-            '<span>' + (d.enabled ? d.start+' — '+d.end : '<span style="color:var(--danger)">مغلق</span>') + '</span>' +
+          schedHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-radius:8px;margin-bottom:3px;background:' + (isToday ? 'rgba(0,212,255,0.08)' : 'transparent') + ';font-size:0.78rem">' +
+            '<span style="font-weight:' + (isToday?'800':'500') + ';color:' + (isToday?'#00d4ff':'#8892b0') + '">' + (isToday?'▶ ':'') + day + '</span>' +
+            '<span style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:' + (d&&d.enabled ? (isToday?'#00e676':'#8892b0') : '#ff3d71') + '">' +
+              (d&&d.enabled ? d.start+' → '+d.end : (d?'مغلق':'—')) +
+            '</span>' +
             '</div>';
         });
         schedEl.innerHTML = schedHtml;
@@ -1506,6 +1510,14 @@ async function loadUserDoors() {
 
     // تحديث GPS badges بعد لحظة
     setTimeout(updateAllGpsBadges, 1000);
+
+    // تحديث حالة الأبواب كل 10 ثوانٍ تلقائياً
+    if (window._doorRefreshInterval) clearInterval(window._doorRefreshInterval);
+    window._doorRefreshInterval = setInterval(function() {
+      inst.doors.forEach(function(door) {
+        fetchUserDoorState(door);
+      });
+    }, 10000);
 
   } catch(e) {
     container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
