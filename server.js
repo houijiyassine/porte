@@ -1175,77 +1175,66 @@ async function pollAllDoors() {
 // يستقبل أحداث Tuya فور حدوثها بدون polling
 async function startTuyaMessageQueue() {
   try {
-    // Tuya MQ - جلب بيانات الاتصال
-    const token   = await getTuyaToken();
-    const t       = Date.now().toString();
-    const nonce   = crypto.randomBytes(8).toString('hex');
-    const urlPath = '/v1.0/open-hub/access/config';
-    const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
+    // Tuya EU WebSocket MQ endpoint
+    const MQ_WS_URL = 'wss://mqe.tuyaeu.com:8285/';
+    const topic     = `persistent://${TUYA.CLIENT_ID}/out/event`;
+    const wsUrl     = MQ_WS_URL + 'ws/v2/consumer/persistent/' +
+      TUYA.CLIENT_ID + '/out/event/y85me8yq7d3vvk7vghuy-sub?ackTimeoutMillis=3000';
 
-    const r = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
-      method: 'GET',
-      headers: {
-        'client_id': TUYA.CLIENT_ID, 'access_token': token,
-        'sign': sign, 't': t, 'nonce': nonce,
-        'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
-      },
-    });
-    const data = await r.json();
-    console.log('[MQ] Config response:', JSON.stringify(data).slice(0, 300));
+    // بناء توقيع المصادقة
+    const t    = Date.now().toString();
+    const sign = crypto.createHmac('sha256', TUYA.SECRET)
+      .update(TUYA.CLIENT_ID + t).digest('hex').toUpperCase();
+    const auth = Buffer.from(JSON.stringify({
+      username: TUYA.CLIENT_ID,
+      password: sign,
+      t:        t,
+    })).toString('base64');
 
-    if (!data.result) {
-      console.log('[MQ] فشل — تفعيل Polling');
-      startPollingFallback();
-      return;
-    }
-
-    // بناء Pulsar URL يدوياً
-    // Tuya EU: pulsar+ssl://mqe.tuyaeu.com:7285/persistent/...
-    const mqUrl   = data.result.url || 'pulsar+ssl://mqe.tuyaeu.com:7285';
-    const mqTopic = data.result.sinkTopic ||
-      `persistent://` + TUYA.CLIENT_ID + `/out/event`;
-
-    console.log('[MQ] URL:', mqUrl, 'Topic:', mqTopic);
-
-    let Pulsar;
-    try {
-      Pulsar = (await import('pulsar-client')).default;
-    } catch(e) {
-      console.log('[MQ] pulsar-client غير مثبت — تفعيل Polling');
-      startPollingFallback();
-      return;
-    }
-
-    const client = new Pulsar.Client({
-      serviceUrl: mqUrl,
-      tlsAllowInsecureConnection: false,
-      operationTimeoutSeconds: 30,
-      authentication: new Pulsar.AuthenticationToken({
-        token: Buffer.from(TUYA.CLIENT_ID + ':' + TUYA.SECRET).toString('base64')
-      }),
+    const { WebSocket: WS } = await import('ws');
+    const mqWs = new WS(wsUrl, {
+      headers: { Authorization: 'Bearer ' + auth }
     });
 
-    const consumer = await client.subscribe({
-      topic:            mqTopic,
-      subscription:     'y85me8yq7d3vvk7vghuy-sub',
-      subscriptionType: 'Shared',
-      ackTimeoutMs:     10000,
+    mqWs.on('open', () => {
+      console.log('[MQ] ✅ متصل بـ Tuya Message Queue (WebSocket)');
     });
 
-    console.log('[MQ] ✅ متصل بـ Tuya Message Queue');
-
-    while (true) {
+    mqWs.on('message', async (data) => {
       try {
-        const msg  = await consumer.receive();
-        const raw  = msg.getData().toString();
-        consumer.acknowledge(msg);
-        const event = JSON.parse(raw);
-        await handleTuyaEvent(event);
+        const raw   = data.toString();
+        const frame = JSON.parse(raw);
+
+        // فك تشفير AES-GCM
+        if (frame.data) {
+          const key     = Buffer.from(TUYA.SECRET.substring(8, 24));
+          const encBuf  = Buffer.from(frame.data, 'base64');
+          const iv      = encBuf.slice(0, 12);
+          const tag     = encBuf.slice(encBuf.length - 16);
+          const enc     = encBuf.slice(12, encBuf.length - 16);
+          const decipher = crypto.createDecipheriv('aes-128-gcm', key, iv);
+          decipher.setAuthTag(tag);
+          const decrypted = Buffer.concat([decipher.update(enc), decipher.final()]);
+          const payload   = JSON.parse(decrypted.toString('utf8'));
+          await handleTuyaEvent(payload);
+        }
+
+        // تأكيد الاستقبال
+        mqWs.send(JSON.stringify({ messageId: frame.messageId }));
       } catch(e) {
-        console.error('[MQ] خطأ:', e.message);
-        await new Promise(r => setTimeout(r, 1000));
+        console.error('[MQ] خطأ في معالجة الرسالة:', e.message);
       }
-    }
+    });
+
+    mqWs.on('error', (e) => {
+      console.error('[MQ] خطأ WebSocket:', e.message);
+    });
+
+    mqWs.on('close', () => {
+      console.log('[MQ] انقطع الاتصال — إعادة المحاولة بعد 5 ثوانٍ');
+      setTimeout(startTuyaMessageQueue, 5000);
+    });
+
   } catch(e) {
     console.error('[MQ] خطأ في الاتصال:', e.message);
     startPollingFallback();
