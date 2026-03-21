@@ -1073,16 +1073,6 @@ app.post('/api/tuya/webhook', async (req, res) => {
 
 // ─── Door Status Polling ──────────────────────────────────────────────────────
 
-// استخدام Polling مباشرة — موثوق وبسيط
-setTimeout(function() {
-  console.log('[Polling] ✅ بدأ مراقبة الأبواب كل 3 ثوانٍ');
-  setInterval(pollAllDoors, 3000);
-}, 5000);
-
-
-
-
-
 
 // ─── Door Tracking ────────────────────────────────────────────────────────────
 const doorStateCache = new Map();
