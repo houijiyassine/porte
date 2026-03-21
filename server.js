@@ -73,6 +73,27 @@ wss.on('connection', (ws, req) => {
       const msg = JSON.parse(raw);
       if (msg.type === 'location' && userId) {
         broadcast({ type: 'user_location', userId, coords: msg.coords });
+        const now = new Date().toISOString();
+        // حفظ في تاريخ المواقع
+        const { data: userData } = await supabase.from('users').select('inst_id').eq('id', userId).single();
+        await supabase.from('user_locations').insert({
+          user_id:   userId,
+          inst_id:   userData?.inst_id,
+          lat:       msg.coords.lat,
+          lng:       msg.coords.lng,
+          accuracy:  msg.coords.accuracy || null,
+          created_at: now,
+        });
+        // تحديث آخر موقع معروف
+        await supabase.from('users').update({
+          last_location: msg.coords,
+          last_seen: now,
+        }).eq('id', userId);
+        // حذف المواقع الأقدم من 30 يوم لهذا المستخدم
+        await supabase.from('user_locations')
+          .delete()
+          .eq('user_id', userId)
+          .lt('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
       }
     } catch {}
   });
@@ -689,6 +710,41 @@ app.get('/api/users/:id/pw', authMiddleware, async (req, res) => {
   try {
     const { data } = await supabase.from('users').select('pw_hash,name').eq('id', req.params.id).single();
     res.json({ pw_hash: data?.pw_hash, note: 'هذا هو الـ hash SHA-256 لكلمة المرور' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// قائمة مستخدمي مؤسسة مع موقعهم
+app.get('/api/institutes/:id/users', authMiddleware, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id,name,phone,role,request_status,last_location,last_seen,created_at')
+      .eq('inst_id', req.params.id)
+      .neq('role', 'super_admin')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json(data || []);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// تاريخ مواقع مستخدم (30 يوم)
+app.get('/api/users/:id/locations', authMiddleware, async (req, res) => {
+  if (!['super_admin','admin'].includes(req.user.role))
+    return res.status(403).json({ error: 'غير مسموح' });
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const since = new Date(Date.now() - days*24*60*60*1000).toISOString();
+    const { data, error } = await supabase
+      .from('user_locations')
+      .select('lat,lng,accuracy,created_at')
+      .eq('user_id', req.params.id)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    res.json(data || []);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
