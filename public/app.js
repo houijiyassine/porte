@@ -99,14 +99,26 @@ function bootApp() {
   }
   // توجيه حسب الدور
   if (user.role === 'super_admin') {
+    var navAlerts = document.getElementById('nav-alerts');
+    var navStats  = document.getElementById('nav-stats');
+    if (navAlerts) navAlerts.style.display = 'flex';
+    if (navStats)  navStats.style.display  = 'flex';
     showPage('institutes', document.getElementById('nav-institutes'));
   } else if (user.role === 'admin') {
     document.querySelectorAll('.nav-item').forEach(function(n){ n.style.display = 'none'; });
     document.getElementById('nav-institutes').style.display = 'flex';
+    document.getElementById('nav-users').style.display = 'flex';
+    var navAl = document.getElementById('nav-alerts');
+    var navSt = document.getElementById('nav-stats');
+    if (navAl) navAl.style.display = 'flex';
+    if (navSt) navSt.style.display = 'flex';
     document.getElementById('nav-institutes').classList.add('active');
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('page-institutes').classList.add('active');
     loadAdminDoors();
+    // إخفاء زر إضافة مؤسسة للمدير
+    var addInstBtn = document.getElementById('inst-add-btn');
+    if (addInstBtn) addInstBtn.style.display = 'none';
   } else {
     document.querySelectorAll('.nav-item').forEach(function(n){ n.style.display = 'none'; });
     document.getElementById('nav-institutes').style.display = 'flex';
@@ -504,7 +516,7 @@ async function checkDoorStatus(deviceId, elemId) {
 
 // ─── Door Logs ────────────────────────────────────────
 async function openDoorLogs(doorId, doorName) {
-  document.getElementById('door-logs-title').textContent = 'سجل: ' + doorName;
+  document.getElementById('door-logs-title').textContent = '📋 ' + doorName;
   document.getElementById('door-logs-body').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">جاري التحميل...</p>';
   openModal('modal-door-logs');
   try {
@@ -1389,23 +1401,44 @@ async function loadAdminDoors() {
   try {
     var insts = await apiFetch('/api/institutes');
     var inst = Array.isArray(insts) ? insts[0] : null;
-    if (!inst) { container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">لا توجد مؤسسة</p>'; return; }
+    if (!inst) {
+      container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">لا توجد مؤسسة</p>';
+      return;
+    }
     container.innerHTML = '';
 
+    // بطاقة المؤسسة
     var instCard = document.createElement('div');
     instCard.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:16px 20px;margin-bottom:16px';
-    instCard.innerHTML = '<div style="font-size:1.1rem;font-weight:800">🏫 ' + inst.name + '</div><div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:3px">🔑 ' + inst.code + '</div>';
+    instCard.innerHTML =
+      '<div style="font-size:1.1rem;font-weight:800">🏫 ' + inst.name + '</div>' +
+      '<div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:3px">🔑 ' + inst.code + '</div>';
     container.appendChild(instCard);
 
+    // زر إضافة باب
+    var btnAddDoor = document.createElement('button');
+    btnAddDoor.style.cssText = 'width:100%;padding:12px;border-radius:12px;border:1px dashed rgba(0,230,118,0.3);background:rgba(0,230,118,0.05);color:var(--success);font-family:Cairo,sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;margin-bottom:16px';
+    btnAddDoor.textContent = '+ إضافة باب جديد';
+    btnAddDoor.addEventListener('click', function() { openAddDoor(inst.id); });
+    container.appendChild(btnAddDoor);
+
+    // قائمة الأبواب
     (inst.doors||[]).forEach(function(door) {
       var card = document.createElement('div');
       card.style.cssText = 'background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:16px;margin-bottom:12px';
 
+      // Header: اسم + En ligne
       var hdr = document.createElement('div');
       hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px';
-      hdr.innerHTML = '<div><div style="font-weight:800">⏳ ' + door.name + '</div><div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted)">ID: ' + (door.device_id||'').substring(0,16) + '...</div></div><span id="adm-status-' + door.id + '" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>';
+      hdr.innerHTML =
+        '<div>' +
+          '<div style="font-weight:800">⏳ ' + door.name + '</div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted)">ID: ' + (door.device_id||'').substring(0,16) + '...</div>' +
+        '</div>' +
+        '<span id="adm-status-' + door.id + '" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>';
       card.appendChild(hdr);
 
+      // أزرار التحكم 4 في grid
       var grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px';
       [['🟢','فتح','open','rgba(0,230,118,0.15)','rgba(0,230,118,0.3)','var(--success)'],
@@ -1421,14 +1454,128 @@ async function loadAdminDoors() {
       });
       card.appendChild(grid);
 
-      var btnLog = document.createElement('button');
-      btnLog.style.cssText = 'width:100%;padding:10px;border-radius:10px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.82rem;font-weight:700;cursor:pointer';
-      btnLog.textContent = '📋 سجل الباب — من فتح ومتى';
-      btnLog.addEventListener('click', (function(id, name){ return function(){ openDoorLogs(id, name); }; })(door.id, door.name));
-      card.appendChild(btnLog);
+      // صف الإدارة: تعديل + حذف + GPS
+      var adminRow = document.createElement('div');
+      adminRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px';
 
+      var btnEdit = document.createElement('button');
+      btnEdit.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(124,92,252,0.3);background:rgba(124,92,252,0.1);color:var(--accent2);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
+      btnEdit.textContent = '✏️ تعديل';
+      btnEdit.addEventListener('click', (function(d){ return function(){ openEditDoor(inst.id, d.id, d.name, d.location||'', d.device_id, d.duration_seconds||5); }; })(door));
+      adminRow.appendChild(btnEdit);
+
+      var btnDel = document.createElement('button');
+      btnDel.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(255,61,113,0.2);background:rgba(255,61,113,0.08);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
+      btnDel.textContent = '🗑 حذف';
+      btnDel.addEventListener('click', (function(did, iid){ return function(){ deleteDoor(did, iid); }; })(door.id, inst.id));
+      adminRow.appendChild(btnDel);
+
+      var btnGps = document.createElement('button');
+      var gpsRange = (door.gps && door.gps.range !== undefined) ? door.gps.range : 100;
+      var userReq  = door.gps && door.gps.user_required;
+      btnGps.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
+      btnGps.textContent = '📡 GPS ' + gpsRange + 'م';
+      btnGps.addEventListener('click', (function(d){ return function(){ openGpsModal(d.id, d.gps&&d.gps.range!==undefined?d.gps.range:100, d.gps&&d.gps.lat||null, d.gps&&d.gps.lng||null); }; })(door));
+      adminRow.appendChild(btnGps);
+
+      card.appendChild(adminRow);
+
+      // GPS toggle للمستخدمين (الأدمن يرى زر واحد فقط)
+      var gpsToggle = document.createElement('div');
+      gpsToggle.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px';
+      gpsToggle.innerHTML =
+        '<div>' +
+          '<div style="font-size:0.78rem;font-weight:700">📍 GPS إلزامي للمستخدمين</div>' +
+          '<div style="font-size:0.7rem;color:' + (userReq?'var(--success)':'var(--danger)') + ';margin-top:2px;font-weight:700">' + (userReq?'مفعّل ✅':'معطّل ❌') + '</div>' +
+        '</div>' +
+        '<label class="toggle-switch">' +
+          '<input type="checkbox" ' + (userReq?'checked':'') + ' onchange="toggleDoorGps('' + door.id + '','user_required',this.checked)">' +
+          '<span class="toggle-knob"></span>' +
+        '</label>';
+      card.appendChild(gpsToggle);
+
+      // أزرار السجل + الجدول
+      var logRow = document.createElement('div');
+      logRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px';
+
+      var btnLog = document.createElement('button');
+      btnLog.style.cssText = 'padding:10px;border-radius:10px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
+      btnLog.textContent = '📋 سجل الباب';
+      btnLog.addEventListener('click', (function(id, name){ return function(){ openDoorLogs(id, name); }; })(door.id, door.name));
+      logRow.appendChild(btnLog);
+
+      var btnSched = document.createElement('button');
+      btnSched.style.cssText = 'padding:10px;border-radius:10px;border:1px solid rgba(255,179,0,0.2);background:rgba(255,179,0,0.08);color:var(--warning);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
+      btnSched.textContent = '🕐 جدول الأوقات';
+      btnSched.addEventListener('click', (function(d){ return function(){ openDoorSchedule(d.id, d.name, d.schedule||{}); }; })(door));
+      logRow.appendChild(btnSched);
+
+      card.appendChild(logRow);
       container.appendChild(card);
       checkDoorStatus(door.device_id, 'adm-status-' + door.id);
+    });
+
+  } catch(e) {
+    container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
+  }
+}
+
+// تبويبة المستخدمين للمدير
+async function loadAdminUsers() {
+  var container = document.getElementById('institutes-list');
+  if (!container) return;
+  container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">⏳ جاري التحميل...</p>';
+  try {
+    var insts = await apiFetch('/api/institutes');
+    var inst = Array.isArray(insts) ? insts[0] : null;
+    if (!inst) { container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">لا توجد مؤسسة</p>'; return; }
+
+    // زر إضافة مستخدم
+    container.innerHTML = '';
+    var btnAdd = document.createElement('button');
+    btnAdd.style.cssText = 'width:100%;padding:12px;border-radius:12px;border:1px dashed rgba(0,212,255,0.3);background:rgba(0,212,255,0.05);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;margin-bottom:16px';
+    btnAdd.textContent = '+ إضافة مستخدم جديد';
+    btnAdd.addEventListener('click', function() { openAddUser(); });
+    container.appendChild(btnAdd);
+
+    // جلب المستخدمين
+    var users = await apiFetch('/api/users?inst_id=' + inst.id);
+    var filtered = (users||[]).filter(function(u){ return u.role !== 'super_admin'; });
+
+    if (!filtered.length) {
+      var empty = document.createElement('p');
+      empty.style.cssText = 'color:var(--muted);text-align:center;padding:30px';
+      empty.textContent = 'لا يوجد مستخدمون بعد';
+      container.appendChild(empty);
+      return;
+    }
+
+    var statusColors = { pending:'var(--warning)', approved:'var(--success)', rejected:'var(--danger)' };
+    var statusLabels = { pending:'انتظار', approved:'موافق', rejected:'مرفوض' };
+    var roleLabels   = { user:'مستخدم', admin:'مدير' };
+
+    filtered.forEach(function(u) {
+      var status = u.request_status || 'approved';
+      var card = document.createElement('div');
+      card.style.cssText = 'background:var(--surface2);border-radius:14px;padding:14px;margin-bottom:10px';
+
+      card.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">' +
+          '<div>' +
+            '<div style="font-weight:700;font-size:0.92rem">' + u.name + '</div>' +
+            '<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem;color:var(--muted);margin-top:2px">📞 ' + u.phone + '</div>' +
+            '<div style="font-size:0.7rem;color:var(--accent2);margin-top:2px">' + (roleLabels[u.role]||u.role) + '</div>' +
+          '</div>' +
+          '<span style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+          '<button onclick="changeUserStatus('' + u.id + '','approved','' + inst.id + '','' + (u.name||'').replace(/'/g,'') + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(0,230,118,0.15);color:var(--success);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">✅ موافقة</button>' +
+          '<button onclick="changeUserStatus('' + u.id + '','pending','' + inst.id + '','' + (u.name||'').replace(/'/g,'') + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(255,179,0,0.15);color:var(--warning);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">⏳ انتظار</button>' +
+          '<button onclick="changeUserStatus('' + u.id + '','rejected','' + inst.id + '','' + (u.name||'').replace(/'/g,'') + '')" style="flex:1;padding:7px;border-radius:8px;border:none;background:rgba(255,61,113,0.15);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">❌ رفض</button>' +
+          '<button onclick="deleteUser('' + u.id + '','' + inst.id + '','')" style="padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer">🗑</button>' +
+        '</div>';
+
+      container.appendChild(card);
     });
   } catch(e) {
     container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
@@ -1436,156 +1583,78 @@ async function loadAdminDoors() {
 }
 
 
-// ─── Institute Users List (Super Admin) ───────────────
-async function openInstUsersList(instId, instName) {
-  document.getElementById('inst-users-title').textContent = 'مستخدمو: ' + instName;
-  document.getElementById('inst-users-body').innerHTML =
-    '<p style="color:var(--muted);text-align:center;padding:20px">⏳ جاري التحميل...</p>';
-  openModal('modal-inst-users');
 
+// ─── Stats Page ───────────────────────────────────────
+async function loadStats() {
   try {
-    const users = await apiFetch('/api/institutes/' + instId + '/users');
-    const body  = document.getElementById('inst-users-body');
-
-    if (!users.length) {
-      body.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">لا يوجد مستخدمون</p>';
-      return;
-    }
-
-    const statusColors = { pending:'var(--warning)', approved:'var(--success)', rejected:'var(--danger)' };
-    const statusLabels = { pending:'انتظار', approved:'موافق', rejected:'مرفوض' };
-    const roleLabels   = { user:'مستخدم', admin:'مدير' };
-
-    body.innerHTML = '';
-    users.forEach(function(u) {
-      var status   = u.request_status || 'approved';
-      var lastSeen = u.last_seen ? formatTime(u.last_seen) : '—';
-      var hasLoc   = u.last_location && u.last_location.lat;
-
-      var card = document.createElement('div');
-      card.style.cssText = 'background:var(--surface2);border-radius:14px;padding:14px;margin-bottom:10px';
-
-      // Row 1: الاسم + الوضعية
-      var row1 = document.createElement('div');
-      row1.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px';
-      row1.innerHTML =
-        '<div>' +
-          '<div style="font-weight:700;font-size:0.92rem">' + u.name + '</div>' +
-          '<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem;color:var(--muted);margin-top:2px">📞 ' + u.phone + '</div>' +
-          '<div style="font-size:0.7rem;color:var(--accent2);margin-top:2px">' + (roleLabels[u.role]||u.role) + '</div>' +
-        '</div>' +
-        '<span style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>';
-      card.appendChild(row1);
-
-      // Row 2: تاريخ الإضافة + آخر ظهور
-      var row2 = document.createElement('div');
-      row2.style.cssText = 'display:flex;gap:16px;font-size:0.72rem;color:var(--muted);margin-bottom:10px';
-      row2.innerHTML =
-        '<span>📅 ' + formatTime(u.created_at) + '</span>' +
-        '<span>👁 ' + lastSeen + '</span>';
-      card.appendChild(row2);
-
-      // Row 3: أزرار الإجراءات
-      var row3 = document.createElement('div');
-      row3.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
-
-      // زر الموقع
-      var btnLoc = document.createElement('button');
-      btnLoc.style.cssText = 'padding:7px 12px;border-radius:8px;border:none;background:' +
-        (hasLoc ? 'rgba(0,212,255,0.15)' : 'var(--surface)') +
-        ';color:' + (hasLoc ? 'var(--accent)' : 'var(--muted)') +
-        ';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:' +
-        (hasLoc ? 'pointer' : 'default');
-      btnLoc.textContent = hasLoc ? '📍 الموقع' : '📍 غير متاح';
-      btnLoc.addEventListener('click', (function(uid, uname) {
-        return function() { showUserLocation(uid, uname); };
-      })(u.id, u.name));
-      row3.appendChild(btnLoc);
-
-      // أزرار الوضعية
-      [['موافقة','approved','rgba(0,230,118,0.15)','var(--success)'],
-       ['رفض','rejected','rgba(255,61,113,0.15)','var(--danger)'],
-       ['🔑','pw','rgba(124,92,252,0.15)','var(--accent2)'],
-       ['🗑','del','rgba(255,61,113,0.1)','var(--danger)']
-      ].forEach(function(item) {
-        var btn = document.createElement('button');
-        btn.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:' + item[2] + ';color:' + item[3] + ';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-        btn.textContent = item[0];
-        btn.addEventListener('click', (function(uid, act, uname, iid) {
-          return function() {
-            if (act === 'pw') resetUserPw(uid, uname);
-            else if (act === 'del') deleteUser(uid, iid, instName);
-            else changeUserStatus(uid, act, iid, instName);
-          };
-        })(u.id, item[1], u.name, instId));
-        row3.appendChild(btn);
-      });
-
-      card.appendChild(row3);
-      body.appendChild(card);
-    });
-  } catch(e) {
-    document.getElementById('inst-users-body').innerHTML =
-      '<p style="color:var(--danger);text-align:center;padding:20px">' + e.message + '</p>';
-  }
+    const s = await apiFetch('/api/stats/full');
+    const grid = document.getElementById('stats-grid');
+    if (!grid) return;
+    const items = [
+      { label:'عمليات اليوم',  value: s.today_actions, color:'var(--accent)',  icon:'📊' },
+      { label:'إجمالي الفتح',  value: s.total_opens,   color:'var(--success)', icon:'🔓' },
+      { label:'التنبيهات',     value: s.alert_count,   color:'var(--danger)',  icon:'🔔' },
+      { label:'المستخدمون',    value: s.active_users + '/' + s.total_users, color:'var(--accent2)', icon:'👥' },
+    ];
+    grid.innerHTML = items.map(function(item) {
+      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;text-align:center">' +
+        '<div style="font-size:1.6rem;margin-bottom:6px">' + item.icon + '</div>' +
+        '<div style="font-size:1.8rem;font-weight:900;font-family:JetBrains Mono,monospace;color:' + item.color + '">' + item.value + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--muted);margin-top:4px">' + item.label + '</div>' +
+        '</div>';
+    }).join('');
+  } catch(e) { console.error('loadStats', e); }
 }
 
-async function showUserLocation(userId, name) {
-  // فتح modal التاريخ
-  document.getElementById('loc-modal-title').textContent = '📍 مواقع: ' + name;
-  document.getElementById('loc-modal-body').innerHTML =
-    '<p style="color:var(--muted);text-align:center;padding:20px">⏳ جاري التحميل...</p>';
-  openModal('modal-user-location');
-
+// ─── Alerts Page ──────────────────────────────────────
+async function loadAlerts() {
+  const container = document.getElementById('alerts-list');
+  if (!container) return;
+  container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:30px">⏳ جاري التحميل...</p>';
   try {
-    const locs = await apiFetch('/api/users/' + userId + '/locations?days=30');
-    const body = document.getElementById('loc-modal-body');
-
-    if (!locs.length) {
-      body.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">لا توجد مواقع محفوظة</p>';
+    const data = await apiFetch('/api/alerts');
+    if (!data.length) {
+      container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:30px">✅ لا توجد تنبيهات</p>';
       return;
     }
 
-    body.innerHTML = '';
+    const typeMap = {
+      gps_required:    { label:'GPS غير مفعّل',    color:'var(--warning)', icon:'📍' },
+      gps_out_of_range:{ label:'خارج نطاق GPS',    color:'var(--danger)',  icon:'🗺' },
+      schedule_denied: { label:'خارج أيام العمل',  color:'var(--danger)',  icon:'📅' },
+      schedule_time:   { label:'خارج أوقات العمل', color:'var(--warning)', icon:'⏰' },
+    };
+    const actionMap = { open:'فتح', close:'غلق', stop:'إيقاف', open40:'فتح 40ث' };
 
-    // آخر موقع — رابط Google Maps
-    var latest = locs[0];
-    var latestCard = document.createElement('div');
-    latestCard.style.cssText = 'background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:12px;padding:14px;margin-bottom:14px';
-    latestCard.innerHTML =
-      '<div style="font-weight:700;margin-bottom:8px;color:var(--accent)">📍 آخر موقع معروف</div>' +
-      '<div style="font-size:0.8rem;color:var(--muted);margin-bottom:10px">' + formatTime(latest.created_at) + '</div>' +
-      '<a href="https://www.google.com/maps?q=' + latest.lat + ',' + latest.lng + '" target="_blank" ' +
-      'style="display:block;padding:10px;border-radius:8px;background:var(--accent);color:#000;font-family:Cairo,sans-serif;font-weight:700;font-size:0.85rem;text-align:center;text-decoration:none">' +
-      '🗺 فتح في Google Maps</a>';
-    body.appendChild(latestCard);
-
-    // قائمة التاريخ
-    var histTitle = document.createElement('div');
-    histTitle.style.cssText = 'font-weight:700;font-size:0.85rem;color:var(--muted);margin-bottom:10px';
-    histTitle.textContent = 'سجل المواقع (' + locs.length + ' نقطة — آخر 30 يوم)';
-    body.appendChild(histTitle);
-
-    locs.forEach(function(loc) {
-      var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)';
-      row.innerHTML =
-        '<div>' +
-          '<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem">' +
-            loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) +
+    container.innerHTML = data.map(function(alert) {
+      var t = typeMap[alert.type] || { label: alert.type, color:'var(--muted)', icon:'⚠️' };
+      var mapsLink = (alert.lat && alert.lng)
+        ? '<a href="https://www.google.com/maps?q=' + alert.lat + ',' + alert.lng + '" target="_blank" style="color:var(--accent);font-size:0.75rem;text-decoration:none">🗺 الموقع</a>'
+        : '';
+      return '<div style="background:var(--surface2);border-radius:14px;padding:14px;margin-bottom:10px;border-right:3px solid ' + t.color + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<span style="font-size:1.1rem">' + t.icon + '</span>' +
+            '<div>' +
+              '<div style="font-weight:700;font-size:0.88rem;color:' + t.color + '">' + t.label + '</div>' +
+              '<div style="font-size:0.75rem;color:var(--muted);margin-top:2px">' + alert.message + '</div>' +
+            '</div>' +
           '</div>' +
-          (loc.accuracy ? '<div style="font-size:0.7rem;color:var(--muted)">دقة: ±' + Math.round(loc.accuracy) + 'م</div>' : '') +
+          '<div style="text-align:left">' +
+            '<div style="font-size:0.7rem;color:var(--muted)">' + formatTime(alert.created_at) + '</div>' +
+            (alert.action ? '<div style="font-size:0.7rem;color:var(--accent2);margin-top:2px">محاولة: ' + (actionMap[alert.action]||alert.action) + '</div>' : '') +
+          '</div>' +
         '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px">' +
-          '<span style="font-size:0.72rem;color:var(--muted)">' + formatTime(loc.created_at) + '</span>' +
-          '<a href="https://www.google.com/maps?q=' + loc.lat + ',' + loc.lng + '" target="_blank" ' +
-          'style="font-size:0.75rem;color:var(--accent);text-decoration:none">🗺</a>' +
-        '</div>';
-      body.appendChild(row);
-    });
+        mapsLink +
+      '</div>';
+    }).join('');
+
+    // تحديث badge التنبيهات
+    var badge = document.getElementById('nav-alerts-label');
+    if (badge && data.length > 0) badge.textContent = 'التنبيهات (' + data.length + ')';
+
   } catch(e) {
-    document.getElementById('loc-modal-body').innerHTML =
-      '<p style="color:var(--danger);text-align:center;padding:20px">' + e.message + '</p>';
+    container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:30px">' + e.message + '</p>';
   }
 }
 
@@ -1599,7 +1668,16 @@ function showPage(name, btn) {
 
   if (name === 'dashboard')   { loadStats(); }
   if (name === 'users')       loadUsers();
-  if (name === 'institutes') { if (user && user.role === 'super_admin') loadInstitutes(); else if (user && user.role === 'admin') loadAdminDoors(); else if (user) loadUserDoors(); }
+  if (name === 'institutes') {
+    if (user && user.role === 'super_admin') loadInstitutes();
+    else if (user && user.role === 'admin') loadAdminDoors();
+    else if (user) loadUserDoors();
+  }
+  if (name === 'users') {
+    if (user && user.role === 'admin') { loadAdminUsers(); return; }
+  }
+  if (name === 'stats')  loadStats();
+  if (name === 'alerts') loadAlerts();
   if (name === 'map')         initMap();
 }
 
