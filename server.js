@@ -1146,15 +1146,13 @@ async function pollAllDoors() {
           },
         });
         const data = await r.json();
-        if (!data.result) continue;
-        // تحقق من الاتصال من نتيجة الـ status
-        const isOnline = data.success === true;
-        if (!isOnline) continue;
+        if (!data.success || !data.result) continue;
 
         const sm = {};
         data.result.forEach(s => { sm[s.code] = s.value; });
-        const r1 = sm['switch_1'] === true || sm['switch_1'] === 'true';
-        const r2 = sm['switch_2'] === true || sm['switch_2'] === 'true';
+        const r1 = sm['switch_1'] === true  || sm['switch_1'] === 'true'  || sm['switch_1'] === 1;
+        const r2 = sm['switch_2'] === true  || sm['switch_2'] === 'true'  || sm['switch_2'] === 1;
+        console.log(`[Polling] ${door.name} → R1=${r1} R2=${r2} raw=${JSON.stringify(sm)}`);
 
         const prev    = doorStateCache.get(door.device_id);
         const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
