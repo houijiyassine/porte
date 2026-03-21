@@ -1180,16 +1180,18 @@ async function startTuyaMessageQueue() {
     const topic   = `persistent://${TUYA.CLIENT_ID}/out/event`;
     const subName = `${TUYA.CLIENT_ID}-sub`;
 
-    // Authentication: password = HmacSHA256(accessId + timestamp, accessSecret)
-    const t        = Date.now().toString();
-    const password = crypto.createHmac('sha256', TUYA.SECRET)
-      .update(TUYA.CLIENT_ID + t).digest('hex').toUpperCase();
+    // Authentication based on Tuya Node.js SDK
+    // password = MD5(accessId + accessSecret).toUpperCase()
     const username = TUYA.CLIENT_ID;
+    const password = crypto.createHash('md5')
+      .update(TUYA.CLIENT_ID + TUYA.SECRET).digest('hex').toUpperCase();
 
-    // WebSocket URL format for Pulsar consumer
+    // WebSocket URL for Pulsar consumer
     const wsPath = `ws/v2/consumer/persistent/${TUYA.CLIENT_ID}/out/event/${subName}` +
       `?subscriptionType=Shared&ackTimeoutMillis=3000&receiverQueueSize=1000`;
     const wsUrl  = MQ_URL + wsPath;
+
+    console.log('[MQ] Connecting to:', wsUrl.slice(0, 80));
 
     const { WebSocketServer: _WSS, ...wsModule } = await import('ws');
     const WS = wsModule.default || wsModule.WebSocket;
@@ -1198,7 +1200,7 @@ async function startTuyaMessageQueue() {
       headers: {
         Authorization: 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64')
       },
-      handshakeTimeout: 10000,
+      handshakeTimeout: 15000,
     });
 
     let pingInterval;
