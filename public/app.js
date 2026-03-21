@@ -283,9 +283,13 @@ async function loadUsers() {
     await loadUsersForSuperAdmin();
     return;
   }
+  if (user && user.role === 'admin') {
+    await loadAdminUsers();
+    return;
+  }
   try {
     const data = await apiFetch('/api/users');
-    usersCache = data || [];
+    usersCache = (data || []).filter(function(u){ return u.role !== 'super_admin'; });
     renderUsersTable(usersCache);
   } catch {}
 }
@@ -342,7 +346,8 @@ async function loadUsersForSuperAdmin() {
 function renderUsersTable(users) {
   const tbody = document.getElementById('users-tbody');
   const roleLabels = { user:'مستخدم', admin:'مدير', super_admin:'سوبر أدمن' };
-  tbody.innerHTML = users.map(u => `
+  const filtered = users.filter(function(u){ return u.role !== 'super_admin'; });
+  tbody.innerHTML = filtered.map(u => `
     <tr>
       <td style="font-weight:600">${u.name}</td>
       <td style="direction:ltr;font-family:'JetBrains Mono';font-size:0.82rem">${u.phone}</td>
