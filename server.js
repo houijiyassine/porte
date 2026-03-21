@@ -1175,63 +1175,74 @@ async function pollAllDoors() {
 // يستقبل أحداث Tuya فور حدوثها بدون polling
 async function startTuyaMessageQueue() {
   try {
-    // Tuya EU WebSocket MQ endpoint
-    const MQ_WS_URL = 'wss://mqe.tuyaeu.com:8285/';
-    const topic     = `persistent://${TUYA.CLIENT_ID}/out/event`;
-    const wsUrl     = MQ_WS_URL + 'ws/v2/consumer/persistent/' +
-      TUYA.CLIENT_ID + '/out/event/y85me8yq7d3vvk7vghuy-sub?ackTimeoutMillis=3000';
+    // Tuya EU WebSocket endpoint
+    const MQ_URL  = 'wss://mqe.tuyaeu.com:8285/';
+    const topic   = `persistent://${TUYA.CLIENT_ID}/out/event`;
+    const subName = `${TUYA.CLIENT_ID}-sub`;
 
-    // بناء توقيع المصادقة
-    const t    = Date.now().toString();
-    const sign = crypto.createHmac('sha256', TUYA.SECRET)
+    // Authentication: password = HmacSHA256(accessId + timestamp, accessSecret)
+    const t        = Date.now().toString();
+    const password = crypto.createHmac('sha256', TUYA.SECRET)
       .update(TUYA.CLIENT_ID + t).digest('hex').toUpperCase();
-    const auth = Buffer.from(JSON.stringify({
-      username: TUYA.CLIENT_ID,
-      password: sign,
-      t:        t,
-    })).toString('base64');
+    const username = TUYA.CLIENT_ID;
 
-    const { WebSocket: WS } = await import('ws');
+    // WebSocket URL format for Pulsar consumer
+    const wsPath = `ws/v2/consumer/persistent/${TUYA.CLIENT_ID}/out/event/${subName}` +
+      `?subscriptionType=Shared&ackTimeoutMillis=3000&receiverQueueSize=1000`;
+    const wsUrl  = MQ_URL + wsPath;
+
+    const { WebSocketServer: _WSS, ...wsModule } = await import('ws');
+    const WS = wsModule.default || wsModule.WebSocket;
+
     const mqWs = new WS(wsUrl, {
-      headers: { Authorization: 'Bearer ' + auth }
+      headers: {
+        Authorization: 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64')
+      },
+      handshakeTimeout: 10000,
     });
+
+    let pingInterval;
 
     mqWs.on('open', () => {
-      console.log('[MQ] ✅ متصل بـ Tuya Message Queue (WebSocket)');
+      console.log('[MQ] ✅ متصل بـ Tuya Message Queue');
+      // إرسال ping كل 30 ثانية للحفاظ على الاتصال
+      pingInterval = setInterval(() => {
+        if (mqWs.readyState === 1) mqWs.ping();
+      }, 30000);
     });
 
-    mqWs.on('message', async (data) => {
+    mqWs.on('message', async (raw) => {
       try {
-        const raw   = data.toString();
-        const frame = JSON.parse(raw);
+        const frame = JSON.parse(raw.toString());
+        if (!frame.payload) return;
 
-        // فك تشفير AES-GCM
-        if (frame.data) {
-          const key     = Buffer.from(TUYA.SECRET.substring(8, 24));
-          const encBuf  = Buffer.from(frame.data, 'base64');
-          const iv      = encBuf.slice(0, 12);
-          const tag     = encBuf.slice(encBuf.length - 16);
-          const enc     = encBuf.slice(12, encBuf.length - 16);
-          const decipher = crypto.createDecipheriv('aes-128-gcm', key, iv);
-          decipher.setAuthTag(tag);
-          const decrypted = Buffer.concat([decipher.update(enc), decipher.final()]);
-          const payload   = JSON.parse(decrypted.toString('utf8'));
-          await handleTuyaEvent(payload);
+        // فك ترميز base64 للـ payload
+        const payloadStr = Buffer.from(frame.payload, 'base64').toString('utf8');
+        const payloadObj = JSON.parse(payloadStr);
+
+        // فك تشفير data بـ AES-128-ECB
+        if (payloadObj.data) {
+          const key = Buffer.from(TUYA.SECRET.substring(8, 24), 'utf8');
+          const encBuf   = Buffer.from(payloadObj.data, 'base64');
+          const decipher = crypto.createDecipheriv('aes-128-ecb', key, null);
+          decipher.setAutoPadding(true);
+          const decrypted = Buffer.concat([decipher.update(encBuf), decipher.final()]);
+          const event     = JSON.parse(decrypted.toString('utf8'));
+          await handleTuyaEvent(event);
         }
 
         // تأكيد الاستقبال
         mqWs.send(JSON.stringify({ messageId: frame.messageId }));
       } catch(e) {
-        console.error('[MQ] خطأ في معالجة الرسالة:', e.message);
+        console.error('[MQ] خطأ في الرسالة:', e.message);
       }
     });
 
-    mqWs.on('error', (e) => {
-      console.error('[MQ] خطأ WebSocket:', e.message);
-    });
+    mqWs.on('error', (e) => console.error('[MQ] خطأ:', e.message));
 
-    mqWs.on('close', () => {
-      console.log('[MQ] انقطع الاتصال — إعادة المحاولة بعد 5 ثوانٍ');
+    mqWs.on('close', (code, reason) => {
+      clearInterval(pingInterval);
+      console.log(`[MQ] انقطع (${code}) — إعادة بعد 5 ثوانٍ`);
       setTimeout(startTuyaMessageQueue, 5000);
     });
 
