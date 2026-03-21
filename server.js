@@ -1,5 +1,29 @@
 import express from 'express';
 import crypto from 'crypto';
+
+// ─── AES-256 Encryption ───────────────────────────────────────────────────────
+const PW_SECRET = process.env.PW_SECRET || 'porte-default-secret-change-me-32ch';
+
+function encryptPw(plainText) {
+  const key    = crypto.scryptSync(PW_SECRET, 'salt', 32);
+  const iv     = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  const enc    = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
+  return iv.toString('hex') + ':' + enc.toString('hex');
+}
+
+function decryptPw(encrypted) {
+  try {
+    const [ivHex, encHex] = encrypted.split(':');
+    const key     = crypto.scryptSync(PW_SECRET, 'salt', 32);
+    const iv      = Buffer.from(ivHex, 'hex');
+    const encBuf  = Buffer.from(encHex, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    return Buffer.concat([decipher.update(encBuf), decipher.final()]).toString('utf8');
+  } catch { return null; }
+}
+
+
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 import path from 'path';
@@ -335,6 +359,12 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
           const userLat = parseFloat(req.body.lat);
           const userLng = parseFloat(req.body.lng);
           if (!userLat || !userLng) {
+            await supabase.from('access_alerts').insert({
+              user_id: req.user.id, inst_id: req.user.inst_id,
+              type: 'gps_required', action: action,
+              message: 'محاولة فتح الباب بدون GPS',
+              created_at: new Date().toISOString(),
+            }).catch(()=>{});
             return res.status(403).json({ error: 'يجب تفعيل GPS للوصول إلى هذا الباب', code: 'GPS_REQUIRED' });
           }
           const R = 6371000;
@@ -343,6 +373,14 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
           const a = Math.sin(dLat/2)**2 + Math.cos(door.gps.lat*Math.PI/180) * Math.cos(userLat*Math.PI/180) * Math.sin(dLng/2)**2;
           const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
           if (distance > (door.gps.range || 100)) {
+            await supabase.from('access_alerts').insert({
+              user_id: req.user.id, inst_id: req.user.inst_id,
+              door_id: (await supabase.from('doors').select('id').eq('device_id',deviceId).single()).data?.id,
+              type: 'gps_out_of_range', action: action,
+              lat: userLat, lng: userLng,
+              message: `بعيد عن الباب بـ ${Math.round(distance)}م (مسموح: ${door.gps.range}م)`,
+              created_at: new Date().toISOString(),
+            }).catch(()=>{});
             return res.status(403).json({ error: `أنت بعيد عن الباب (${Math.round(distance)}م). النطاق المسموح: ${door.gps.range}م`, code: 'GPS_OUT_OF_RANGE' });
           }
         }
@@ -354,11 +392,23 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
           const dayIndex = dayMap[now.getDay()];
           const daySchedule = door.schedule[dayIndex];
           if (daySchedule && !daySchedule.enabled) {
+            await supabase.from('access_alerts').insert({
+              user_id: req.user.id, inst_id: req.user.inst_id,
+              type: 'schedule_denied', action: action,
+              message: 'محاولة فتح الباب خارج أيام العمل',
+              created_at: new Date().toISOString(),
+            }).catch(()=>{});
             return res.status(403).json({ error: 'الباب غير مسموح به اليوم', code: 'SCHEDULE_DENIED' });
           }
           if (daySchedule?.enabled && daySchedule.start && daySchedule.end) {
             const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
             if (timeStr < daySchedule.start || timeStr > daySchedule.end) {
+              await supabase.from('access_alerts').insert({
+                user_id: req.user.id, inst_id: req.user.inst_id,
+                type: 'schedule_time', action: action,
+                message: `محاولة فتح الباب خارج الوقت المسموح (${daySchedule.start}–${daySchedule.end})`,
+                created_at: new Date().toISOString(),
+              }).catch(()=>{});
               return res.status(403).json({ error: `الباب مسموح به من ${daySchedule.start} إلى ${daySchedule.end} فقط`, code: 'SCHEDULE_OUT_OF_RANGE' });
             }
           }
@@ -535,7 +585,7 @@ app.post('/api/institutes', authMiddleware, superAdminOnly, async (req, res) => 
       await supabase.from('users').insert({
         inst_id: inst.id, name: 'مسؤول ' + name,
         phone: admin_phone, pw_hash,
-        pw_plain: Buffer.from(admin_pw).toString('base64'),
+        pw_plain: encryptPw(admin_pw),
         role: 'admin', status: 'active',
         created_at: new Date().toISOString(),
       });
@@ -566,7 +616,8 @@ app.put('/api/institutes/:id', authMiddleware, adminOnly, async (req, res) => {
       if (existingAdmin) {
         const adminUpdates = {};
         if (req.body.admin_phone) adminUpdates.phone = req.body.admin_phone;
-        if (req.body.admin_pw)    adminUpdates.pw_hash = crypto.createHash('sha256').update(req.body.admin_pw).digest('hex');
+        if (req.body.admin_pw)    adminUpdates.pw_hash  = crypto.createHash('sha256').update(req.body.admin_pw).digest('hex');
+        adminUpdates.pw_plain = encryptPw(req.body.admin_pw);
         await supabase.from('users').update(adminUpdates).eq('id', existingAdmin.id);
       } else if (req.body.admin_phone && req.body.admin_pw) {
         const pw_hash = crypto.createHash('sha256').update(req.body.admin_pw).digest('hex');
@@ -711,7 +762,7 @@ app.get('/api/users/:id/pw', authMiddleware, async (req, res) => {
     return res.status(403).json({ error: 'غير مسموح' });
   try {
     const { data } = await supabase.from('users').select('pw_plain,pw_hash,name').eq('id', req.params.id).single();
-    const pw = data?.pw_plain ? Buffer.from(data.pw_plain, 'base64').toString('utf8') : null;
+    const pw = data?.pw_plain ? decryptPw(data.pw_plain) : null;
     res.json({ pw: pw, name: data?.name });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -748,6 +799,49 @@ app.get('/api/users/:id/locations', authMiddleware, async (req, res) => {
       .limit(500);
     if (error) throw error;
     res.json(data || []);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// ─── Alerts ───────────────────────────────────────────────────────────────────
+app.get('/api/alerts', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    let query = supabase.from('access_alerts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (req.user.role !== 'super_admin') query = query.eq('inst_id', req.user.inst_id);
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data || []);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Stats
+app.get('/api/stats/full', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const instId = req.user.role === 'super_admin' ? null : req.user.inst_id;
+    const today  = new Date(); today.setHours(0,0,0,0);
+
+    let logsQ = supabase.from('door_logs').select('value,created_at', { count: 'exact' });
+    let alertsQ = supabase.from('access_alerts').select('id', { count: 'exact' });
+    let usersQ = supabase.from('users').select('id,status', { count: 'exact' }).neq('role','super_admin');
+
+    if (instId) { logsQ = logsQ.eq('inst_id', instId); alertsQ = alertsQ.eq('inst_id', instId); usersQ = usersQ.eq('inst_id', instId); }
+
+    const [logs, alerts, users] = await Promise.all([logsQ, alertsQ, usersQ]);
+
+    const todayLogs = (logs.data||[]).filter(l => new Date(l.created_at) >= today).length;
+    const openCount = (logs.data||[]).filter(l => l.value === 'open' || l.value === 'open40').length;
+
+    res.json({
+      today_actions: todayLogs,
+      total_actions: logs.count || 0,
+      total_opens:   openCount,
+      alert_count:   alerts.count || 0,
+      total_users:   users.count || 0,
+      active_users:  (users.data||[]).filter(u => u.status === 'active').length,
+    });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
