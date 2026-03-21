@@ -534,7 +534,9 @@ app.post('/api/institutes', authMiddleware, superAdminOnly, async (req, res) => 
       const pw_hash = crypto.createHash('sha256').update(admin_pw).digest('hex');
       await supabase.from('users').insert({
         inst_id: inst.id, name: 'مسؤول ' + name,
-        phone: admin_phone, pw_hash, role: 'admin', status: 'active',
+        phone: admin_phone, pw_hash,
+        pw_plain: Buffer.from(admin_pw).toString('base64'),
+        role: 'admin', status: 'active',
         created_at: new Date().toISOString(),
       });
     }
@@ -708,8 +710,9 @@ app.get('/api/users/:id/pw', authMiddleware, async (req, res) => {
   if (req.user.role !== 'super_admin')
     return res.status(403).json({ error: 'غير مسموح' });
   try {
-    const { data } = await supabase.from('users').select('pw_hash,name').eq('id', req.params.id).single();
-    res.json({ pw_hash: data?.pw_hash, note: 'هذا هو الـ hash SHA-256 لكلمة المرور' });
+    const { data } = await supabase.from('users').select('pw_plain,pw_hash,name').eq('id', req.params.id).single();
+    const pw = data?.pw_plain ? Buffer.from(data.pw_plain, 'base64').toString('utf8') : null;
+    res.json({ pw: pw, name: data?.name });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
