@@ -688,6 +688,7 @@ function backToInstList() {
 }
 
 function renderInstDetail(inst) {
+  const isSuperAdmin = user && user.role === 'super_admin';
   const container = document.getElementById('institutes-list');
   let doorsHtml = '';
 
@@ -730,7 +731,8 @@ function renderInstDetail(inst) {
           <button onclick="openDoorLogs('${doorId}','${doorName}')" style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:12px;padding:10px 6px;cursor:pointer;font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;color:var(--accent);display:flex;align-items:center;justify-content:center;gap:6px">📋 سجل الباب</button>
           <button onclick="openDoorSchedule('${doorId}','${doorName}',${schedData === '&quot;{}&quot;' ? '{}' : schedData})" style="background:rgba(255,179,0,0.08);border:1px solid rgba(255,179,0,0.2);border-radius:12px;padding:10px 6px;cursor:pointer;font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;color:var(--warning);display:flex;align-items:center;justify-content:center;gap:6px">🕐 جدول الأوقات</button>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="display:grid;grid-template-columns:${isSuperAdmin ? '1fr 1fr' : '1fr'};gap:8px">
+          ${isSuperAdmin ? `
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">
             <div>
               <div style="font-size:0.72rem;font-weight:700;color:var(--muted)">🏢 GPS مسؤول</div>
@@ -740,7 +742,7 @@ function renderInstDetail(inst) {
               <input type="checkbox" ${adminReq?'checked':''} onchange="toggleDoorGps('${doorId}','admin_required',this.checked)">
               <span class="toggle-knob"></span>
             </label>
-          </div>
+          </div>` : ''}
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">
             <div>
               <div style="font-size:0.72rem;font-weight:700;color:var(--muted)">📍 GPS مستخدمين</div>
