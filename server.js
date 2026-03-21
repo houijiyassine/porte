@@ -1159,28 +1159,49 @@ async function pollAllDoors() {
 
         const prev    = doorStateCache.get(door.device_id);
         const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
-        if (!changed) continue;
 
+        // دائماً حدّث الـ cache
         doorStateCache.set(door.device_id, { r1, r2 });
+
+        // بث تحديث الحالة دائماً (للواجهة)
         const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
         const lastApp    = appLastAction.get(door.device_id);
         const isFromApp  = lastApp && (Date.now() - lastApp.time) < 15000;
 
-        if (!isFromApp && (r1 || r2)) {
-          await supabase.from('door_logs').insert({
-            door_id: door.id, inst_id: door.inst_id,
-            value: doorAction, source: 'RC (جهاز تحكم)',
-            created_at: new Date().toISOString(),
-          }).catch(() => {});
-          console.log(`[Polling] 📻 RC → ${door.name}: ${doorAction}`);
+        // تسجيل RC فقط إذا:
+        // 1. تغيرت الحالة فعلاً
+        // 2. الأمر ليس من التطبيق
+        // 3. الباب مفتوح أو مغلق (r1 أو r2 = true)
+        if (changed && !isFromApp && (r1 || r2)) {
+          // تحقق من أن آخر سجل ليس نفس الحالة (تجنب التكرار)
+          const { data: lastLog } = await supabase.from('door_logs')
+            .select('value,source,created_at')
+            .eq('door_id', door.id)
+            .order('created_at', { ascending: false })
+            .limit(1).single().catch(() => ({ data: null }));
+
+          const isRecent = lastLog && (Date.now() - new Date(lastLog.created_at).getTime()) < 10000;
+          const isSameAction = lastLog?.value === doorAction;
+
+          if (!isRecent || !isSameAction) {
+            await supabase.from('door_logs').insert({
+              door_id: door.id, inst_id: door.inst_id,
+              value: doorAction, source: 'RC (جهاز تحكم)',
+              created_at: new Date().toISOString(),
+            }).catch(() => {});
+            console.log(`[Polling] 📻 RC → ${door.name}: ${doorAction}`);
+          }
         }
 
-        broadcast({
-          type: 'door_state', deviceId: door.device_id,
-          doorId: door.id, instId: door.inst_id,
-          r1_on: r1, r2_on: r2, state: doorAction,
-          source: isFromApp ? 'app' : 'rc', timestamp: Date.now(),
-        });
+        // بث تحديث الحالة فقط إذا تغيرت
+        if (changed) {
+          broadcast({
+            type: 'door_state', deviceId: door.device_id,
+            doorId: door.id, instId: door.inst_id,
+            r1_on: r1, r2_on: r2, state: doorAction,
+            source: isFromApp ? 'app' : 'rc', timestamp: Date.now(),
+          });
+        }
       } catch(e) {}
     }
   } catch(e) { console.error('[Polling Error]', e.message); }
