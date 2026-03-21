@@ -1171,87 +1171,12 @@ async function pollAllDoors() {
 }
 
 
-// ─── Tuya Message Queue (Pulsar) ─────────────────────────────────────────────
-// يستقبل أحداث Tuya فور حدوثها بدون polling
-async function startTuyaMessageQueue() {
-  try {
-    // Tuya EU WebSocket endpoint
-    const MQ_URL  = 'wss://mqe.tuyaeu.com:8285/';
-    const topic   = `persistent://${TUYA.CLIENT_ID}/out/event`;
-    const subName = `${TUYA.CLIENT_ID}-sub`;
+// ─── Tuya Message Queue ──────────────────────────────────────────────────────
+const doorStateCache = new Map();
+const appLastAction  = new Map();
 
-    // Authentication based on Tuya Node.js SDK
-    // password = MD5(accessId + accessSecret).toUpperCase()
-    const username = TUYA.CLIENT_ID;
-    const password = crypto.createHash('md5')
-      .update(TUYA.CLIENT_ID + TUYA.SECRET).digest('hex').toUpperCase();
-
-    // WebSocket URL for Pulsar consumer
-    const wsPath = `ws/v2/consumer/persistent/${TUYA.CLIENT_ID}/out/event/${subName}` +
-      `?subscriptionType=Shared&ackTimeoutMillis=3000&receiverQueueSize=1000`;
-    const wsUrl  = MQ_URL + wsPath;
-
-    console.log('[MQ] Connecting to:', wsUrl.slice(0, 80));
-
-    const { WebSocketServer: _WSS, ...wsModule } = await import('ws');
-    const WS = wsModule.default || wsModule.WebSocket;
-
-    const mqWs = new WS(wsUrl, {
-      headers: {
-        Authorization: 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64')
-      },
-      handshakeTimeout: 15000,
-    });
-
-    let pingInterval;
-
-    mqWs.on('open', () => {
-      console.log('[MQ] ✅ متصل بـ Tuya Message Queue');
-      // إرسال ping كل 30 ثانية للحفاظ على الاتصال
-      pingInterval = setInterval(() => {
-        if (mqWs.readyState === 1) mqWs.ping();
-      }, 30000);
-    });
-
-    mqWs.on('message', async (raw) => {
-      try {
-        const frame = JSON.parse(raw.toString());
-        if (!frame.payload) return;
-
-        // فك ترميز base64 للـ payload
-        const payloadStr = Buffer.from(frame.payload, 'base64').toString('utf8');
-        const payloadObj = JSON.parse(payloadStr);
-
-        // فك تشفير data بـ AES-128-ECB
-        if (payloadObj.data) {
-          const key = Buffer.from(TUYA.SECRET.substring(8, 24), 'utf8');
-          const encBuf   = Buffer.from(payloadObj.data, 'base64');
-          const decipher = crypto.createDecipheriv('aes-128-ecb', key, null);
-          decipher.setAutoPadding(true);
-          const decrypted = Buffer.concat([decipher.update(encBuf), decipher.final()]);
-          const event     = JSON.parse(decrypted.toString('utf8'));
-          await handleTuyaEvent(event);
-        }
-
-        // تأكيد الاستقبال
-        mqWs.send(JSON.stringify({ messageId: frame.messageId }));
-      } catch(e) {
-        console.error('[MQ] خطأ في الرسالة:', e.message);
-      }
-    });
-
-    mqWs.on('error', (e) => console.error('[MQ] خطأ:', e.message));
-
-    mqWs.on('close', (code, reason) => {
-      clearInterval(pingInterval);
-      console.log(`[MQ] انقطع (${code}) — إعادة بعد 5 ثوانٍ`);
-      setTimeout(startTuyaMessageQueue, 5000);
-    });
-
-  } catch(e) {
-    console.error('[MQ] خطأ في الاتصال:', e.message);
-    startPollingFallback();
-  }
+function markAppAction(deviceId, userId, userName, action) {
+  appLastAction.set(deviceId, { action, userId, userName, time: Date.now() });
 }
 
 async function handleTuyaEvent(event) {
@@ -1266,13 +1191,12 @@ async function handleTuyaEvent(event) {
 
     const statusMap = {};
     status.forEach(s => { statusMap[s.code] = s.value; });
-    const r1 = statusMap['switch_1'] === true;
-    const r2 = statusMap['switch_2'] === true;
+    const r1 = statusMap['switch_1'] === true || statusMap['switch_1'] === 'true';
+    const r2 = statusMap['switch_2'] === true || statusMap['switch_2'] === 'true';
 
     const prev    = doorStateCache.get(deviceId);
     const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
     if (!changed) return;
-
     doorStateCache.set(deviceId, { r1, r2 });
 
     const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
@@ -1299,14 +1223,74 @@ async function handleTuyaEvent(event) {
   }
 }
 
-// Polling كـ fallback إذا فشل Pulsar
-function startPollingFallback() {
-  console.log('[Polling] بدأ مراقبة الأبواب كل 3 ثوانٍ');
-  setInterval(pollAllDoors, 3000);
+async function pollAllDoors() {
+  try {
+    const { data: doors } = await supabase
+      .from('doors').select('id,inst_id,name,device_id').eq('is_active', true);
+    if (!doors?.length) return;
+
+    for (const door of doors) {
+      try {
+        const token   = await getTuyaToken();
+        const t       = Date.now().toString();
+        const nonce   = crypto.randomBytes(8).toString('hex');
+        const urlPath = `/v1.0/devices/${door.device_id}/status`;
+        const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
+
+        const r = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
+          method: 'GET',
+          headers: {
+            'client_id': TUYA.CLIENT_ID, 'access_token': token,
+            'sign': sign, 't': t, 'nonce': nonce,
+            'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
+          },
+        });
+        const data = await r.json();
+        if (!data.result) continue;
+
+        const statusMap = {};
+        data.result.forEach(s => { statusMap[s.code] = s.value; });
+        const r1 = statusMap['switch_1'] === true;
+        const r2 = statusMap['switch_2'] === true;
+
+        const prev    = doorStateCache.get(door.device_id);
+        const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
+        if (!changed) continue;
+
+        doorStateCache.set(door.device_id, { r1, r2 });
+        const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
+        const lastApp    = appLastAction.get(door.device_id);
+        const isFromApp  = lastApp && (Date.now() - lastApp.time) < 15000;
+
+        if (!isFromApp && (r1 || r2)) {
+          await supabase.from('door_logs').insert({
+            door_id: door.id, inst_id: door.inst_id,
+            value: doorAction, source: 'RC (جهاز تحكم)',
+            created_at: new Date().toISOString(),
+          }).catch(() => {});
+          console.log(`[Polling] 📻 RC → ${door.name}: ${doorAction}`);
+        }
+
+        broadcast({
+          type: 'door_state', deviceId: door.device_id, doorId: door.id,
+          instId: door.inst_id, r1_on: r1, r2_on: r2,
+          state: doorAction, source: isFromApp ? 'app' : 'rc',
+          timestamp: Date.now(),
+        });
+      } catch(e) {}
+    }
+  } catch(e) {
+    console.error('[Polling Error]', e.message);
+  }
 }
 
-// بدء الاتصال
-setTimeout(startTuyaMessageQueue, 3000);
+// استخدام Polling مباشرة — موثوق وبسيط
+setTimeout(function() {
+  console.log('[Polling] ✅ بدأ مراقبة الأبواب كل 3 ثوانٍ');
+  setInterval(pollAllDoors, 3000);
+}, 5000);
+
+
 
 
 
