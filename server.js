@@ -1143,11 +1143,10 @@ async function pollAllDoors() {
         data.result.forEach(s => { sm[s.code] = s.value; });
         const r1 = sm['switch_1'] === true  || sm['switch_1'] === 'true'  || sm['switch_1'] === 1;
         const r2 = sm['switch_2'] === true  || sm['switch_2'] === 'true'  || sm['switch_2'] === 1;
-        const stateStr = r1 ? 'open' : r2 ? 'close' : 'idle';
-        console.log(`[Polling] ${door.name} → ${stateStr} (R1=${r1} R2=${r2}) prev=${JSON.stringify(prev)} changed=${!prev || prev.r1 !== r1 || prev.r2 !== r2}`);
-
         const prev    = doorStateCache.get(door.device_id);
         const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
+        const stateStr = r1 ? 'open' : r2 ? 'close' : 'idle';
+        console.log(`[Polling] ${door.name} → ${stateStr} R1=${r1} R2=${r2} changed=${changed}`);
 
         // دائماً حدّث الـ cache
         doorStateCache.set(door.device_id, { r1, r2 });
