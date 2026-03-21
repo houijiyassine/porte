@@ -500,7 +500,10 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
     if (result && !result.success)
       return res.status(500).json({ error: result.msg });
 
-    // سجّل العملية
+    // تسجيل أن الأمر جاء من التطبيق (للـ Webhook)
+    markAppAction(deviceId, req.user.id, req.user.name, action);
+    // سجّل العملية — سيُسجّل الآن عبر Webhook تلقائياً
+    // لكن نحتفظ بسجل مباشر كـ fallback
     const deviceId2 = req.body.deviceId || TUYA.DEVICE_ID;
     const { data: doorData } = await supabase.from('doors').select('id').eq('device_id', deviceId2).single();
     await supabase.from('door_logs').insert({
@@ -983,6 +986,98 @@ app.post('/api/device/fingerprint', authMiddleware, async (req, res) => {
     }
     res.json({ ok: true });
   } catch(e) { res.json({ ok: false }); }
+});
+
+
+// ─── Tuya Webhook ────────────────────────────────────────────────────────────
+// تتبع آخر أمر صدر من التطبيق لكل جهاز
+const appLastAction = new Map(); // deviceId → { action, userId, userName, time }
+
+// يُستدعى عند إرسال أمر من التطبيق
+function markAppAction(deviceId, userId, userName, action) {
+  appLastAction.set(deviceId, {
+    action, userId, userName,
+    time: Date.now(),
+  });
+}
+
+app.post('/api/tuya/webhook', async (req, res) => {
+  try {
+    const t     = req.headers['t'] || '';
+    const sign  = req.headers['sign'] || '';
+    const nonce = req.headers['nonce'] || '';
+    const body  = JSON.stringify(req.body);
+
+    // التحقق من التوقيع
+    const strToSign = TUYA.CLIENT_ID + t + nonce + body;
+    const expected  = crypto.createHmac('sha256', TUYA.SECRET)
+      .update(strToSign).digest('hex').toUpperCase();
+    if (sign && sign !== expected) {
+      return res.status(401).json({ code: 'SIGN_INVALID' });
+    }
+
+    const event = req.body;
+    console.log('[Tuya Webhook]', JSON.stringify(event).slice(0, 200));
+
+    if (event.devId) {
+      const deviceId = event.devId;
+      const status   = event.status || [];
+
+      const { data: door } = await supabase
+        .from('doors').select('id,inst_id,name').eq('device_id', deviceId).single();
+
+      if (door) {
+        const state = {};
+        status.forEach(s => { state[s.code] = s.value; });
+
+        const r1 = state['switch_1'] === true || state['switch_1'] === 'true';
+        const r2 = state['switch_2'] === true || state['switch_2'] === 'true';
+
+        let doorAction = 'idle';
+        if (r1) doorAction = 'open';
+        else if (r2) doorAction = 'close';
+
+        // ─── هل الأمر جاء من التطبيق أم من RC؟ ───
+        const lastApp = appLastAction.get(deviceId);
+        const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000; // خلال 15 ثانية
+        const source = isFromApp ? 'app' : 'rc';
+
+        // تسجيل في door_logs فقط عند تغيير حقيقي (R1 أو R2 = ON)
+        if (r1 || r2) {
+          await supabase.from('door_logs').insert({
+            door_id:    door.id,
+            inst_id:    door.inst_id,
+            user_id:    isFromApp ? lastApp.userId : null,
+            value:      doorAction,
+            source:     isFromApp ? lastApp.userName : 'RC (جهاز تحكم)',
+            created_at: new Date().toISOString(),
+          });
+
+          if (!isFromApp) {
+            console.log(`[Webhook] 📻 RC فتح الباب ${door.name}`);
+          }
+        }
+
+        // إرسال للعملاء عبر WebSocket
+        broadcast({
+          type:     'door_state',
+          deviceId:  deviceId,
+          doorId:    door.id,
+          instId:    door.inst_id,
+          r1_on:     r1,
+          r2_on:     r2,
+          state:     doorAction,
+          source:    source,
+          timestamp: Date.now(),
+        });
+      }
+    }
+
+    res.json({ success: true });
+  } catch(err) {
+    console.error('[Webhook Error]', err.message);
+    res.status(200).json({ success: true });
+  }
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
