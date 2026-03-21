@@ -1073,205 +1073,6 @@ app.post('/api/tuya/webhook', async (req, res) => {
 
 // ─── Door Status Polling ──────────────────────────────────────────────────────
 
-async function pollAllDoors() {
-  try {
-    const { data: doors } = await supabase
-      .from('doors')
-      .select('id,inst_id,name,device_id')
-      .eq('is_active', true);
-
-    if (!doors || !doors.length) return;
-
-    for (const door of doors) {
-      try {
-        const token   = await getTuyaToken();
-        const t       = Date.now().toString();
-        const nonce   = crypto.randomBytes(8).toString('hex');
-        const urlPath = `/v1.0/devices/${door.device_id}/status`;
-        const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
-
-        const r = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
-          method: 'GET',
-          headers: {
-            'client_id': TUYA.CLIENT_ID, 'access_token': token,
-            'sign': sign, 't': t, 'nonce': nonce,
-            'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
-          },
-        });
-        const data = await r.json();
-        if (!data.result) continue;
-
-        // استخراج R1 و R2
-        const statusMap = {};
-        data.result.forEach(s => { statusMap[s.code] = s.value; });
-        const r1 = statusMap['switch_1'] === true;
-        const r2 = statusMap['switch_2'] === true;
-
-        // فحص التغيير
-        const prev = doorStateCache.get(door.device_id);
-        const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
-
-        if (changed) {
-          doorStateCache.set(door.device_id, { r1, r2 });
-
-          let doorAction = 'idle';
-          if (r1) doorAction = 'open';
-          else if (r2) doorAction = 'close';
-
-          // هل التغيير جاء من RC؟
-          const lastApp  = appLastAction.get(door.device_id);
-          const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
-          const source   = isFromApp ? 'app' : 'rc';
-
-          // تسجيل في السجل إذا RC
-          if (!isFromApp && (r1 || r2)) {
-            await supabase.from('door_logs').insert({
-              door_id:    door.id,
-              inst_id:    door.inst_id,
-              user_id:    null,
-              value:      doorAction,
-              source:     'RC (جهاز تحكم)',
-              created_at: new Date().toISOString(),
-            }).catch(() => {});
-            console.log(`[Polling] 📻 RC → باب ${door.name}: ${doorAction}`);
-          }
-
-          // بث التغيير لكل المتصلين
-          broadcast({
-            type:      'door_state',
-            deviceId:  door.device_id,
-            doorId:    door.id,
-            instId:    door.inst_id,
-            r1_on:     r1,
-            r2_on:     r2,
-            state:     doorAction,
-            source:    source,
-            timestamp: Date.now(),
-          });
-        }
-      } catch(e) {
-        // تجاهل أخطاء جهاز واحد
-      }
-    }
-  } catch(e) {
-    console.error('[Polling Error]', e.message);
-  }
-}
-
-
-// ─── Tuya Message Queue ──────────────────────────────────────────────────────
-const doorStateCache = new Map();
-const appLastAction  = new Map();
-
-function markAppAction(deviceId, userId, userName, action) {
-  appLastAction.set(deviceId, { action, userId, userName, time: Date.now() });
-}
-
-async function handleTuyaEvent(event) {
-  try {
-    const deviceId = event.devId || event.bizData?.devId;
-    const status   = event.status || event.bizData?.status || [];
-    if (!deviceId || !status.length) return;
-
-    const { data: door } = await supabase
-      .from('doors').select('id,inst_id,name').eq('device_id', deviceId).single();
-    if (!door) return;
-
-    const statusMap = {};
-    status.forEach(s => { statusMap[s.code] = s.value; });
-    const r1 = statusMap['switch_1'] === true || statusMap['switch_1'] === 'true';
-    const r2 = statusMap['switch_2'] === true || statusMap['switch_2'] === 'true';
-
-    const prev    = doorStateCache.get(deviceId);
-    const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
-    if (!changed) return;
-    doorStateCache.set(deviceId, { r1, r2 });
-
-    const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
-    const lastApp    = appLastAction.get(deviceId);
-    const isFromApp  = lastApp && (Date.now() - lastApp.time) < 15000;
-
-    if (!isFromApp && (r1 || r2)) {
-      await supabase.from('door_logs').insert({
-        door_id: door.id, inst_id: door.inst_id,
-        value: doorAction, source: 'RC (جهاز تحكم)',
-        created_at: new Date().toISOString(),
-      }).catch(() => {});
-      console.log(`[MQ] 📻 RC → ${door.name}: ${doorAction}`);
-    }
-
-    broadcast({
-      type: 'door_state', deviceId, doorId: door.id,
-      instId: door.inst_id, r1_on: r1, r2_on: r2,
-      state: doorAction, source: isFromApp ? 'app' : 'rc',
-      timestamp: Date.now(),
-    });
-  } catch(e) {
-    console.error('[MQ Event Error]', e.message);
-  }
-}
-
-async function pollAllDoors() {
-  try {
-    const { data: doors } = await supabase
-      .from('doors').select('id,inst_id,name,device_id').eq('is_active', true);
-    if (!doors?.length) return;
-
-    for (const door of doors) {
-      try {
-        const token   = await getTuyaToken();
-        const t       = Date.now().toString();
-        const nonce   = crypto.randomBytes(8).toString('hex');
-        const urlPath = `/v1.0/devices/${door.device_id}/status`;
-        const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
-
-        const r = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
-          method: 'GET',
-          headers: {
-            'client_id': TUYA.CLIENT_ID, 'access_token': token,
-            'sign': sign, 't': t, 'nonce': nonce,
-            'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
-          },
-        });
-        const data = await r.json();
-        if (!data.result) continue;
-
-        const statusMap = {};
-        data.result.forEach(s => { statusMap[s.code] = s.value; });
-        const r1 = statusMap['switch_1'] === true;
-        const r2 = statusMap['switch_2'] === true;
-
-        const prev    = doorStateCache.get(door.device_id);
-        const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
-        if (!changed) continue;
-
-        doorStateCache.set(door.device_id, { r1, r2 });
-        const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
-        const lastApp    = appLastAction.get(door.device_id);
-        const isFromApp  = lastApp && (Date.now() - lastApp.time) < 15000;
-
-        if (!isFromApp && (r1 || r2)) {
-          await supabase.from('door_logs').insert({
-            door_id: door.id, inst_id: door.inst_id,
-            value: doorAction, source: 'RC (جهاز تحكم)',
-            created_at: new Date().toISOString(),
-          }).catch(() => {});
-          console.log(`[Polling] 📻 RC → ${door.name}: ${doorAction}`);
-        }
-
-        broadcast({
-          type: 'door_state', deviceId: door.device_id, doorId: door.id,
-          instId: door.inst_id, r1_on: r1, r2_on: r2,
-          state: doorAction, source: isFromApp ? 'app' : 'rc',
-          timestamp: Date.now(),
-        });
-      } catch(e) {}
-    }
-  } catch(e) {
-    console.error('[Polling Error]', e.message);
-  }
-}
-
 // استخدام Polling مباشرة — موثوق وبسيط
 setTimeout(function() {
   console.log('[Polling] ✅ بدأ مراقبة الأبواب كل 3 ثوانٍ');
@@ -1281,6 +1082,72 @@ setTimeout(function() {
 
 
 
+
+
+// ─── Door Tracking ────────────────────────────────────────────────────────────
+const doorStateCache = new Map();
+const appLastAction  = new Map();
+
+function markAppAction(deviceId, userId, userName, action) {
+  appLastAction.set(deviceId, { action, userId, userName, time: Date.now() });
+}
+
+async function pollAllDoors() {
+  try {
+    const { data: doors } = await supabase
+      .from('doors').select('id,inst_id,name,device_id').eq('is_active', true);
+    if (!doors?.length) return;
+    for (const door of doors) {
+      try {
+        const token   = await getTuyaToken();
+        const t       = Date.now().toString();
+        const nonce   = crypto.randomBytes(8).toString('hex');
+        const urlPath = `/v1.0/devices/${door.device_id}/status`;
+        const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
+        const r = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
+          method: 'GET',
+          headers: {
+            'client_id': TUYA.CLIENT_ID, 'access_token': token,
+            'sign': sign, 't': t, 'nonce': nonce,
+            'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
+          },
+        });
+        const data = await r.json();
+        if (!data.result) continue;
+        const sm = {};
+        data.result.forEach(s => { sm[s.code] = s.value; });
+        const r1 = sm['switch_1'] === true || sm['switch_1'] === 'true';
+        const r2 = sm['switch_2'] === true || sm['switch_2'] === 'true';
+        const prev    = doorStateCache.get(door.device_id);
+        const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
+        if (!changed) continue;
+        doorStateCache.set(door.device_id, { r1, r2 });
+        const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
+        const lastApp    = appLastAction.get(door.device_id);
+        const isFromApp  = lastApp && (Date.now() - lastApp.time) < 15000;
+        if (!isFromApp && (r1 || r2)) {
+          await supabase.from('door_logs').insert({
+            door_id: door.id, inst_id: door.inst_id,
+            value: doorAction, source: 'RC (جهاز تحكم)',
+            created_at: new Date().toISOString(),
+          }).catch(() => {});
+          console.log(`[Polling] 📻 RC → ${door.name}: ${doorAction}`);
+        }
+        broadcast({
+          type: 'door_state', deviceId: door.device_id,
+          doorId: door.id, instId: door.inst_id,
+          r1_on: r1, r2_on: r2, state: doorAction,
+          source: isFromApp ? 'app' : 'rc', timestamp: Date.now(),
+        });
+      } catch(e) {}
+    }
+  } catch(e) { console.error('[Polling Error]', e.message); }
+}
+
+setTimeout(function() {
+  console.log('[Polling] ✅ بدأ مراقبة الأبواب كل 3 ثوانٍ');
+  setInterval(pollAllDoors, 3000);
+}, 5000);
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
