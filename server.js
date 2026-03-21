@@ -300,6 +300,51 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
     const deviceId   = req.body.deviceId || TUYA.DEVICE_ID;
     const duration   = req.body.duration || DEFAULT_DURATION;
 
+    // التحقق من القيود حسب الدور
+    const role = req.user.role;
+    if (role === 'user' || role === 'admin') {
+      const { data: door } = await supabase.from('doors')
+        .select('gps,schedule,inst_id').eq('device_id', deviceId).single();
+
+      if (door) {
+        // تحديد هل GPS مطلوب لهذا الدور
+        const gpsRequired = role === 'user' ? door.gps?.user_required : door.gps?.admin_required;
+
+        if (gpsRequired && door.gps?.lat && door.gps?.lng) {
+          const userLat = parseFloat(req.body.lat);
+          const userLng = parseFloat(req.body.lng);
+          if (!userLat || !userLng) {
+            return res.status(403).json({ error: 'يجب تفعيل GPS للوصول إلى هذا الباب', code: 'GPS_REQUIRED' });
+          }
+          const R = 6371000;
+          const dLat = (userLat - door.gps.lat) * Math.PI / 180;
+          const dLng = (userLng - door.gps.lng) * Math.PI / 180;
+          const a = Math.sin(dLat/2)**2 + Math.cos(door.gps.lat*Math.PI/180) * Math.cos(userLat*Math.PI/180) * Math.sin(dLng/2)**2;
+          const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          if (distance > (door.gps.range || 100)) {
+            return res.status(403).json({ error: `أنت بعيد عن الباب (${Math.round(distance)}م). النطاق المسموح: ${door.gps.range}م`, code: 'GPS_OUT_OF_RANGE' });
+          }
+        }
+
+        // التحقق من الجدول — للمستخدم فقط
+        if (role === 'user' && door.schedule && Object.keys(door.schedule).length > 0) {
+          const now = new Date();
+          const dayMap = [1,2,3,4,5,6,0];
+          const dayIndex = dayMap[now.getDay()];
+          const daySchedule = door.schedule[dayIndex];
+          if (daySchedule && !daySchedule.enabled) {
+            return res.status(403).json({ error: 'الباب غير مسموح به اليوم', code: 'SCHEDULE_DENIED' });
+          }
+          if (daySchedule?.enabled && daySchedule.start && daySchedule.end) {
+            const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+            if (timeStr < daySchedule.start || timeStr > daySchedule.end) {
+              return res.status(403).json({ error: `الباب مسموح به من ${daySchedule.start} إلى ${daySchedule.end} فقط`, code: 'SCHEDULE_OUT_OF_RANGE' });
+            }
+          }
+        }
+      }
+    }
+
     let result;
     if      (action === 'open')   result = await openDoor(deviceId, duration);
     else if (action === 'open40') result = await openDoor(deviceId, 40);
@@ -634,6 +679,17 @@ app.get('/api/device/status/:deviceId', authMiddleware, async (req, res) => {
   } catch (err) {
     res.json({ success: false, online: false });
   }
+});
+
+
+// السوبر أدمن يرى كلمة المرور
+app.get('/api/users/:id/pw', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin')
+    return res.status(403).json({ error: 'غير مسموح' });
+  try {
+    const { data } = await supabase.from('users').select('pw_hash,name').eq('id', req.params.id).single();
+    res.json({ pw_hash: data?.pw_hash, note: 'هذا هو الـ hash SHA-256 لكلمة المرور' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
