@@ -461,9 +461,12 @@
   <header class="header">
     <div class="header-logo">P<span>O</span>RTE</div>
     <div class="header-user">
-      <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()" title="Mode Sombre/Clair">🌙</button>
       <span class="role-badge" id="header-role-badge"></span>
-      <div class="header-avatar" id="header-avatar" onclick="showLogout()">؟</div>
+      <div class="header-avatar" id="header-avatar">؟</div>
+      <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()" title="Mode Sombre/Clair">🌙</button>
+      <button onclick="logout()" title="تسجيل الخروج" style="width:36px;height:36px;border-radius:50%;background:rgba(255,61,113,0.1);border:1px solid rgba(255,61,113,0.2);cursor:pointer;display:flex;align-items:center;justify-content:center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" width="16" height="16"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+      </button>
     </div>
   </header>
 
@@ -584,6 +587,19 @@
     <div class="page-title">مواقع <span>المستخدمين</span></div>
     <div id="map-container"></div>
     <div id="map-users-list"></div>
+  </div>
+
+  <!-- ── STATS ── -->
+  <div class="page" id="page-stats">
+    <div class="page-title">ال<span>إحصائيات</span></div>
+    <div id="stats-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px"></div>
+    <div id="stats-chart-section"></div>
+  </div>
+
+  <!-- ── ALERTS ── -->
+  <div class="page" id="page-alerts">
+    <div class="page-title">🔔 <span>التنبيهات</span></div>
+    <div id="alerts-list"></div>
   </div>
 
   <!-- ── BOTTOM NAV ── -->
