@@ -62,9 +62,6 @@ async function doLogin() {
 function bootApp() {
   document.getElementById('main-app').style.display = 'block';
 
-  const initials = user.name.split(' ').map(n=>n[0]).join('').slice(0,2);
-  document.getElementById('header-avatar').textContent = initials;
-
   const roleBadge = document.getElementById('header-role-badge');
   const roleLabels = { user:'مستخدم', admin:'مدير', super_admin:'سوبر أدمن' };
   roleBadge.textContent = roleLabels[user.role] || user.role;
@@ -126,6 +123,11 @@ function bootApp() {
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('page-institutes').classList.add('active');
     startUserLocationTracking();
+    // إخفاء عناصر غير ضرورية للمستخدم
+    var addBtn = document.getElementById('inst-add-btn');
+    if (addBtn) addBtn.style.display = 'none';
+    var pageTitle = document.querySelector('#page-institutes .page-title');
+    if (pageTitle) pageTitle.style.display = 'none';
     loadUserDoors();
   }
 }
@@ -334,7 +336,7 @@ async function loadUsersForSuperAdmin() {
         '</div>';
 
       card.addEventListener('click', function() {
-        openInstUsersList(inst.id, inst.name);
+        openInstUsers(inst.id, inst.name);
       });
       container.appendChild(card);
     });
@@ -676,7 +678,7 @@ function renderInstList(insts) {
     btnUsers.title = 'مستخدمو المؤسسة';
     btnUsers.onclick = function(e) {
       e.stopPropagation();
-      openInstUsersList(inst.id, inst.name);
+      openInstUsers(inst.id, inst.name);
     };
 
     btns.appendChild(btnUsers);
@@ -1254,28 +1256,78 @@ async function deleteUser(userId, instId, instName) {
 
 // ─── User Interface ────────────────────────────────────
 let userLocation = null;
+let userLocationWatcher = null;
 
 function startUserLocationTracking() {
   if (!navigator.geolocation) return;
-  var opts = { enableHighAccuracy: true, timeout: 10000 };
-  var update = function() {
+
+  function sendLocation() {
     navigator.geolocation.getCurrentPosition(
       function(pos) {
-        userLocation = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy
-        };
-        // إرسال الموقع للسيرفر عبر WebSocket
-        if (ws && ws.readyState === 1) {
-          ws.send(JSON.stringify({ type: 'location', coords: userLocation }));
-        }
+        userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+        if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'location', coords: userLocation }));
+        updateAllGpsBadges();
       },
-      function() {}
-    , opts);
-  };
-  update();
-  setInterval(update, 30000);
+      function() {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 }
+    );
+  }
+
+  // أول مرة عند فتح التطبيق
+  sendLocation();
+
+  // كل 5 دقائق طالما التطبيق مفتوح
+  setInterval(sendLocation, 5 * 60 * 1000);
+}
+
+// جلب الموقع عند الضغط على زر — دقة عالية لمرة واحدة
+function getUserLocationOnDemand(callback) {
+  if (!navigator.geolocation) { callback(null); return; }
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'location', coords: userLocation }));
+      updateAllGpsBadges();
+      callback(userLocation);
+    },
+    function() { callback(userLocation); }, // استخدم الأخير المتاح
+    { enableHighAccuracy: true, timeout: 6000, maximumAge: 30000 }
+  );
+}
+
+function updateAllGpsBadges() {
+  document.querySelectorAll('[data-door-id]').forEach(function(doorEl) {
+    var doorId = doorEl.getAttribute('data-door-id');
+    var gpsBadge = document.getElementById('gps-badge-' + doorId);
+    var timeBadge = document.getElementById('time-badge-' + doorId);
+    if (gpsBadge) updateGpsBadge(gpsBadge, doorEl);
+    if (timeBadge) updateTimeBadge(timeBadge, doorEl);
+  });
+}
+
+function getDistanceMeters(lat1, lng1, lat2, lng2) {
+  var R = 6371000;
+  var dLat = (lat2-lat1) * Math.PI/180;
+  var dLng = (lng2-lng1) * Math.PI/180;
+  var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+          Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+          Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function checkTimeAllowed(schedule) {
+  if (!schedule || !Object.keys(schedule).length) return { allowed: true, reason: '' };
+  var now = new Date();
+  var dayMap = [1,2,3,4,5,6,0]; // الاثنين=0 ... الأحد=6
+  var dayIndex = dayMap[now.getDay()];
+  var daySched = schedule[dayIndex];
+  if (!daySched) return { allowed: true, reason: '' };
+  if (!daySched.enabled) return { allowed: false, reason: 'غير مسموح اليوم' };
+  var timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  if (timeStr < daySched.start || timeStr > daySched.end) {
+    return { allowed: false, reason: daySched.start + ' — ' + daySched.end };
+  }
+  return { allowed: true, reason: daySched.start + ' — ' + daySched.end };
 }
 
 async function loadUserDoors() {
@@ -1291,22 +1343,47 @@ async function loadUserDoors() {
     }
     container.innerHTML = '';
 
-    // عنوان المؤسسة
-    var instTitle = document.createElement('div');
-    instTitle.style.cssText = 'text-align:center;margin-bottom:20px';
-    instTitle.innerHTML = '<div style="font-size:1rem;font-weight:800;color:var(--accent)">🏫 ' + inst.name + '</div>';
-    container.appendChild(instTitle);
+    // بطاقة معلومات المستخدم
+    var userCard = document.createElement('div');
+    userCard.style.cssText = 'background:linear-gradient(135deg,rgba(0,212,255,0.1),rgba(124,92,252,0.1));border:1px solid rgba(0,212,255,0.2);border-radius:20px;padding:18px 20px;margin-bottom:20px';
+    userCard.innerHTML =
+      '<div style="display:flex;align-items:center;gap:14px">' +
+        '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:900;color:#000">' +
+          (user.name||'?').split(' ').map(function(n){return n[0];}).join('').slice(0,2).toUpperCase() +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:1rem;font-weight:800">' + (user.name||'') + '</div>' +
+          '<div style="font-size:0.78rem;color:var(--muted);margin-top:2px">🏫 ' + inst.name + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--accent);margin-top:2px">📱 ' + (user.phone||'') + '</div>' +
+        '</div>' +
+      '</div>';
+    container.appendChild(userCard);
 
+    // الأبواب
     inst.doors.forEach(function(door) {
+      var gpsRange  = (door.gps && door.gps.range !== undefined) ? door.gps.range : 100;
+      var gpsLat    = door.gps && door.gps.lat;
+      var gpsLng    = door.gps && door.gps.lng;
+      var userReq   = door.gps && door.gps.user_required;
+      var schedule  = door.schedule || {};
+      var timeCheck = checkTimeAllowed(schedule);
+      var DAYS_LABELS = ['الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت','الأحد'];
+
       var card = document.createElement('div');
+      card.setAttribute('data-door-id', door.id);
+      card.setAttribute('data-gps-lat', gpsLat||'');
+      card.setAttribute('data-gps-lng', gpsLng||'');
+      card.setAttribute('data-gps-range', gpsRange);
+      card.setAttribute('data-gps-req', userReq?'1':'0');
+      card.setAttribute('data-schedule', JSON.stringify(schedule));
       card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;margin-bottom:16px;position:relative;overflow:hidden';
 
-      // خط جانبي
+      // خط جانبي ديناميكي
       var line = document.createElement('div');
-      line.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--accent),var(--accent2))';
+      line.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--accent),var(--accent2))';
       card.appendChild(line);
 
-      // Header: اسم + En ligne
+      // Header
       var hdr = document.createElement('div');
       hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
       hdr.innerHTML =
@@ -1318,34 +1395,92 @@ async function loadUserDoors() {
       card.appendChild(hdr);
 
       // حالة الباب
-      var state = document.createElement('div');
-      state.id = 'user-state-' + door.id;
-      state.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border-radius:10px;margin-bottom:14px;font-weight:600;font-size:0.9rem';
-      state.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:var(--muted);display:inline-block"></span><span style="color:var(--muted)">جاري التحقق...</span>';
-      card.appendChild(state);
+      var stateEl = document.createElement('div');
+      stateEl.id = 'user-state-' + door.id;
+      stateEl.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border-radius:10px;margin-bottom:12px;font-weight:700;font-size:0.9rem;color:var(--muted)';
+      stateEl.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:var(--muted);display:inline-block"></span>جاري التحقق...';
+      card.appendChild(stateEl);
 
-      // أزرار
+      // ─── شارات GPS + وقت ───
+      var badges = document.createElement('div');
+      badges.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px';
+
+      // GPS Badge
+      var gpsBadge = document.createElement('div');
+      gpsBadge.id = 'gps-badge-' + door.id;
+      if (userReq && gpsLat && gpsLng) {
+        gpsBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);font-size:0.78rem;font-weight:700;text-align:center';
+        gpsBadge.textContent = '📍 جاري تحديد موقعك...';
+      } else if (userReq && (!gpsLat || !gpsLng)) {
+        gpsBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(255,179,0,0.1);border:1px solid rgba(255,179,0,0.2);font-size:0.78rem;font-weight:700;text-align:center;color:var(--warning)';
+        gpsBadge.textContent = '📍 لم يُحدد موقع الباب';
+      } else {
+        gpsBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.15);font-size:0.78rem;font-weight:700;text-align:center;color:var(--success)';
+        gpsBadge.textContent = '📍 GPS غير مطلوب';
+      }
+      badges.appendChild(gpsBadge);
+
+      // Time Badge
+      var timeBadge = document.createElement('div');
+      timeBadge.id = 'time-badge-' + door.id;
+      if (Object.keys(schedule).length === 0) {
+        timeBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.15);font-size:0.78rem;font-weight:700;text-align:center;color:var(--success)';
+        timeBadge.textContent = '⏰ متاح دائماً';
+      } else if (timeCheck.allowed) {
+        timeBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.15);font-size:0.78rem;font-weight:700;text-align:center;color:var(--success)';
+        timeBadge.innerHTML = '⏰ متاح<br><span style="font-size:0.68rem;font-weight:600">' + timeCheck.reason + '</span>';
+      } else {
+        timeBadge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(255,61,113,0.08);border:1px solid rgba(255,61,113,0.15);font-size:0.78rem;font-weight:700;text-align:center;color:var(--danger)';
+        timeBadge.innerHTML = '⛔ مغلق الآن<br><span style="font-size:0.68rem;font-weight:600">' + (timeCheck.reason||'خارج أوقات العمل') + '</span>';
+      }
+      badges.appendChild(timeBadge);
+
+      card.appendChild(badges);
+
+      // جدول الأوقات المسموحة
+      if (Object.keys(schedule).length > 0) {
+        var now = new Date();
+        var dayMap = [1,2,3,4,5,6,0];
+        var todayIdx = dayMap[now.getDay()];
+        var schedEl = document.createElement('div');
+        schedEl.style.cssText = 'background:var(--surface2);border-radius:12px;padding:12px;margin-bottom:12px';
+        var schedHtml = '<div style="font-size:0.75rem;font-weight:700;color:var(--muted);margin-bottom:8px">📅 جدول الأوقات</div>';
+        DAYS_LABELS.forEach(function(day, i) {
+          var d = schedule[i];
+          var isToday = i === todayIdx;
+          if (!d) return;
+          schedHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;' + (isToday?'font-weight:700;color:var(--accent)':'color:var(--muted)') + ';font-size:0.78rem">' +
+            '<span>' + (isToday?'▶ ':'') + day + '</span>' +
+            '<span>' + (d.enabled ? d.start+' — '+d.end : '<span style="color:var(--danger)">مغلق</span>') + '</span>' +
+            '</div>';
+        });
+        schedEl.innerHTML = schedHtml;
+        card.appendChild(schedEl);
+      }
+
+      // أزرار التحكم
       var btns = document.createElement('div');
-      btns.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px';
-
-      var bOpen = document.createElement('button');
-      bOpen.style.cssText = 'padding:16px;border-radius:14px;border:1px solid rgba(0,230,118,0.3);background:rgba(0,230,118,0.1);color:var(--success);font-family:Cairo,sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer';
-      bOpen.innerHTML = '🟢 فتح';
-      bOpen.addEventListener('click', (function(d){ return function(){ userDoorAction(d,'open'); }; })(door));
-
-      var bClose = document.createElement('button');
-      bClose.style.cssText = 'padding:16px;border-radius:14px;border:1px solid rgba(255,61,113,0.3);background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer';
-      bClose.innerHTML = '🔴 غلق';
-      bClose.addEventListener('click', (function(d){ return function(){ userDoorAction(d,'close'); }; })(door));
-
-      btns.appendChild(bOpen);
-      btns.appendChild(bClose);
+      btns.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:8px';
+      [['🟢','فتح','open'],['🔴','غلق','close'],['🟡','إيقاف','stop'],['⏱','40ث','open40']].forEach(function(item) {
+        var btn = document.createElement('button');
+        btn.style.cssText = 'padding:14px 4px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:Cairo,sans-serif;font-weight:700;font-size:0.8rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;transition:all 0.15s';
+        btn.innerHTML = item[0] + '<span>' + item[1] + '</span>';
+        btn.addEventListener('click', (function(d, act) {
+          return function() { userDoorAction(d, act); };
+        })(door, item[2]));
+        btns.appendChild(btn);
+      });
       card.appendChild(btns);
       container.appendChild(card);
 
+      // جلب الحالة
       checkDoorStatus(door.device_id, 'user-online-' + door.id);
       fetchUserDoorState(door);
     });
+
+    // تحديث GPS badges بعد لحظة
+    setTimeout(updateAllGpsBadges, 1000);
+
   } catch(e) {
     container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
   }
@@ -1358,45 +1493,82 @@ async function fetchUserDoorState(door) {
     var data = await apiFetch('/api/door/status?deviceId=' + door.device_id);
     var r1 = data.r1_on, r2 = data.r2_on;
     var text, color;
-    if (r1)      { text = 'مفتوح';  color = 'var(--success)'; }
-    else if (r2) { text = 'مغلق';   color = 'var(--danger)';  }
-    else         { text = 'متوقف';  color = 'var(--muted)';   }
-    el.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span><span style="color:' + color + '">' + text + '</span>';
+    if (r1)      { text = '🔓 مفتوح';  color = 'var(--success)'; }
+    else if (r2) { text = '🔒 مغلق';   color = 'var(--danger)'; }
+    else         { text = '⏹ متوقف';  color = 'var(--muted)'; }
+    el.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' + text;
+    el.style.color = color;
   } catch(e) {
     el.innerHTML = '<span style="color:var(--muted)">—</span>';
   }
 }
 
+// تحديث GPS badge لباب محدد
+function updateGpsBadge(badge, doorEl) {
+  if (!badge || !doorEl) return;
+  var gpsReq = doorEl.getAttribute('data-gps-req') === '1';
+  var gpsLat = parseFloat(doorEl.getAttribute('data-gps-lat'));
+  var gpsLng = parseFloat(doorEl.getAttribute('data-gps-lng'));
+  var range  = parseFloat(doorEl.getAttribute('data-gps-range')) || 100;
+  if (!gpsReq) return;
+  if (!gpsLat || !gpsLng) return;
+  if (!userLocation) {
+    badge.style.cssText = 'padding:10px 12px;border-radius:12px;background:rgba(255,179,0,0.1);border:1px solid rgba(255,179,0,0.2);font-size:0.78rem;font-weight:700;text-align:center;color:var(--warning)';
+    badge.textContent = '📍 جاري التحديد...';
+    return;
+  }
+  var dist = Math.round(getDistanceMeters(userLocation.lat, userLocation.lng, gpsLat, gpsLng));
+  var inRange = dist <= range;
+  badge.style.cssText = 'padding:10px 12px;border-radius:12px;background:' +
+    (inRange ? 'rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.2)' : 'rgba(255,61,113,0.08);border:1px solid rgba(255,61,113,0.2)') +
+    ';font-size:0.78rem;font-weight:700;text-align:center;color:' + (inRange ? 'var(--success)' : 'var(--danger)');
+  badge.innerHTML = (inRange ? '✅ في النطاق' : '❌ خارج النطاق') + '<br><span style="font-size:0.68rem;font-weight:600">' + dist + 'م / ' + range + 'م</span>';
+}
+
+function updateTimeBadge(badge, doorEl) {
+  if (!badge) return;
+  var schedStr = doorEl.getAttribute('data-schedule');
+  try {
+    var sched = JSON.parse(schedStr);
+    var check = checkTimeAllowed(sched);
+    if (!Object.keys(sched).length) return;
+    badge.style.cssText = 'padding:10px 12px;border-radius:12px;background:' +
+      (check.allowed ? 'rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.15)' : 'rgba(255,61,113,0.08);border:1px solid rgba(255,61,113,0.15)') +
+      ';font-size:0.78rem;font-weight:700;text-align:center;color:' + (check.allowed ? 'var(--success)' : 'var(--danger)');
+    badge.innerHTML = (check.allowed ? '⏰ متاح' : '⛔ مغلق الآن') + '<br><span style="font-size:0.68rem;font-weight:600">' + (check.reason||'') + '</span>';
+  } catch(e) {}
+}
+
 async function userDoorAction(door, action) {
   var body = { action: action, deviceId: door.device_id, duration: door.duration_seconds || 5 };
-  // GPS مطلوب للمستخدم أو المدير حسب الإعداد
   var gpsNeeded = (user.role === 'user' && door.gps && door.gps.user_required) ||
                   (user.role === 'admin' && door.gps && door.gps.admin_required);
   if (gpsNeeded) {
-    if (!userLocation) {
-      toast('📍 يجب تفعيل GPS للوصول إلى هذا الباب', 'error');
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          function(pos) { userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; toast('تم تحديد موقعك، حاول مرة أخرى', 'info'); },
-          function() { toast('تعذر تحديد موقعك', 'error'); }
-        );
-      }
+    // جلب الموقع الحالي عند الضغط فقط
+    await new Promise(function(resolve) {
+      getUserLocationOnDemand(function(loc) {
+        if (loc) { body.lat = loc.lat; body.lng = loc.lng; }
+        resolve();
+      });
+    });
+    if (!body.lat) {
+      toast('📍 تعذر تحديد موقعك، تأكد من تفعيل GPS', 'error');
       return;
     }
-    body.lat = userLocation.lat;
-    body.lng = userLocation.lng;
   }
   try {
     await apiFetch('/api/door/control', 'POST', body);
-    toast(action === 'open' ? '✅ تم فتح الباب' : '✅ تم غلق الباب', 'success');
+    var labels = { open:'✅ تم الفتح', close:'✅ تم الغلق', stop:'✅ تم الإيقاف', open40:'✅ فتح 40 ثانية' };
+    toast(labels[action]||'✅ تم', 'success');
     setTimeout(function(){ fetchUserDoorState(door); }, 1500);
   } catch(e) {
-    var msg = e.message || 'خطأ غير معروف';
+    var msg = e.message || 'خطأ';
     if (msg.includes('GPS') || msg.includes('بعيد')) toast('📍 ' + msg, 'error');
     else if (msg.includes('وقت') || msg.includes('مسموح') || msg.includes('اليوم')) toast('⏰ ' + msg, 'error');
     else toast('❌ ' + msg, 'error');
   }
 }
+
 
 // ─── Admin Interface ───────────────────────────────────
 async function loadAdminDoors() {
@@ -1618,12 +1790,24 @@ async function loadStats() {
     const s = await apiFetch('/api/stats/full');
     const grid = document.getElementById('stats-grid');
     if (!grid) return;
+
+    // للسوبر أدمن: أضف إحصائيات المؤسسات
+    var extraItems = [];
+    if (user && user.role === 'super_admin') {
+      try {
+        const insts = await apiFetch('/api/institutes');
+        extraItems = [{ label:'المؤسسات', value: insts.length, color:'var(--warning)', icon:'🏫' }];
+      } catch(e) {}
+    }
+
     const items = [
       { label:'عمليات اليوم',  value: s.today_actions, color:'var(--accent)',  icon:'📊' },
       { label:'إجمالي الفتح',  value: s.total_opens,   color:'var(--success)', icon:'🔓' },
       { label:'التنبيهات',     value: s.alert_count,   color:'var(--danger)',  icon:'🔔' },
       { label:'المستخدمون',    value: s.active_users + '/' + s.total_users, color:'var(--accent2)', icon:'👥' },
-    ];
+    ].concat(extraItems);
+
+    grid.style.gridTemplateColumns = items.length === 5 ? 'repeat(3,1fr)' : '1fr 1fr';
     grid.innerHTML = items.map(function(item) {
       return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;text-align:center">' +
         '<div style="font-size:1.6rem;margin-bottom:6px">' + item.icon + '</div>' +
@@ -1684,6 +1868,33 @@ async function loadAlerts() {
   } catch(e) {
     container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:30px">' + e.message + '</p>';
   }
+}
+
+
+// ─── طلب موقع فوري ────────────────────────────────────
+async function requestUserLocationNow(userId, userName) {
+  toast('📡 جاري طلب موقع ' + userName + '...', 'info');
+  try {
+    const res = await apiFetch('/api/users/' + userId + '/request-location', 'POST', {});
+
+    if (res.success) {
+      // المستخدم متصل — انتظر الرد عبر WebSocket
+      toast('✅ تم إرسال الطلب لـ ' + userName + ' — سيظهر موقعه خلال ثوانٍ', 'success');
+      // بعد 5 ثوانٍ اعرض السجل
+      setTimeout(function() { showUserLocation(userId, userName); }, 5000);
+    } else if (res.offline) {
+      // المستخدم غير متصل
+      if (res.last_location) {
+        var ago = res.last_seen ? ' (آخر ظهور: ' + formatTime(res.last_seen) + ')' : '';
+        var open = confirm(userName + ' غير متصل الآن' + ago + '\nهل تريد رؤية آخر موقع معروف؟');
+        if (open) {
+          window.open('https://www.google.com/maps?q=' + res.last_location.lat + ',' + res.last_location.lng, '_blank');
+        }
+      } else {
+        toast('⚠️ ' + userName + ' غير متصل ولا يوجد موقع محفوظ', 'error');
+      }
+    }
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 // ─── Navigation ───────────────────────────────
