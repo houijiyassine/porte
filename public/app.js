@@ -1489,10 +1489,17 @@ async function loadAdminDoors() {
           '<div style="font-size:0.7rem;color:' + (userReq?'var(--success)':'var(--danger)') + ';margin-top:2px;font-weight:700">' + (userReq?'مفعّل ✅':'معطّل ❌') + '</div>' +
         '</div>' +
         '<label class="toggle-switch">' +
-          '<input type="checkbox" ' + (userReq?'checked':'') + ' onchange="toggleDoorGps('' + door.id + '','user_required',this.checked)">' +
+          '<input type="checkbox" ' + (userReq?'checked':'') + ' id="gps-toggle-' + door.id + '">' +
           '<span class="toggle-knob"></span>' +
         '</label>';
       card.appendChild(gpsToggle);
+      // إضافة event listener للـ toggle
+      (function(did, ureq) {
+        setTimeout(function() {
+          var chk = document.getElementById('gps-toggle-' + did);
+          if (chk) chk.addEventListener('change', function() { toggleDoorGps(did, 'user_required', this.checked); });
+        }, 50);
+      })(door.id, userReq);
 
       // أزرار السجل + الجدول
       var logRow = document.createElement('div');
