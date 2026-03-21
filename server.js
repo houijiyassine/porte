@@ -990,16 +990,6 @@ app.post('/api/device/fingerprint', authMiddleware, async (req, res) => {
 
 
 // ─── Tuya Webhook ────────────────────────────────────────────────────────────
-// تتبع آخر أمر صدر من التطبيق لكل جهاز
-const appLastAction = new Map(); // deviceId → { action, userId, userName, time }
-
-// يُستدعى عند إرسال أمر من التطبيق
-function markAppAction(deviceId, userId, userName, action) {
-  appLastAction.set(deviceId, {
-    action, userId, userName,
-    time: Date.now(),
-  });
-}
 
 app.post('/api/tuya/webhook', async (req, res) => {
   try {
@@ -1082,8 +1072,6 @@ app.post('/api/tuya/webhook', async (req, res) => {
 
 
 // ─── Door Status Polling ──────────────────────────────────────────────────────
-// يتحقق من حالة جميع الأبواب كل 3 ثوانٍ ويبث التغييرات عبر WebSocket
-const doorStateCache = new Map(); // deviceId → { r1, r2 }
 
 async function pollAllDoors() {
   try {
