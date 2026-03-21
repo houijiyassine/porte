@@ -1080,6 +1080,222 @@ app.post('/api/tuya/webhook', async (req, res) => {
   }
 });
 
+
+// ─── Door Status Polling ──────────────────────────────────────────────────────
+// يتحقق من حالة جميع الأبواب كل 3 ثوانٍ ويبث التغييرات عبر WebSocket
+const doorStateCache = new Map(); // deviceId → { r1, r2 }
+
+async function pollAllDoors() {
+  try {
+    const { data: doors } = await supabase
+      .from('doors')
+      .select('id,inst_id,name,device_id')
+      .eq('is_active', true);
+
+    if (!doors || !doors.length) return;
+
+    for (const door of doors) {
+      try {
+        const token   = await getTuyaToken();
+        const t       = Date.now().toString();
+        const nonce   = crypto.randomBytes(8).toString('hex');
+        const urlPath = `/v1.0/devices/${door.device_id}/status`;
+        const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
+
+        const r = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
+          method: 'GET',
+          headers: {
+            'client_id': TUYA.CLIENT_ID, 'access_token': token,
+            'sign': sign, 't': t, 'nonce': nonce,
+            'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
+          },
+        });
+        const data = await r.json();
+        if (!data.result) continue;
+
+        // استخراج R1 و R2
+        const statusMap = {};
+        data.result.forEach(s => { statusMap[s.code] = s.value; });
+        const r1 = statusMap['switch_1'] === true;
+        const r2 = statusMap['switch_2'] === true;
+
+        // فحص التغيير
+        const prev = doorStateCache.get(door.device_id);
+        const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
+
+        if (changed) {
+          doorStateCache.set(door.device_id, { r1, r2 });
+
+          let doorAction = 'idle';
+          if (r1) doorAction = 'open';
+          else if (r2) doorAction = 'close';
+
+          // هل التغيير جاء من RC؟
+          const lastApp  = appLastAction.get(door.device_id);
+          const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
+          const source   = isFromApp ? 'app' : 'rc';
+
+          // تسجيل في السجل إذا RC
+          if (!isFromApp && (r1 || r2)) {
+            await supabase.from('door_logs').insert({
+              door_id:    door.id,
+              inst_id:    door.inst_id,
+              user_id:    null,
+              value:      doorAction,
+              source:     'RC (جهاز تحكم)',
+              created_at: new Date().toISOString(),
+            }).catch(() => {});
+            console.log(`[Polling] 📻 RC → باب ${door.name}: ${doorAction}`);
+          }
+
+          // بث التغيير لكل المتصلين
+          broadcast({
+            type:      'door_state',
+            deviceId:  door.device_id,
+            doorId:    door.id,
+            instId:    door.inst_id,
+            r1_on:     r1,
+            r2_on:     r2,
+            state:     doorAction,
+            source:    source,
+            timestamp: Date.now(),
+          });
+        }
+      } catch(e) {
+        // تجاهل أخطاء جهاز واحد
+      }
+    }
+  } catch(e) {
+    console.error('[Polling Error]', e.message);
+  }
+}
+
+
+// ─── Tuya Message Queue (Pulsar) ─────────────────────────────────────────────
+// يستقبل أحداث Tuya فور حدوثها بدون polling
+async function startTuyaMessageQueue() {
+  try {
+    // جلب بيانات الاشتراك من Tuya
+    const token   = await getTuyaToken();
+    const t       = Date.now().toString();
+    const nonce   = crypto.randomBytes(8).toString('hex');
+    const urlPath = '/v1.0/message/subscribe/open';
+    const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
+
+    const r = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
+      method: 'GET',
+      headers: {
+        'client_id': TUYA.CLIENT_ID, 'access_token': token,
+        'sign': sign, 't': t, 'nonce': nonce,
+        'sign_method': 'HMAC-SHA256', 'Content-Type': 'application/json',
+      },
+    });
+    const data = await r.json();
+
+    if (!data.result) {
+      console.log('[MQ] فشل جلب بيانات Pulsar:', data.msg);
+      console.log('[MQ] تفعيل Polling كـ fallback');
+      startPollingFallback();
+      return;
+    }
+
+    const { url, accessId, accessKey, topic } = data.result;
+    console.log('[MQ] بيانات Pulsar:', { url, topic });
+
+    // استيراد pulsar-client ديناميكياً
+    let Pulsar;
+    try {
+      Pulsar = (await import('pulsar-client')).default;
+    } catch(e) {
+      console.log('[MQ] pulsar-client غير مثبت — تفعيل Polling');
+      startPollingFallback();
+      return;
+    }
+
+    const client = new Pulsar.Client({ serviceUrl: url });
+    const consumer = await client.subscribe({
+      topic:            topic,
+      subscription:     'porte-sub-' + TUYA.CLIENT_ID,
+      subscriptionType: 'Shared',
+    });
+
+    console.log('[MQ] ✅ متصل بـ Tuya Message Queue');
+
+    // استقبال الرسائل
+    while (true) {
+      try {
+        const msg  = await consumer.receive();
+        const raw  = msg.getData().toString();
+        consumer.acknowledge(msg);
+
+        const event = JSON.parse(raw);
+        await handleTuyaEvent(event);
+      } catch(e) {
+        console.error('[MQ] خطأ في استقبال الرسالة:', e.message);
+      }
+    }
+  } catch(e) {
+    console.error('[MQ] خطأ في الاتصال:', e.message);
+    startPollingFallback();
+  }
+}
+
+async function handleTuyaEvent(event) {
+  try {
+    const deviceId = event.devId || event.bizData?.devId;
+    const status   = event.status || event.bizData?.status || [];
+    if (!deviceId || !status.length) return;
+
+    const { data: door } = await supabase
+      .from('doors').select('id,inst_id,name').eq('device_id', deviceId).single();
+    if (!door) return;
+
+    const statusMap = {};
+    status.forEach(s => { statusMap[s.code] = s.value; });
+    const r1 = statusMap['switch_1'] === true;
+    const r2 = statusMap['switch_2'] === true;
+
+    const prev    = doorStateCache.get(deviceId);
+    const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
+    if (!changed) return;
+
+    doorStateCache.set(deviceId, { r1, r2 });
+
+    const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
+    const lastApp    = appLastAction.get(deviceId);
+    const isFromApp  = lastApp && (Date.now() - lastApp.time) < 15000;
+
+    if (!isFromApp && (r1 || r2)) {
+      await supabase.from('door_logs').insert({
+        door_id: door.id, inst_id: door.inst_id,
+        value: doorAction, source: 'RC (جهاز تحكم)',
+        created_at: new Date().toISOString(),
+      }).catch(() => {});
+      console.log(`[MQ] 📻 RC → ${door.name}: ${doorAction}`);
+    }
+
+    broadcast({
+      type: 'door_state', deviceId, doorId: door.id,
+      instId: door.inst_id, r1_on: r1, r2_on: r2,
+      state: doorAction, source: isFromApp ? 'app' : 'rc',
+      timestamp: Date.now(),
+    });
+  } catch(e) {
+    console.error('[MQ Event Error]', e.message);
+  }
+}
+
+// Polling كـ fallback إذا فشل Pulsar
+function startPollingFallback() {
+  console.log('[Polling] بدأ مراقبة الأبواب كل 3 ثوانٍ');
+  setInterval(pollAllDoors, 3000);
+}
+
+// بدء الاتصال
+setTimeout(startTuyaMessageQueue, 3000);
+
+
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ─── Start ────────────────────────────────────────────────────────────────────
