@@ -1179,7 +1179,7 @@ async function startTuyaMessageQueue() {
     const token   = await getTuyaToken();
     const t       = Date.now().toString();
     const nonce   = crypto.randomBytes(8).toString('hex');
-    const urlPath = '/v1.0/message/subscribe/open';
+    const urlPath = '/v1.0/open-hub/access/config';
     const sign    = buildRequestSign({ token, t, nonce, method: 'GET', urlPath });
 
     const r = await fetch(`${TUYA.BASE_URL}${urlPath}`, {
@@ -1215,7 +1215,7 @@ async function startTuyaMessageQueue() {
     const client = new Pulsar.Client({ serviceUrl: url });
     const consumer = await client.subscribe({
       topic:            topic,
-      subscription:     'porte-sub-' + TUYA.CLIENT_ID,
+      subscription:     'y85me8yq7d3vvk7vghuy-sub',
       subscriptionType: 'Shared',
     });
 
