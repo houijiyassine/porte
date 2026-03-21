@@ -1200,11 +1200,19 @@ async function resetUserPw(userId, userName) {
       var pwData = await apiFetch('/api/users/' + userId + '/pw');
       if (pwData.pw) {
         var action = confirm(
-          'مستخدم: ' + (pwData.name || userName) + '\n' +
-          'كلمة المرور الحالية: ' + pwData.pw + '\n\n' +
+          '👤 ' + (pwData.name || userName) + '\n' +
+          '🔑 كلمة المرور الحالية: ' + pwData.pw + '\n\n' +
           'هل تريد تغييرها؟'
         );
         if (!action) return;
+      } else {
+        // pw_plain فارغ — المستخدم أُنشئ قبل التشفير
+        var cont = confirm(
+          '👤 ' + (pwData.name || userName) + '\n' +
+          '⚠️ كلمة المرور القديمة غير متوفرة\n(أُنشئ الحساب قبل تفعيل التشفير)\n\n' +
+          'هل تريد تعيين كلمة مرور جديدة؟'
+        );
+        if (!cont) return;
       }
     } catch(e) {}
   }
