@@ -1116,9 +1116,8 @@ async function checkDeviceOnline(deviceId) {
 
 async function pollAllDoors() {
   try {
-    const { data: doors, error: doorsErr } = await supabase
+    const { data: doors } = await supabase
       .from('doors').select('id,inst_id,name,device_id');
-    console.log('[Polling] أبواب:', doors?.length, doorsErr?.message);
     if (!doors?.length) return;
 
     for (const door of doors) {
@@ -1145,25 +1144,21 @@ async function pollAllDoors() {
         const r2 = sm['switch_2'] === true  || sm['switch_2'] === 'true'  || sm['switch_2'] === 1;
         const prev    = doorStateCache.get(door.device_id);
         const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
-        const stateStr = r1 ? 'open' : r2 ? 'close' : 'idle';
-        console.log(`[Polling] ${door.name} → ${stateStr} R1=${r1} R2=${r2} changed=${changed}`);
+        const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
 
         // دائماً حدّث الـ cache
         doorStateCache.set(door.device_id, { r1, r2 });
 
-        // بث تحديث الحالة دائماً (للواجهة)
-        const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
-        const lastApp    = appLastAction.get(door.device_id);
-        const isFromApp  = lastApp && (Date.now() - lastApp.time) < 15000;
+        const lastApp   = appLastAction.get(door.device_id);
+        const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
 
-        console.log(`[Polling] RC check: changed=${changed} isFromApp=${isFromApp} r1=${r1} r2=${r2} doorAction=${doorAction}`);
+        // كشف RC: تغيير لم يأتِ من التطبيق
         if (changed && !isFromApp && (r1 || r2)) {
-          const { error: insertErr } = await supabase.from('door_logs').insert({
+          await supabase.from('door_logs').insert({
             door_id: door.id, inst_id: door.inst_id,
             value: doorAction, source: 'RC (جهاز تحكم)',
             created_at: new Date().toISOString(),
           });
-          console.log(`[Polling] 📻 RC insert: ${insertErr ? insertErr.message : '✅ نجح'}`);
         }
 
         // بث تحديث الحالة فقط إذا تغيرت
@@ -1181,8 +1176,8 @@ async function pollAllDoors() {
 }
 
 setTimeout(function() {
-  console.log('[Polling] ✅ بدأ مراقبة الأبواب كل 3 ثوانٍ');
-  setInterval(pollAllDoors, 3000);
+  console.log('[Polling] ✅ بدأ مراقبة الأبواب كل ثانية');
+  setInterval(pollAllDoors, 1000);
 }, 5000);
 
 // مسار Webhook القديم كـ alias
