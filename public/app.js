@@ -167,33 +167,34 @@ function connectWS() {
 
         updateDoorStatusUI(rawState);
 
+        // ─── منطق التايمر والحالات ───
+        var curTimer  = doorTimers[doorId];
+        var timerAction = curTimer ? (curTimer.isOpen ? 'open' : 'close') : null;
+
         if (rawState === 'idle') {
           if (hasTimer) {
-            // أُوقف قبل انتهاء الوقت → جمّد الصورة
+            // جاء idle وتايمر شغال → إيقاف مبكر (RC أو يدوي)
             stopDoorTimer(doorId, imgEl, stateEl);
             updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
           }
           // لا تايمر → idle عابر من Tuya — نتجاهل
+
         } else {
-          if (msg.source === 'rc') {
-            // RC: شغّل أنيميشن بمدة الباب المحفوظة في DOM
+          // open أو close جديد
+          var isNewAction = !hasTimer || (timerAction !== rawState);
+
+          if (isNewAction) {
+            // حدث جديد (RC أو App جديد أو تعارض) → أوقف القديم وابدأ جديد
             _cancelDoorTimer(doorId);
-            var rcImgEl   = document.getElementById('door-img-'      + doorId);
-            var rcStateEl = document.getElementById('user-state-'    + doorId)
-                         || document.getElementById('door-progress-' + doorId);
-            // جلب مدة الباب من data-duration أو افتراضي 5
-            var rcDurEl = document.querySelector('[data-door-id="' + doorId + '"]');
-            var rcSecs  = rcDurEl ? parseInt(rcDurEl.getAttribute('data-duration') || '5') : 5;
-            var rcAction = rawState === 'open' ? 'open' : 'close';
-            startDoorTimer(doorId, rcImgEl, rcStateEl, rcSecs, rcAction);
-            updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
-          } else if (!hasTimer) {
-            // App أو polling بدون تايمر نشط → عرض ثابت
-            _cancelDoorTimer(doorId);
-            _drawDoorStatic(imgEl, stateEl, rawState);
+            var newImgEl   = document.getElementById('door-img-'      + doorId);
+            var newStateEl = document.getElementById('user-state-'    + doorId)
+                          || document.getElementById('door-progress-' + doorId);
+            var durEl  = document.querySelector('[data-door-id="' + doorId + '"]');
+            var newSecs = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
+            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           }
-          // إذا تايمر شغال من App → لا نتدخل
+          // نفس الحدث والتايمر شغال → لا نتدخل
         }
 
         // تحديث السجل إذا جاء من RC
