@@ -294,6 +294,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
   // هل يوجد تجميد سابق لنفس الاتجاه؟ نكمل منه
   var frozen   = doorFrozen[doorId];
   var startPct = (frozen && frozen.isOpen === isOpen) ? frozen.pct : 0;
+  console.log('[DOOR TIMER] doorId=' + doorId + ' action=' + action + ' frozen=' + JSON.stringify(frozen) + ' startPct=' + startPct);
   // نحسب startTime بحيث elapsed يبدأ من startPct
   var startTime = Date.now() - (startPct * total);
 
@@ -332,6 +333,7 @@ function stopDoorTimer(doorId, imgEl, stateEl) {
   var pct     = Math.min(elapsed / t.total, 1);
   if (t._raf) cancelAnimationFrame(t._raf);
   // احفظ النسبة والاتجاه للاستئناف لاحقاً
+  console.log('[DOOR STOP] doorId=' + doorId + ' pct=' + pct + ' isOpen=' + t.isOpen);
   doorFrozen[doorId] = { pct: pct, isOpen: t.isOpen };
   delete doorTimers[doorId];
   _drawDoorProgress(imgEl, stateEl, pct, t.isOpen, true);
