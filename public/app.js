@@ -173,17 +173,11 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
-            // جاء idle وتايمر شغال → إيقاف مبكر (RC أو يدوي)
+            // جاء idle وتايمر شغال → إيقاف مبكر من RC
             stopDoorTimer(doorId, imgEl, stateEl);
             updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
-          } else if (doorFrozen[doorId]) {
-            // idle حقيقي وما في تايمر — امسح التجميد وأظهر idle
-            var fi = doorFrozen[doorId];
-            delete doorFrozen[doorId];
-            _drawDoorProgress(imgEl, stateEl, fi.pct, fi.isOpen, true);
-            updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
           }
-          // لا تايمر ولا تجميد → idle عابر من Tuya — نتجاهل
+          // لا تايمر → idle عابر من Tuya — نتجاهل تماماً (لا نمسح doorFrozen)
 
         } else {
           // open أو close جديد
@@ -319,6 +313,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
       t._raf = requestAnimationFrame(tick);
     } else {
       delete doorTimers[doorId];
+      delete doorFrozen[doorId]; // اكتمل طبيعياً — امسح أي تجميد سابق
       var finalState = isOpen ? 'open' : 'close';
       setTimeout(function() {
         _drawDoorStatic(imgEl, stateEl, finalState);
