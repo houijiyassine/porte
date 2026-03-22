@@ -283,6 +283,31 @@ async function sendPushToAll(notification) {
   } catch {}
 }
 
+async function sendPushToAdmins(instId, notification) {
+  if (!VAPID_PRIVATE) return;
+  try {
+    // جلب مشتركي الإشعارات من أدمن هذه المؤسسة
+    const { data: admins } = await supabase
+      .from('users')
+      .select('id')
+      .eq('inst_id', instId)
+      .in('role', ['admin','super_admin'])
+      .eq('status', 'active');
+    if (!admins?.length) return;
+    const adminIds = admins.map(a => a.id);
+    const { data: subs } = await supabase
+      .from('push_subscriptions')
+      .select('*')
+      .in('user_id', adminIds);
+    if (!subs?.length) return;
+    const payload = JSON.stringify(notification);
+    await Promise.allSettled(subs.map(sub =>
+      webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload)
+        .catch(err => { if (err.statusCode === 410) supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); })
+    ));
+  } catch {}
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // API ROUTES
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -774,7 +799,7 @@ app.post('/api/doors', authMiddleware, adminOnly, async (req, res) => {
 app.put('/api/doors/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
     const updates = {};
-    ['name','location','device_id','duration_seconds','is_active','gps','schedule'].forEach(k => {
+    ['name','location','device_id','duration_seconds','is_active','gps','schedule','rc_notify'].forEach(k => {
       if (req.body[k] !== undefined) updates[k] = req.body[k];
     });
     const { data, error } = await supabase.from('doors').update(updates).eq('id', req.params.id).select().single();
@@ -1116,13 +1141,12 @@ async function checkDeviceOnline(deviceId) {
 
 async function pollAllDoors() {
   try {
-    const { data: doors } = await supabase
-      .from('doors').select('id,inst_id,name,device_id')
-      .not('device_id', 'is', null);
+    const { data: doors, error: doorsErr } = await supabase
+      .from('doors').select('id,inst_id,name,device_id,rc_notify');
+    console.log('[Polling] أبواب:', doors?.length, doorsErr?.message);
     if (!doors?.length) return;
 
     for (const door of doors) {
-      if (!door.inst_id) continue; // تخطى الأبواب بدون مؤسسة
       try {
         const token   = await getTuyaToken();
         const t       = Date.now().toString();
@@ -1144,40 +1168,44 @@ async function pollAllDoors() {
         data.result.forEach(s => { sm[s.code] = s.value; });
         const r1 = sm['switch_1'] === true  || sm['switch_1'] === 'true'  || sm['switch_1'] === 1;
         const r2 = sm['switch_2'] === true  || sm['switch_2'] === 'true'  || sm['switch_2'] === 1;
-        const prev      = doorStateCache.get(door.device_id);
-        const changed   = !prev || prev.r1 !== r1 || prev.r2 !== r2;
-        const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
+        const prev    = doorStateCache.get(door.device_id);
+        const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
+        const stateStr = r1 ? 'open' : r2 ? 'close' : 'idle';
+        console.log(`[Polling] ${door.name} → ${stateStr} R1=${r1} R2=${r2} changed=${changed}`);
 
+        // دائماً حدّث الـ cache
         doorStateCache.set(door.device_id, { r1, r2 });
 
-        const lastApp   = appLastAction.get(door.device_id);
-        const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
+        // بث تحديث الحالة دائماً (للواجهة)
+        const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
+        const lastApp    = appLastAction.get(door.device_id);
+        const isFromApp  = lastApp && (Date.now() - lastApp.time) < 15000;
 
-        // ─── كشف RC: تغيير لم يأتِ من التطبيق ───
+        console.log(`[Polling] RC check: changed=${changed} isFromApp=${isFromApp} r1=${r1} r2=${r2} doorAction=${doorAction}`);
         if (changed && !isFromApp && (r1 || r2)) {
-          const { error: rcErr } = await supabase.from('door_logs').insert({
-            door_id:    door.id,
-            inst_id:    door.inst_id,
-            user_id:    null,
-            value:      doorAction,
-            source:     'RC (جهاز تحكم)',
+          const { error: insertErr } = await supabase.from('door_logs').insert({
+            door_id: door.id, inst_id: door.inst_id,
+            value: doorAction, source: 'RC (جهاز تحكم)',
             created_at: new Date().toISOString(),
           });
-          if (rcErr) console.error('[Polling] RC insert error:', rcErr.message);
+          if (insertErr) console.error('[Polling] RC insert error:', insertErr.message);
+          // إذا rc_notify مفعّل → أرسل push لأدمن المؤسسة
+          if (door.rc_notify) {
+            const rcLabel = doorAction === 'open' ? 'فتح الباب' : 'غلق الباب';
+            sendPushToAdmins(door.inst_id, {
+              title: 'إشعار RC 📻',
+              body:  rcLabel + ' بواسطة RC — ' + door.name,
+            });
+          }
         }
 
-        // بث التغيير عبر WebSocket
+        // بث تحديث الحالة فقط إذا تغيرت
         if (changed) {
           broadcast({
-            type:     'door_state',
-            deviceId:  door.device_id,
-            doorId:    door.id,
-            instId:    door.inst_id,
-            r1_on:     r1,
-            r2_on:     r2,
-            state:     doorAction,
-            source:    isFromApp ? 'app' : 'rc',
-            timestamp: Date.now(),
+            type: 'door_state', deviceId: door.device_id,
+            doorId: door.id, instId: door.inst_id,
+            r1_on: r1, r2_on: r2, state: doorAction,
+            source: isFromApp ? 'app' : 'rc', timestamp: Date.now(),
           });
         }
       } catch(e) {}
@@ -1186,8 +1214,8 @@ async function pollAllDoors() {
 }
 
 setTimeout(function() {
-  console.log('[Polling] ✅ بدأ مراقبة الأبواب كل ثانية');
-  setInterval(pollAllDoors, 1000);
+  console.log('[Polling] ✅ بدأ مراقبة الأبواب كل 3 ثوانٍ');
+  setInterval(pollAllDoors, 3000);
 }, 5000);
 
 // مسار Webhook القديم كـ alias
