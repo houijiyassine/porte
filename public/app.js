@@ -697,8 +697,12 @@ async function saveUser() {
     if (id) { await apiFetch(`/api/users/${id}`, 'PUT', body); }
     else    { await apiFetch('/api/users', 'POST', body); }
     closeModal('modal-user');
-    loadUsers();
     toast('تم الحفظ بنجاح', 'success');
+    if (user && user.role === 'admin') {
+      loadAdminUsers();
+    } else {
+      loadUsers();
+    }
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -1564,9 +1568,14 @@ async function openInstUsers(instId, instName) {
 async function changeUserStatus(userId, status, instId, instName) {
   try {
     await apiFetch('/api/users/' + userId, 'PUT', { request_status: status });
-    var labels = { approved:'موافق', pending:'انتظار', rejected:'مرفوض' };
+    var labels = { approved:'✅ تمت الموافقة', pending:'⏳ تم الإرجاع للانتظار', rejected:'❌ تم الرفض' };
     toast(labels[status] || status, 'success');
-    openInstUsers(instId, instName);
+    // أعد تحميل حسب الدور
+    if (user && user.role === 'admin') {
+      loadAdminUsers();
+    } else {
+      openInstUsers(instId, instName);
+    }
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -1606,7 +1615,11 @@ async function deleteUser(userId, instId, instName) {
   try {
     await apiFetch('/api/users/' + userId, 'DELETE');
     toast('تم الحذف', 'success');
-    openInstUsers(instId, instName || '');
+    if (user && user.role === 'admin') {
+      loadAdminUsers();
+    } else {
+      openInstUsers(instId, instName || '');
+    }
   } catch(e) { toast(e.message, 'error'); }
 }
 
