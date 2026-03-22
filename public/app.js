@@ -113,20 +113,26 @@ function bootApp() {
     if (navStats)  navStats.style.display  = 'flex';
     showPage('institutes', document.getElementById('nav-institutes'));
   } else if (user.role === 'admin') {
+    // ── 4 تبويبات للمسؤول: الأبواب | المستخدمون | الإحصاء | التنبيهات ──
     document.querySelectorAll('.nav-item').forEach(function(n){ n.style.display = 'none'; });
-    document.getElementById('nav-institutes').style.display = 'flex';
-    document.getElementById('nav-users').style.display = 'flex';
-    var navAl = document.getElementById('nav-alerts');
-    var navSt = document.getElementById('nav-stats');
-    if (navAl) navAl.style.display = 'flex';
-    if (navSt) navSt.style.display = 'flex';
+    ['nav-institutes','nav-users','nav-stats','nav-alerts'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = 'flex';
+    });
+    // تحديث أيقونة وعنوان تبويب الأبواب للأدمن
+    var navInst = document.getElementById('nav-institutes');
+    if (navInst) navInst.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>الأبواب';
+    // الصفحة الافتراضية: الأبواب
     document.getElementById('nav-institutes').classList.add('active');
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('page-institutes').classList.add('active');
     loadAdminDoors();
-    // إخفاء زر إضافة مؤسسة للمدير
+    // إخفاء زر إضافة مؤسسة
     var addInstBtn = document.getElementById('inst-add-btn');
     if (addInstBtn) addInstBtn.style.display = 'none';
+    // تحميل عدد التنبيهات للـ badge
+    loadAlerts();
   } else {
     document.querySelectorAll('.nav-item').forEach(function(n){ n.style.display = 'none'; });
     document.getElementById('nav-institutes').style.display = 'flex';
@@ -2197,11 +2203,10 @@ async function loadAdminUsers() {
 // ─── Stats Page ───────────────────────────────────────
 async function loadStats() {
   try {
-    const s = await apiFetch('/api/stats/full');
+    const s    = await apiFetch('/api/stats/full');
     const grid = document.getElementById('stats-grid');
     if (!grid) return;
 
-    // للسوبر أدمن: أضف إحصائيات المؤسسات
     var extraItems = [];
     if (user && user.role === 'super_admin') {
       try {
@@ -2211,21 +2216,78 @@ async function loadStats() {
     }
 
     const items = [
-      { label:'عمليات اليوم',  value: s.today_actions, color:'var(--accent)',  icon:'📊' },
-      { label:'إجمالي الفتح',  value: s.total_opens,   color:'var(--success)', icon:'🔓' },
-      { label:'التنبيهات',     value: s.alert_count,   color:'var(--danger)',  icon:'🔔' },
-      { label:'المستخدمون',    value: s.active_users + '/' + s.total_users, color:'var(--accent2)', icon:'👥' },
+      { label:'عمليات اليوم',  value: s.today_actions,                              color:'var(--accent)',  icon:'📊' },
+      { label:'إجمالي الفتح',  value: s.total_opens,                                color:'var(--success)', icon:'🔓' },
+      { label:'التنبيهات',     value: s.alert_count,                                color:'var(--danger)',  icon:'🔔' },
+      { label:'المستخدمون',    value: s.active_users + ' / ' + s.total_users,        color:'var(--accent2)', icon:'👥' },
     ].concat(extraItems);
 
-    grid.style.gridTemplateColumns = items.length === 5 ? 'repeat(3,1fr)' : '1fr 1fr';
+    grid.style.gridTemplateColumns = items.length >= 5 ? 'repeat(3,1fr)' : '1fr 1fr';
     grid.innerHTML = items.map(function(item) {
       return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;text-align:center">' +
         '<div style="font-size:1.6rem;margin-bottom:6px">' + item.icon + '</div>' +
-        '<div style="font-size:1.8rem;font-weight:900;font-family:JetBrains Mono,monospace;color:' + item.color + '">' + item.value + '</div>' +
-        '<div style="font-size:0.75rem;color:var(--muted);margin-top:4px">' + item.label + '</div>' +
+        '<div style="font-size:2rem;font-weight:900;font-family:JetBrains Mono,monospace;color:' + item.color + '">' + (item.value ?? '—') + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--muted);margin-top:4px;font-weight:600">' + item.label + '</div>' +
         '</div>';
     }).join('');
+
+    // رسم بياني لآخر 7 أيام
+    await loadWeekChart();
   } catch(e) { console.error('loadStats', e); }
+}
+
+async function loadWeekChart() {
+  const section = document.getElementById('stats-chart-section');
+  if (!section) return;
+  try {
+    const data = await apiFetch('/api/history');
+    if (!data || !data.length) { section.innerHTML = ''; return; }
+
+    // تجميع العمليات حسب اليوم (آخر 7 أيام)
+    var days = {};
+    for (var i = 6; i >= 0; i--) {
+      var d = new Date(); d.setDate(d.getDate() - i);
+      var key = d.toISOString().split('T')[0];
+      days[key] = { open: 0, close: 0 };
+    }
+    data.forEach(function(log) {
+      var day = (log.created_at || '').split('T')[0];
+      if (days[day]) {
+        if (log.value === 'open' || log.value === 'open40') days[day].open++;
+        else if (log.value === 'close') days[day].close++;
+      }
+    });
+
+    var keys   = Object.keys(days);
+    var opens  = keys.map(function(k){ return days[k].open; });
+    var closes = keys.map(function(k){ return days[k].close; });
+    var maxVal = Math.max.apply(null, opens.concat(closes).concat([1]));
+    var dayNames = ['أحد','اثن','ثلا','أرب','خمي','جمع','سبت'];
+
+    var bars = keys.map(function(key, i) {
+      var d    = new Date(key);
+      var name = dayNames[d.getDay()];
+      var oh   = Math.round((opens[i]  / maxVal) * 80);
+      var ch   = Math.round((closes[i] / maxVal) * 80);
+      return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">' +
+        '<div style="display:flex;align-items:flex-end;gap:2px;height:80px">' +
+          '<div title="فتح: '+opens[i]+'" style="width:10px;height:'+oh+'px;background:var(--success);border-radius:3px 3px 0 0;opacity:0.85;min-height:2px"></div>' +
+          '<div title="غلق: '+closes[i]+'" style="width:10px;height:'+ch+'px;background:var(--danger);border-radius:3px 3px 0 0;opacity:0.85;min-height:2px"></div>' +
+        '</div>' +
+        '<div style="font-size:0.65rem;color:var(--muted);font-weight:600">' + name + '</div>' +
+        '</div>';
+    }).join('');
+
+    section.innerHTML =
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px">' +
+        '<div style="font-size:0.8rem;font-weight:700;color:var(--muted);margin-bottom:12px">📅 آخر 7 أيام</div>' +
+        '<div style="display:flex;align-items:flex-end;gap:4px;height:100px">' + bars + '</div>' +
+        '<div style="display:flex;gap:16px;margin-top:8px">' +
+          '<span style="font-size:0.7rem;color:var(--success);font-weight:700">■ فتح</span>' +
+          '<span style="font-size:0.7rem;color:var(--danger);font-weight:700">■ غلق</span>' +
+        '</div>' +
+      '</div>';
+  } catch(e) { section.innerHTML = ''; }
 }
 
 // ─── Alerts Page ──────────────────────────────────────
