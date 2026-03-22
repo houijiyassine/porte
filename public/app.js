@@ -171,17 +171,9 @@ function connectWS() {
           if (hasTimer) {
             // أُوقف قبل انتهاء الوقت → جمّد الصورة
             stopDoorTimer(doorId, imgEl, stateEl);
-            delete doorLastFinal[doorId];
             updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
-          } else {
-            // لا تايمر — تحقق: هل idle بعد اكتمال مباشرة؟
-            var lf = doorLastFinal[doorId];
-            if (!lf || (Date.now() - lf.time) >= 8000) {
-              delete doorLastFinal[doorId];
-              // idle حقيقي — لا نغير الصورة (Tuya عابر)
-            }
-            // وإلا: ignore (idle مؤقت بعد انتهاء التايمر)
           }
+          // لا تايمر → idle عابر من Tuya — نتجاهل
         } else {
           if (msg.source === 'rc' || !hasTimer) {
             _cancelDoorTimer(doorId);
@@ -277,7 +269,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
 
   var isOpen    = (action === 'open' || action === 'open40');
   var startTime = Date.now();
-  var total     = seconds * 1000;
+  var total     = (seconds + 1) * 1000;  // n+1 ثانية: نكمل الأنيميشن بعد إغلاق الريلاي فعلياً
 
   doorTimers[doorId] = { startTime: startTime, total: total, isOpen: isOpen, frozen: false, _raf: null };
 
@@ -295,8 +287,6 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
       // ارسم 100% أولاً — انتظر 400ms ثم انتقل للحالة النهائية
       delete doorTimers[doorId];
       var finalState = isOpen ? 'close' : 'open';
-      // احفظ الحالة النهائية — تجاهل idle من Polling لمدة 8 ثوان
-      doorLastFinal[doorId] = { state: finalState, time: Date.now() };
       setTimeout(function() {
         _drawDoorStatic(imgEl, stateEl, finalState);
         updateDoorCardState(doorId, null, finalState, 'auto');
@@ -788,16 +778,6 @@ async function fetchAndUpdateDoorImage(door) {
     var imgEl = document.getElementById('door-img-' + door.id);
 
     if (doorTimers[door.id]) return; // تايمر شغال — لا نتدخل
-
-    // إذا Tuya قال idle لكن عندنا حالة نهائية حديثة (< 8 ثوان) → استخدمها
-    if (state === 'idle') {
-      var lf = doorLastFinal[door.id];
-      if (lf && (Date.now() - lf.time) < 8000) {
-        state = lf.state;
-      } else {
-        delete doorLastFinal[door.id]; // انتهت المدة — اقبل idle
-      }
-    }
 
     if (imgEl) _drawDoorStatic(imgEl, null, state);
     updateDoorCardState(door.id, door.device_id, state, 'poll');
