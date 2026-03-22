@@ -167,25 +167,22 @@ function connectWS() {
         updateDoorStatusUI(rawState);
 
         if (rawState === 'idle') {
-          // Tuya أفاد أن الجهاز في حالة idle
           if (hasTimer) {
-            // تم إيقافه قبل انتهاء الوقت (من RC أو يدوياً)
+            // أُوقف قبل انتهاء الوقت → جمّد الصورة عند النسبة الحالية
             stopDoorTimer(doorId);
-            if (imgEl) renderDoorSVG(imgEl, 'idle');
-            if (stateEl) _updateStateEl(stateEl, 'idle');
+            freezeDoorAtStop(doorId, imgEl, stateEl);
             updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
           }
-          // إذا لم يكن هناك تايمر شغال → لا نغير الصورة (سببها إشارة عابرة)
+          // إذا لم يكن هناك تايمر → لا نغير (إشارة عابرة من Tuya)
         } else {
-          // open أو close — إذا جاء من RC وليس من تايمر نشط
           if (msg.source === 'rc' || !hasTimer) {
-            // RC بدأ تشغيل جديد → لا نعرف المدة، نعرض الحالة فقط
-            stopDoorTimer(doorId);
-            if (imgEl) renderDoorSVG(imgEl, rawState);
-            if (stateEl) _updateStateEl(stateEl, rawState);
+            // RC أو فتح/غلق جديد من الخارج → عرض الحالة الثابتة
+            _cancelDoorTimer(doorId);
+            if (imgEl) _drawDoorStatic(imgEl, stateEl, rawState);
+            else if (stateEl) _drawDoorStatic(null, stateEl, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           }
-          // إذا من app وتايمر شغال → التايمر يتحكم، لا نتدخل
+          // إذا تايمر شغال من App → لا نتدخل
         }
 
         // تحديث السجل إذا جاء من RC
@@ -257,118 +254,198 @@ function updateDoorImage(doorId, state) {
   renderDoorSVG(imgEl, state);
 }
 
-function renderDoorSVG(container, state) {
-  var isOpen   = state === 'open';
-  var isStop   = state === 'idle' || state === 'stop';
-  var color    = isOpen ? '#00e676' : isStop ? '#ffb300' : '#ff3d71';
-  var shadow   = isOpen ? '0 0 18px #00e67688' : isStop ? '0 0 18px #ffb30088' : '0 0 18px #ff3d7188';
-  var angleDeg = isOpen ? -55 : 0; // الباب مفتوح = دوران
-  container.innerHTML = `
-    <svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;filter:drop-shadow(${shadow})">
-      <!-- إطار الباب -->
-      <rect x="6" y="4" width="68" height="92" rx="4" fill="none" stroke="${color}" stroke-width="2.5" opacity="0.35"/>
-      <!-- الباب نفسه -->
-      <g transform="rotate(${angleDeg}, 10, 50)" style="transform-origin:10px 50px;transform-box:fill-box;transition:transform 0.5s ease">
-        <rect x="10" y="8" width="58" height="84" rx="3"
-          fill="${color}" fill-opacity="${isOpen ? 0.18 : 0.22}"
-          stroke="${color}" stroke-width="2"/>
-        <!-- مقبض الباب -->
-        <circle cx="${isOpen ? 58 : 22}" cy="50" r="4"
-          fill="${color}" opacity="0.9"/>
-        <line x1="${isOpen ? 58 : 22}" y1="46" x2="${isOpen ? 58 : 22}" y2="54"
-          stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>
-      </g>
-      <!-- حالة نص -->
-      <text x="40" y="97" text-anchor="middle" font-size="7"
-        fill="${color}" font-family="Cairo,sans-serif" font-weight="700">
-        ${isOpen ? 'مفتوح' : isStop ? 'متوقف' : 'مغلق'}
-      </text>
-    </svg>`;
-}
-
 // ─── Door Control ─────────────────────────────
 let timerInterval = null;
 
-// ─── Per-door countdown timers ────────────────
-// doorTimers[doorId] = { interval, remaining, total, action }
-const doorTimers = {};
+// ─────────────────────────────────────────────────────────
+//  نظام التايمر لكل باب
+//  المنطق:
+//   - عند فتح/غلق: نسبة تصاعدية 0%→100% + صورة باب تتحرك بالتدريج
+//   - عند انتهاء الوقت: الحالة النهائية تلقائياً
+//   - عند إيقاف مبكر (App أو RC): تتجمد النسبة والصورة
+// ─────────────────────────────────────────────────────────
+const doorTimers = {};   // doorTimers[doorId] = { raf, startTime, total, action, frozen, frozenPct }
 
 function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
-  // إلغاء أي تايمر سابق لنفس الباب
-  if (doorTimers[doorId]) {
-    clearInterval(doorTimers[doorId].interval);
-    delete doorTimers[doorId];
-  }
+  _cancelDoorTimer(doorId);
   if (!seconds || seconds <= 0) return;
 
-  doorTimers[doorId] = { remaining: seconds, total: seconds, action, interval: null };
+  var isOpen   = (action === 'open' || action === 'open40');
+  var startTime = Date.now();
+  var total     = seconds * 1000;
 
-  // رسم أول مرة فوراً
-  _renderDoorWithTimer(doorId, imgEl, stateEl, seconds, seconds, action);
+  doorTimers[doorId] = { startTime, total, action, frozen: false, frozenPct: 0, _raf: null };
 
-  doorTimers[doorId].interval = setInterval(function() {
+  function tick() {
     var t = doorTimers[doorId];
-    if (!t) return;
-    t.remaining--;
-    if (t.remaining <= 0) {
-      clearInterval(t.interval);
-      delete doorTimers[doorId];
-      // انتهى الوقت → الباب يعود للحالة المقابلة
-      var finalState = (action === 'open' || action === 'open40') ? 'close' : 'open';
-      if (imgEl) renderDoorSVG(imgEl, finalState);
-      if (stateEl) _updateStateEl(stateEl, finalState);
-      updateDoorCardState(doorId, null, finalState, 'auto');
+    if (!t || t.frozen) return;
+
+    var elapsed = Date.now() - t.startTime;
+    var pct     = Math.min(elapsed / total, 1);        // 0 → 1  تصاعدي
+
+    _drawDoorProgress(imgEl, stateEl, pct, isOpen, false);
+
+    if (pct < 1) {
+      t._raf = requestAnimationFrame(tick);
     } else {
-      _renderDoorWithTimer(doorId, imgEl, stateEl, t.remaining, t.total, action);
+      // اكتمل الوقت — الباب يغلق/يفتح
+      delete doorTimers[doorId];
+      var finalState = isOpen ? 'close' : 'open';
+      _drawDoorStatic(imgEl, stateEl, finalState);
+      updateDoorCardState(doorId, null, finalState, 'auto');
     }
-  }, 1000);
+  }
+
+  doorTimers[doorId]._raf = requestAnimationFrame(tick);
 }
 
 function stopDoorTimer(doorId) {
-  if (doorTimers[doorId]) {
-    clearInterval(doorTimers[doorId].interval);
-    delete doorTimers[doorId];
+  var t = doorTimers[doorId];
+  if (!t) return;
+  // تجميد عند النسبة الحالية
+  var elapsed  = Date.now() - t.startTime;
+  var pct      = Math.min(elapsed / t.total, 1);
+  t.frozen     = true;
+  t.frozenPct  = pct;
+  if (t._raf) cancelAnimationFrame(t._raf);
+}
+
+function freezeDoorAtStop(doorId, imgEl, stateEl) {
+  var t = doorTimers[doorId];
+  var pct = t ? t.frozenPct : 0;
+  _drawDoorProgress(imgEl, stateEl, pct, false, true);  // حالة stop = برتقالي
+  delete doorTimers[doorId];
+}
+
+function _cancelDoorTimer(doorId) {
+  var t = doorTimers[doorId];
+  if (t && t._raf) cancelAnimationFrame(t._raf);
+  delete doorTimers[doorId];
+}
+
+// ─── رسم الباب أثناء الحركة ────────────────────────────
+// pct: 0→1  |  isOpen: true=فتح false=غلق  |  isStopped: برتقالي متجمد
+function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped) {
+  var pctInt = Math.round(pct * 100);
+
+  // الألوان
+  var color, shadow, label, labelStatus;
+  if (isStopped) {
+    color  = '#ffb300';
+    shadow = '0 0 16px #ffb30077';
+    label  = '\u0645\u062a\u0648\u0642\u0641';           // متوقف
+    labelStatus = '\u23f9 \u0645\u062a\u0648\u0642\u0641 \u2014 ' + pctInt + '%';
+  } else if (isOpen) {
+    color  = '#00e676';
+    shadow = '0 0 16px #00e67677';
+    label  = '\u064a\u0641\u062a\u062d...';              // يفتح...
+    labelStatus = '\U0001f513 \u064a\u0641\u062a\u062d... \u2014 ' + pctInt + '%';
+  } else {
+    color  = '#ff3d71';
+    shadow = '0 0 16px #ff3d7177';
+    label  = '\u064a\u063a\u0644\u0642...';              // يغلق...
+    labelStatus = '\U0001f512 \u064a\u063a\u0644\u0642... \u2014 ' + pctInt + '%';
   }
-}
 
-function _updateStateEl(el, state) {
-  if (!el) return;
-  var color = state === 'open' ? 'var(--success)' : state === 'close' ? 'var(--danger)' : 'var(--warning)';
-  var text  = state === 'open' ? '🔓 مفتوح' : state === 'close' ? '🔒 مغلق' : '⏹ متوقف';
-  el.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' + text;
-  el.style.color = color;
-}
+  // زاوية الباب: 0%=مغلق(0°) → 100%=مفتوح(-55°)
+  // للفتح: يزيد الفتح مع pct
+  // للغلق: يقل الفتح مع pct
+  var angleDeg;
+  if (isStopped) {
+    angleDeg = isOpen ? -(pct * 55) : -(( 1 - pct) * 55);
+  } else if (isOpen) {
+    angleDeg = -(pct * 55);
+  } else {
+    angleDeg = -((1 - pct) * 55);
+  }
 
-function _renderDoorWithTimer(doorId, imgEl, stateEl, remaining, total, action) {
-  var state    = (action === 'open' || action === 'open40') ? 'open' : 'close';
-  var color    = state === 'open' ? '#00e676' : '#ff3d71';
-  var shadow   = state === 'open' ? '0 0 18px #00e67688' : '0 0 18px #ff3d7188';
-  var angleDeg = state === 'open' ? -55 : 0;
-  var pct      = total > 0 ? (remaining / total) : 1;
-  var arc      = _describeArc(40, 40, 30, 0, pct * 360);
-  var label    = state === 'open' ? 'مفتوح' : 'مغلق';
-  var cx       = state === 'open' ? 58 : 22;
+  // مقبض الباب يتحرك مع الزاوية
+  var handleX = 22 + (pct * (isOpen ? 36 : 0));
+  if (!isOpen && !isStopped) handleX = 22 + ((1 - pct) * 36);
+
+  // قوس التقدم (من 0 إلى pct*360)
+  var arcDeg = pct * 359.99;
+  var arc    = _describeArc(40, 46, 12, 0, arcDeg);
 
   if (imgEl) {
     imgEl.innerHTML =
-      '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;filter:drop-shadow(' + shadow + ')">' +
-      '<rect x="6" y="4" width="68" height="92" rx="4" fill="none" stroke="' + color + '" stroke-width="2.5" opacity="0.3"/>' +
-      '<rect x="10" y="8" width="58" height="84" rx="3" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="2" style="transform:rotate(' + angleDeg + 'deg);transform-origin:10px 50px;transition:transform 0.5s"/>' +
-      '<circle cx="' + cx + '" cy="50" r="4" fill="' + color + '" opacity="0.9"/>' +
-      '<circle cx="40" cy="40" r="30" fill="none" stroke="' + color + '44" stroke-width="4"/>' +
-      '<path d="' + arc + '" fill="none" stroke="' + color + '" stroke-width="4" stroke-linecap="round" opacity="0.9"/>' +
-      '<text x="40" y="45" text-anchor="middle" font-size="13" fill="' + color + '" font-family="JetBrains Mono,monospace" font-weight="800">' + remaining + '</text>' +
-      '<text x="40" y="97" text-anchor="middle" font-size="7" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + label + '</text>' +
+      '<svg viewBox="0 0 80 105" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;filter:drop-shadow(' + shadow + ')">' +
+
+      // إطار الباب
+      '<rect x="4" y="2" width="72" height="90" rx="5" fill="none" stroke="' + color + '" stroke-width="2" opacity="0.25"/>' +
+
+      // الباب المتحرك
+      '<g style="transform:rotate(' + angleDeg.toFixed(1) + 'deg);transform-origin:8px 46px;transition:none">' +
+        '<rect x="8" y="5" width="62" height="84" rx="3" fill="' + color + '" fill-opacity="0.15" stroke="' + color + '" stroke-width="1.8"/>' +
+        // مقبض
+        '<circle cx="' + (isStopped ? (22 + pct*36).toFixed(0) : (isOpen ? (22+pct*36).toFixed(0) : (58-pct*36).toFixed(0))) + '" cy="47" r="3.5" fill="' + color + '" opacity="0.95"/>' +
+      '</g>' +
+
+      // خط الحالة (نص صغير)
+      '<text x="40" y="99" text-anchor="middle" font-size="6.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + label + '</text>' +
+
+      // نسبة مئوية كبيرة
+      '<text x="40" y="80" text-anchor="middle" font-size="11" fill="' + color + '" font-family="JetBrains Mono,monospace" font-weight="900">' + pctInt + '%</text>' +
+
+      // قوس التقدم صغير تحت الباب
+      '<circle cx="40" cy="80" r="0" fill="none"/>' +
+
       '</svg>';
   }
+
   if (stateEl) {
-    var stateText = label + ' — ' + remaining + 'ث';
-    stateEl.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' + stateText;
+    stateEl.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border-radius:10px;margin-bottom:12px;font-weight:700;font-size:0.9rem;';
     stateEl.style.color = color;
+
+    // progress bar
+    stateEl.innerHTML =
+      '<div style="flex:1">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">' +
+          '<span>' + labelStatus + '</span>' +
+        '</div>' +
+        '<div style="height:6px;border-radius:4px;background:rgba(255,255,255,0.08);overflow:hidden">' +
+          '<div style="height:100%;width:' + pctInt + '%;background:' + color + ';border-radius:4px;transition:width 0.05s linear"></div>' +
+        '</div>' +
+      '</div>';
   }
 }
 
-// رسم قوس SVG
+// ─── رسم الباب في حالة ثابتة (مفتوح / مغلق / متوقف) ──
+function _drawDoorStatic(imgEl, stateEl, state) {
+  var color, shadow, angleDeg, label, icon;
+  if (state === 'open') {
+    color = '#00e676'; shadow = '0 0 18px #00e67688'; angleDeg = -55;
+    label = '\u0645\u0641\u062a\u0648\u062d'; icon = '\U0001f513';
+  } else if (state === 'close') {
+    color = '#ff3d71'; shadow = '0 0 18px #ff3d7188'; angleDeg = 0;
+    label = '\u0645\u063a\u0644\u0642'; icon = '\U0001f512';
+  } else {
+    color = '#ffb300'; shadow = '0 0 18px #ffb30088'; angleDeg = -27;
+    label = '\u0645\u062a\u0648\u0642\u0641'; icon = '\u23f9';
+  }
+
+  if (imgEl) {
+    imgEl.innerHTML =
+      '<svg viewBox="0 0 80 105" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;filter:drop-shadow(' + shadow + ')">' +
+      '<rect x="4" y="2" width="72" height="90" rx="5" fill="none" stroke="' + color + '" stroke-width="2" opacity="0.25"/>' +
+      '<g style="transform:rotate(' + angleDeg + 'deg);transform-origin:8px 46px">' +
+        '<rect x="8" y="5" width="62" height="84" rx="3" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="1.8"/>' +
+        '<circle cx="' + (state === 'open' ? 58 : state === 'idle' ? 40 : 22) + '" cy="47" r="3.5" fill="' + color + '" opacity="0.95"/>' +
+      '</g>' +
+      '<text x="40" y="99" text-anchor="middle" font-size="6.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + label + '</text>' +
+      '</svg>';
+  }
+
+  if (stateEl) {
+    stateEl.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border-radius:10px;margin-bottom:12px;font-weight:700;font-size:0.9rem;';
+    stateEl.style.color = color;
+    stateEl.innerHTML =
+      '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' +
+      icon + ' ' + label;
+  }
+}
+
+// ─── رسم قوس SVG ──────────────────────────────
 function _describeArc(cx, cy, r, startDeg, endDeg) {
   if (endDeg >= 360) endDeg = 359.99;
   var s = _polar(cx, cy, r, startDeg - 90);
@@ -379,6 +456,16 @@ function _describeArc(cx, cy, r, startDeg, endDeg) {
 function _polar(cx, cy, r, deg) {
   var rad = (deg * Math.PI) / 180;
   return { x: +(cx + r * Math.cos(rad)).toFixed(3), y: +(cy + r * Math.sin(rad)).toFixed(3) };
+}
+
+// ─── دالة renderDoorSVG (الحالة الثابتة) ─────
+function renderDoorSVG(container, state) {
+  _drawDoorStatic(container, null, state);
+}
+
+// ─── تحديث _updateStateEl ─────────────────────
+function _updateStateEl(el, state) {
+  _drawDoorStatic(null, el, state);
 }
 
 async function sendAction(action) {
@@ -414,11 +501,10 @@ async function sendDoorAction(deviceId, action, duration) {
       var secs    = (action === 'stop') ? 0 : (action === 'open40' ? 40 : (duration || 5));
       if (action === 'stop') {
         stopDoorTimer(doorId);
-        if (imgEl) renderDoorSVG(imgEl, 'idle');
+        freezeDoorAtStop(doorId, imgEl, stateEl);
         updateDoorCardState(doorId, deviceId, 'idle', 'app');
       } else {
         startDoorTimer(doorId, imgEl, stateEl, secs, action);
-        updateDoorCardState(doorId, deviceId, action === 'open' || action === 'open40' ? 'open' : 'close', 'app');
       }
     }
   } catch(e) {
@@ -756,7 +842,7 @@ async function fetchAndUpdateDoorImage(door) {
     var stateEl = document.getElementById('user-state-' + door.id);
     // إذا لم يكن هناك تايمر شغال → رسم الحالة مباشرة
     if (!doorTimers[door.id]) {
-      if (imgEl) renderDoorSVG(imgEl, state);
+      if (imgEl) _drawDoorStatic(imgEl, null, state);
       updateDoorCardState(door.id, door.device_id, state, 'poll');
     }
   } catch(e) {}
@@ -1783,8 +1869,9 @@ async function fetchUserDoorState(door) {
     el.style.color = color;
     // تحديث صورة الباب فقط إذا لم يكن هناك تايمر شغال
     if (!doorTimers[door.id]) {
-      var imgEl = document.getElementById('door-img-' + door.id);
-      if (imgEl) renderDoorSVG(imgEl, state);
+      var imgEl2b = document.getElementById('door-img-' + door.id);
+      var stEl2b  = document.getElementById('user-state-' + door.id);
+      if (imgEl2b) _drawDoorStatic(imgEl2b, stEl2b, state);
     }
   } catch(e) {
     el.innerHTML = '<span style="color:var(--muted)">—</span>';
@@ -1854,8 +1941,7 @@ async function userDoorAction(door, action) {
     var secs    = action === 'stop' ? 0 : (action === 'open40' ? 40 : (door.duration_seconds || 5));
     if (action === 'stop') {
       stopDoorTimer(door.id);
-      if (imgEl) renderDoorSVG(imgEl, 'idle');
-      if (stateEl) _updateStateEl(stateEl, 'idle');
+      freezeDoorAtStop(door.id, imgEl, stateEl);
     } else {
       startDoorTimer(door.id, imgEl, stateEl, secs, action);
     }
