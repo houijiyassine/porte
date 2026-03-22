@@ -660,9 +660,9 @@ app.get('/api/institutes', authMiddleware, async (req, res) => {
         supabase.from('doors').select('*').eq('inst_id', inst.id),
         supabase.from('users').select('id', { count: 'exact' }).eq('inst_id', inst.id),
       ]);
-      const { data: adminUser } = await supabase
-        .from('users').select('phone').eq('inst_id', inst.id).eq('role', 'admin').single();
-      return { ...inst, doors: doors||[], users_count: usersCount||0, admin_phone: adminUser?.phone };
+      const { data: adminUsers } = await supabase
+        .from('users').select('phone').eq('inst_id', inst.id).eq('role', 'admin').limit(1);
+      return { ...inst, doors: doors||[], users_count: usersCount||0, admin_phone: adminUsers?.[0]?.phone };
     }));
 
     res.json(enriched);
@@ -713,7 +713,7 @@ app.put('/api/institutes/:id', authMiddleware, adminOnly, async (req, res) => {
     // تحديث أو إنشاء حساب المسؤول
     if (req.body.admin_phone || req.body.admin_pw) {
       const { data: existingAdmin } = await supabase
-        .from('users').select('id').eq('inst_id', id).eq('role', 'admin').single();
+        .from('users').select('id').eq('inst_id', id).eq('role', 'admin').limit(1).maybeSingle();
 
       if (existingAdmin) {
         const adminUpdates = {};
@@ -733,7 +733,7 @@ app.put('/api/institutes/:id', authMiddleware, adminOnly, async (req, res) => {
 
     // جلب بيانات المسؤول لإرجاعها
     const { data: adminData } = await supabase
-      .from('users').select('phone').eq('inst_id', id).eq('role', 'admin').single();
+      .from('users').select('phone').eq('inst_id', id).eq('role', 'admin').limit(1).maybeSingle();
 
     res.json({ ...data, admin_phone: adminData?.phone });
   } catch (err) {
