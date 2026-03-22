@@ -169,11 +169,19 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
-            // أُوقف قبل انتهاء الوقت → جمّد الصورة عند النسبة الحالية
+            // أُوقف قبل انتهاء الوقت → جمّد الصورة
             stopDoorTimer(doorId, imgEl, stateEl);
+            delete doorLastFinal[doorId];
             updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
+          } else {
+            // لا تايمر — تحقق: هل idle بعد اكتمال مباشرة؟
+            var lf = doorLastFinal[doorId];
+            if (!lf || (Date.now() - lf.time) >= 8000) {
+              delete doorLastFinal[doorId];
+              // idle حقيقي — لا نغير الصورة (Tuya عابر)
+            }
+            // وإلا: ignore (idle مؤقت بعد انتهاء التايمر)
           }
-          // إذا لم يكن هناك تايمر → لا نغير (إشارة عابرة من Tuya)
         } else {
           if (msg.source === 'rc' || !hasTimer) {
             _cancelDoorTimer(doorId);
@@ -286,8 +294,10 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
     } else {
       // ارسم 100% أولاً — انتظر 400ms ثم انتقل للحالة النهائية
       delete doorTimers[doorId];
+      var finalState = isOpen ? 'close' : 'open';
+      // احفظ الحالة النهائية — تجاهل idle من Polling لمدة 8 ثوان
+      doorLastFinal[doorId] = { state: finalState, time: Date.now() };
       setTimeout(function() {
-        var finalState = isOpen ? 'close' : 'open';
         _drawDoorStatic(imgEl, stateEl, finalState);
         updateDoorCardState(doorId, null, finalState, 'auto');
       }, 400);
@@ -773,15 +783,24 @@ async function checkDoorStatus(deviceId, elemId) {
 // جلب حالة الباب الحقيقية (مفتوح/مغلق/متوقف) وتحديث الصورة والـ badge
 async function fetchAndUpdateDoorImage(door) {
   try {
-    var data = await apiFetch('/api/door/status?deviceId=' + door.device_id);
+    var data  = await apiFetch('/api/door/status?deviceId=' + door.device_id);
     var state = data.r1_on ? 'open' : data.r2_on ? 'close' : 'idle';
-    var imgEl   = document.getElementById('door-img-' + door.id);
-    var stateEl = document.getElementById('user-state-' + door.id);
-    // إذا لم يكن هناك تايمر شغال → رسم الحالة مباشرة
-    if (!doorTimers[door.id]) {
-      if (imgEl) _drawDoorStatic(imgEl, null, state);
-      updateDoorCardState(door.id, door.device_id, state, 'poll');
+    var imgEl = document.getElementById('door-img-' + door.id);
+
+    if (doorTimers[door.id]) return; // تايمر شغال — لا نتدخل
+
+    // إذا Tuya قال idle لكن عندنا حالة نهائية حديثة (< 8 ثوان) → استخدمها
+    if (state === 'idle') {
+      var lf = doorLastFinal[door.id];
+      if (lf && (Date.now() - lf.time) < 8000) {
+        state = lf.state;
+      } else {
+        delete doorLastFinal[door.id]; // انتهت المدة — اقبل idle
+      }
     }
+
+    if (imgEl) _drawDoorStatic(imgEl, null, state);
+    updateDoorCardState(door.id, door.device_id, state, 'poll');
   } catch(e) {}
 }
 
