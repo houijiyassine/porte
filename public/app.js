@@ -269,7 +269,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
 
   var isOpen    = (action === 'open' || action === 'open40');
   var startTime = Date.now();
-  var total     = (seconds + 1) * 1000;  // n+1 ثانية: نكمل الأنيميشن بعد إغلاق الريلاي فعلياً
+  var total     = Math.max((seconds - 1), 1) * 1000;  // n-1 ثانية: ينتهي الأنيميشن قبل إغلاق الريلاي
 
   doorTimers[doorId] = { startTime: startTime, total: total, isOpen: isOpen, frozen: false, _raf: null };
 
