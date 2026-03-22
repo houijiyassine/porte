@@ -169,8 +169,7 @@ function connectWS() {
         if (rawState === 'idle') {
           if (hasTimer) {
             // أُوقف قبل انتهاء الوقت → جمّد الصورة عند النسبة الحالية
-            stopDoorTimer(doorId);
-            freezeDoorAtStop(doorId, imgEl, stateEl);
+            stopDoorTimer(doorId, imgEl, stateEl);
             updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
           }
           // إذا لم يكن هناك تايمر → لا نغير (إشارة عابرة من Tuya)
@@ -257,64 +256,52 @@ function updateDoorImage(doorId, state) {
 // ─── Door Control ─────────────────────────────
 let timerInterval = null;
 
-// ─────────────────────────────────────────────────────────
-//  نظام التايمر لكل باب
-//  المنطق:
-//   - عند فتح/غلق: نسبة تصاعدية 0%→100% + صورة باب تتحرك بالتدريج
-//   - عند انتهاء الوقت: الحالة النهائية تلقائياً
-//   - عند إيقاف مبكر (App أو RC): تتجمد النسبة والصورة
-// ─────────────────────────────────────────────────────────
-const doorTimers = {};   // doorTimers[doorId] = { raf, startTime, total, action, frozen, frozenPct }
+// ═══════════════════════════════════════════════════════
+//  نظام الباب المتحرك — per-door timer
+//  - فتح/غلق: نسبة 0→100% + باب يتحرك بالتدريج
+//  - انتهاء الوقت: حالة نهائية تلقائية
+//  - إيقاف مبكر: يتجمد عند النسبة الحالية بلون برتقالي
+// ═══════════════════════════════════════════════════════
+const doorTimers = {};
 
 function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
   _cancelDoorTimer(doorId);
   if (!seconds || seconds <= 0) return;
 
-  var isOpen   = (action === 'open' || action === 'open40');
+  var isOpen    = (action === 'open' || action === 'open40');
   var startTime = Date.now();
   var total     = seconds * 1000;
 
-  doorTimers[doorId] = { startTime, total, action, frozen: false, frozenPct: 0, _raf: null };
+  doorTimers[doorId] = { startTime: startTime, total: total, isOpen: isOpen, frozen: false, _raf: null };
 
   function tick() {
     var t = doorTimers[doorId];
     if (!t || t.frozen) return;
-
     var elapsed = Date.now() - t.startTime;
-    var pct     = Math.min(elapsed / total, 1);        // 0 → 1  تصاعدي
+    var pct     = Math.min(elapsed / t.total, 1);
 
     _drawDoorProgress(imgEl, stateEl, pct, isOpen, false);
 
     if (pct < 1) {
       t._raf = requestAnimationFrame(tick);
     } else {
-      // اكتمل الوقت — الباب يغلق/يفتح
       delete doorTimers[doorId];
-      var finalState = isOpen ? 'close' : 'open';
-      _drawDoorStatic(imgEl, stateEl, finalState);
-      updateDoorCardState(doorId, null, finalState, 'auto');
+      _drawDoorStatic(imgEl, stateEl, isOpen ? 'close' : 'open');
+      updateDoorCardState(doorId, null, isOpen ? 'close' : 'open', 'auto');
     }
   }
 
   doorTimers[doorId]._raf = requestAnimationFrame(tick);
 }
 
-function stopDoorTimer(doorId) {
+function stopDoorTimer(doorId, imgEl, stateEl) {
   var t = doorTimers[doorId];
   if (!t) return;
-  // تجميد عند النسبة الحالية
-  var elapsed  = Date.now() - t.startTime;
-  var pct      = Math.min(elapsed / t.total, 1);
-  t.frozen     = true;
-  t.frozenPct  = pct;
+  var elapsed = Date.now() - t.startTime;
+  var pct     = Math.min(elapsed / t.total, 1);
   if (t._raf) cancelAnimationFrame(t._raf);
-}
-
-function freezeDoorAtStop(doorId, imgEl, stateEl) {
-  var t = doorTimers[doorId];
-  var pct = t ? t.frozenPct : 0;
-  _drawDoorProgress(imgEl, stateEl, pct, false, true);  // حالة stop = برتقالي
   delete doorTimers[doorId];
+  _drawDoorProgress(imgEl, stateEl, pct, t.isOpen, true);
 }
 
 function _cancelDoorTimer(doorId) {
@@ -323,151 +310,96 @@ function _cancelDoorTimer(doorId) {
   delete doorTimers[doorId];
 }
 
-// ─── رسم الباب أثناء الحركة ────────────────────────────
-// pct: 0→1  |  isOpen: true=فتح false=غلق  |  isStopped: برتقالي متجمد
+// ─── رسم الباب أثناء الحركة ──────────────────
 function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped) {
   var pctInt = Math.round(pct * 100);
+  var color  = isStopped ? '#ffb300' : isOpen ? '#00e676' : '#ff3d71';
+  var statusTxt = isStopped ? ('\u23f9 \u0645\u062a\u0648\u0642\u0641 \u2014 ' + pctInt + '%')
+                : isOpen    ? ('\U0001f513 \u064a\u0641\u062a\u062d... \u2014 ' + pctInt + '%')
+                :             ('\U0001f512 \u064a\u063a\u0644\u0642... \u2014 ' + pctInt + '%');
+  var label = isStopped ? '\u0645\u062a\u0648\u0642\u0641' : isOpen ? '\u064a\u0641\u062a\u062d...' : '\u064a\u063a\u0644\u0642...';
 
-  // الألوان
-  var color, shadow, label, labelStatus;
-  if (isStopped) {
-    color  = '#ffb300';
-    shadow = '0 0 16px #ffb30077';
-    label  = '\u0645\u062a\u0648\u0642\u0641';           // متوقف
-    labelStatus = '\u23f9 \u0645\u062a\u0648\u0642\u0641 \u2014 ' + pctInt + '%';
-  } else if (isOpen) {
-    color  = '#00e676';
-    shadow = '0 0 16px #00e67677';
-    label  = '\u064a\u0641\u062a\u062d...';              // يفتح...
-    labelStatus = '\U0001f513 \u064a\u0641\u062a\u062d... \u2014 ' + pctInt + '%';
-  } else {
-    color  = '#ff3d71';
-    shadow = '0 0 16px #ff3d7177';
-    label  = '\u064a\u063a\u0644\u0642...';              // يغلق...
-    labelStatus = '\U0001f512 \u064a\u063a\u0644\u0642... \u2014 ' + pctInt + '%';
-  }
-
-  // زاوية الباب: 0%=مغلق(0°) → 100%=مفتوح(-55°)
-  // للفتح: يزيد الفتح مع pct
-  // للغلق: يقل الفتح مع pct
-  var angleDeg;
-  if (isStopped) {
-    angleDeg = isOpen ? -(pct * 55) : -(( 1 - pct) * 55);
-  } else if (isOpen) {
-    angleDeg = -(pct * 55);
-  } else {
-    angleDeg = -((1 - pct) * 55);
-  }
-
-  // مقبض الباب يتحرك مع الزاوية
-  var handleX = 22 + (pct * (isOpen ? 36 : 0));
-  if (!isOpen && !isStopped) handleX = 22 + ((1 - pct) * 36);
-
-  // قوس التقدم (من 0 إلى pct*360)
-  var arcDeg = pct * 359.99;
-  var arc    = _describeArc(40, 46, 12, 0, arcDeg);
+  // زاوية الباب: فتح 0→-55 | غلق -55→0
+  var angleDeg = isOpen ? -(pct * 55) : -((1 - pct) * 55);
+  var handleX  = isOpen ? (22 + pct * 36) : (58 - pct * 36);
+  var arcPath  = pct > 0.005 ? _describeArc(40, 86, 10, 0, pct * 359.99) : '';
 
   if (imgEl) {
     imgEl.innerHTML =
-      '<svg viewBox="0 0 80 105" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;filter:drop-shadow(' + shadow + ')">' +
-
-      // إطار الباب
-      '<rect x="4" y="2" width="72" height="90" rx="5" fill="none" stroke="' + color + '" stroke-width="2" opacity="0.25"/>' +
-
-      // الباب المتحرك
-      '<g style="transform:rotate(' + angleDeg.toFixed(1) + 'deg);transform-origin:8px 46px;transition:none">' +
-        '<rect x="8" y="5" width="62" height="84" rx="3" fill="' + color + '" fill-opacity="0.15" stroke="' + color + '" stroke-width="1.8"/>' +
-        // مقبض
-        '<circle cx="' + (isStopped ? (22 + pct*36).toFixed(0) : (isOpen ? (22+pct*36).toFixed(0) : (58-pct*36).toFixed(0))) + '" cy="47" r="3.5" fill="' + color + '" opacity="0.95"/>' +
+      '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">' +
+      '<rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="' + color + '" stroke-width="1.8" opacity="0.3"/>' +
+      '<g style="transform:rotate(' + angleDeg.toFixed(2) + 'deg);transform-origin:8px 41px">' +
+        '<rect x="8" y="4" width="62" height="74" rx="3" fill="' + color + '" fill-opacity="0.15" stroke="' + color + '" stroke-width="1.6"/>' +
+        '<circle cx="' + handleX.toFixed(1) + '" cy="41" r="3.2" fill="' + color + '" opacity="0.95"/>' +
       '</g>' +
-
-      // خط الحالة (نص صغير)
-      '<text x="40" y="99" text-anchor="middle" font-size="6.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + label + '</text>' +
-
-      // نسبة مئوية كبيرة
-      '<text x="40" y="80" text-anchor="middle" font-size="11" fill="' + color + '" font-family="JetBrains Mono,monospace" font-weight="900">' + pctInt + '%</text>' +
-
-      // قوس التقدم صغير تحت الباب
-      '<circle cx="40" cy="80" r="0" fill="none"/>' +
-
+      (arcPath
+        ? '<circle cx="40" cy="86" r="10" fill="none" stroke="' + color + '33" stroke-width="3"/>' +
+          '<path d="' + arcPath + '" fill="none" stroke="' + color + '" stroke-width="3" stroke-linecap="round"/>'
+        : '') +
+      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + pctInt + '%</text>' +
       '</svg>';
   }
 
   if (stateEl) {
-    stateEl.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border-radius:10px;margin-bottom:12px;font-weight:700;font-size:0.9rem;';
     stateEl.style.color = color;
-
-    // progress bar
+    stateEl.style.background = 'var(--surface2)';
     stateEl.innerHTML =
       '<div style="flex:1">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">' +
-          '<span>' + labelStatus + '</span>' +
-        '</div>' +
-        '<div style="height:6px;border-radius:4px;background:rgba(255,255,255,0.08);overflow:hidden">' +
-          '<div style="height:100%;width:' + pctInt + '%;background:' + color + ';border-radius:4px;transition:width 0.05s linear"></div>' +
+        '<div style="font-size:0.85rem;font-weight:700;margin-bottom:5px">' + statusTxt + '</div>' +
+        '<div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden">' +
+          '<div style="height:100%;width:' + pctInt + '%;background:' + color + ';border-radius:3px"></div>' +
         '</div>' +
       '</div>';
   }
 }
 
-// ─── رسم الباب في حالة ثابتة (مفتوح / مغلق / متوقف) ──
+// ─── رسم الباب في حالة ثابتة ─────────────────
 function _drawDoorStatic(imgEl, stateEl, state) {
-  var color, shadow, angleDeg, label, icon;
-  if (state === 'open') {
-    color = '#00e676'; shadow = '0 0 18px #00e67688'; angleDeg = -55;
-    label = '\u0645\u0641\u062a\u0648\u062d'; icon = '\U0001f513';
-  } else if (state === 'close') {
-    color = '#ff3d71'; shadow = '0 0 18px #ff3d7188'; angleDeg = 0;
-    label = '\u0645\u063a\u0644\u0642'; icon = '\U0001f512';
-  } else {
-    color = '#ffb300'; shadow = '0 0 18px #ffb30088'; angleDeg = -27;
-    label = '\u0645\u062a\u0648\u0642\u0641'; icon = '\u23f9';
-  }
+  var color    = state === 'open' ? '#00e676' : state === 'close' ? '#ff3d71' : '#ffb300';
+  var angleDeg = state === 'open' ? -55 : state === 'idle' ? -27 : 0;
+  var handleX  = state === 'open' ? 58 : state === 'idle' ? 40 : 22;
+  var label    = state === 'open' ? '\u0645\u0641\u062a\u0648\u062d' : state === 'close' ? '\u0645\u063a\u0644\u0642' : '\u0645\u062a\u0648\u0642\u0641';
+  var icon     = state === 'open' ? '\U0001f513' : state === 'close' ? '\U0001f512' : '\u23f9';
 
   if (imgEl) {
     imgEl.innerHTML =
-      '<svg viewBox="0 0 80 105" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;filter:drop-shadow(' + shadow + ')">' +
-      '<rect x="4" y="2" width="72" height="90" rx="5" fill="none" stroke="' + color + '" stroke-width="2" opacity="0.25"/>' +
-      '<g style="transform:rotate(' + angleDeg + 'deg);transform-origin:8px 46px">' +
-        '<rect x="8" y="5" width="62" height="84" rx="3" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="1.8"/>' +
-        '<circle cx="' + (state === 'open' ? 58 : state === 'idle' ? 40 : 22) + '" cy="47" r="3.5" fill="' + color + '" opacity="0.95"/>' +
+      '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">' +
+      '<rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="' + color + '" stroke-width="1.8" opacity="0.3"/>' +
+      '<g style="transform:rotate(' + angleDeg + 'deg);transform-origin:8px 41px">' +
+        '<rect x="8" y="4" width="62" height="74" rx="3" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="1.6"/>' +
+        '<circle cx="' + handleX + '" cy="41" r="3.2" fill="' + color + '" opacity="0.95"/>' +
       '</g>' +
-      '<text x="40" y="99" text-anchor="middle" font-size="6.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + label + '</text>' +
+      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + label + '</text>' +
       '</svg>';
   }
 
   if (stateEl) {
-    stateEl.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border-radius:10px;margin-bottom:12px;font-weight:700;font-size:0.9rem;';
     stateEl.style.color = color;
-    stateEl.innerHTML =
-      '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' +
-      icon + ' ' + label;
+    stateEl.style.background = 'var(--surface2)';
+    stateEl.innerHTML = icon + ' ' + label;
   }
 }
 
-// ─── رسم قوس SVG ──────────────────────────────
-function _describeArc(cx, cy, r, startDeg, endDeg) {
-  if (endDeg >= 360) endDeg = 359.99;
-  var s = _polar(cx, cy, r, startDeg - 90);
-  var e = _polar(cx, cy, r, endDeg - 90);
-  var large = endDeg > 180 ? 1 : 0;
-  return 'M ' + s.x + ' ' + s.y + ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + e.x + ' ' + e.y;
-}
-function _polar(cx, cy, r, deg) {
-  var rad = (deg * Math.PI) / 180;
-  return { x: +(cx + r * Math.cos(rad)).toFixed(3), y: +(cy + r * Math.sin(rad)).toFixed(3) };
-}
-
-// ─── دالة renderDoorSVG (الحالة الثابتة) ─────
+// ─── renderDoorSVG (alias للحالة الثابتة) ────
 function renderDoorSVG(container, state) {
   _drawDoorStatic(container, null, state);
 }
 
-// ─── تحديث _updateStateEl ─────────────────────
 function _updateStateEl(el, state) {
   _drawDoorStatic(null, el, state);
 }
 
+// ─── قوس SVG ──────────────────────────────────
+function _describeArc(cx, cy, r, startDeg, endDeg) {
+  if (endDeg >= 360) endDeg = 359.99;
+  function polar(deg) {
+    var rad = (deg - 90) * Math.PI / 180;
+    return { x: (cx + r * Math.cos(rad)).toFixed(2), y: (cy + r * Math.sin(rad)).toFixed(2) };
+  }
+  var s = polar(startDeg), e = polar(endDeg);
+  var large = endDeg > 180 ? 1 : 0;
+  return 'M ' + s.x + ' ' + s.y + ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + e.x + ' ' + e.y;
+}
 async function sendAction(action) {
   try {
     await apiFetch('/api/door/control', 'POST', { action });
@@ -500,8 +432,7 @@ async function sendDoorAction(deviceId, action, duration) {
       var stateEl = document.getElementById('user-state-' + doorId);
       var secs    = (action === 'stop') ? 0 : (action === 'open40' ? 40 : (duration || 5));
       if (action === 'stop') {
-        stopDoorTimer(doorId);
-        freezeDoorAtStop(doorId, imgEl, stateEl);
+        stopDoorTimer(doorId, imgEl, stateEl);
         updateDoorCardState(doorId, deviceId, 'idle', 'app');
       } else {
         startDoorTimer(doorId, imgEl, stateEl, secs, action);
@@ -1940,8 +1871,7 @@ async function userDoorAction(door, action) {
     var stateEl = document.getElementById('user-state-' + door.id);
     var secs    = action === 'stop' ? 0 : (action === 'open40' ? 40 : (door.duration_seconds || 5));
     if (action === 'stop') {
-      stopDoorTimer(door.id);
-      freezeDoorAtStop(door.id, imgEl, stateEl);
+      stopDoorTimer(door.id, imgEl, stateEl);
     } else {
       startDoorTimer(door.id, imgEl, stateEl, secs, action);
     }
