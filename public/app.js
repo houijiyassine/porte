@@ -175,7 +175,20 @@ function connectWS() {
           }
           // لا تايمر → idle عابر من Tuya — نتجاهل
         } else {
-          if (msg.source === 'rc' || !hasTimer) {
+          if (msg.source === 'rc') {
+            // RC: شغّل أنيميشن بمدة الباب المحفوظة في DOM
+            _cancelDoorTimer(doorId);
+            var rcImgEl   = document.getElementById('door-img-'      + doorId);
+            var rcStateEl = document.getElementById('user-state-'    + doorId)
+                         || document.getElementById('door-progress-' + doorId);
+            // جلب مدة الباب من data-duration أو افتراضي 5
+            var rcDurEl = document.querySelector('[data-door-id="' + doorId + '"]');
+            var rcSecs  = rcDurEl ? parseInt(rcDurEl.getAttribute('data-duration') || '5') : 5;
+            var rcAction = rawState === 'open' ? 'open' : 'close';
+            startDoorTimer(doorId, rcImgEl, rcStateEl, rcSecs, rcAction);
+            updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
+          } else if (!hasTimer) {
+            // App أو polling بدون تايمر نشط → عرض ثابت
             _cancelDoorTimer(doorId);
             _drawDoorStatic(imgEl, stateEl, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
@@ -269,7 +282,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
 
   var isOpen    = (action === 'open' || action === 'open40');
   var startTime = Date.now();
-  var total     = Math.max((seconds - 1), 1) * 1000;  // n-1 ثانية: ينتهي الأنيميشن قبل إغلاق الريلاي
+  var total     = Math.max((seconds - 1.3), 0.5) * 1000;  // n-1.3 ثانية: ينتهي الأنيميشن قبل إغلاق الريلاي
 
   doorTimers[doorId] = { startTime: startTime, total: total, isOpen: isOpen, frozen: false, _raf: null };
 
@@ -1048,7 +1061,7 @@ function renderInstDetail(inst) {
     if (idx > 0) doorsHtml += '<div style="margin:10px 0"></div>';
 
     doorsHtml += `
-      <div style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:14px;margin-bottom:4px">
+      <div data-door-id="${doorId}" data-duration="${duration}" style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:14px;margin-bottom:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px">
           <div style="display:flex;align-items:center;gap:12px;flex:1">
             <!-- صورة الباب -->
@@ -1668,6 +1681,7 @@ async function loadUserDoors() {
 
       var card = document.createElement('div');
       card.setAttribute('data-door-id', door.id);
+      card.setAttribute('data-duration', door.duration_seconds || 5);
       card.setAttribute('data-gps-lat', gpsLat||'');
       card.setAttribute('data-gps-lng', gpsLng||'');
       card.setAttribute('data-gps-range', gpsRange);
@@ -1933,6 +1947,8 @@ async function loadAdminDoors() {
     (inst.doors||[]).forEach(function(door) {
       var card = document.createElement('div');
       card.style.cssText = 'background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:16px;margin-bottom:12px';
+      card.setAttribute('data-door-id', door.id);
+      card.setAttribute('data-duration', door.duration_seconds || 5);
 
       // Header: صورة الباب + اسم + حالة
       var hdr = document.createElement('div');
