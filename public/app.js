@@ -173,10 +173,11 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
+            // تايمر شغال → أوقفه (إيقاف مبكر من RC أو يدوي)
             stopDoorTimer(doorId, imgEl, stateEl);
             updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
           }
-          // لا تايمر → idle عابر من Tuya — نتجاهل
+          // لا تايمر → idle عابر من Tuya — نتجاهل (الصورة تبقى على lastKnownState)
 
         } else {
           // open أو close جديد
@@ -189,11 +190,11 @@ function connectWS() {
           var newSecs = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
 
           if (msg.source === 'rc') {
-            // RC دائماً يشغّل أنيميشن — يقطع أي تايمر شغال
+            lastKnownState[doorId] = rawState;
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
-            // App أو polling بدون تايمر → شغّل أنيميشن
+            if (rawState !== 'idle') lastKnownState[doorId] = rawState;
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           }
@@ -279,8 +280,9 @@ let timerInterval = null;
 //  عند غلق: pos تنقص من pos_حالي إلى 0.0
 //  عند إيقاف: pos تتجمد حيث هي
 // ═══════════════════════════════════════════════════════
-const doorPos    = {};  // doorPos[doorId]    = موضع الباب (0→1)
-const doorTimers = {};  // doorTimers[doorId] = { _raf }
+const doorPos         = {};  // doorPos[doorId]    = موضع الباب (0→1)
+const doorTimers      = {};  // doorTimers[doorId] = { _raf }
+const lastKnownState  = {};  // lastKnownState[doorId] = 'open'|'close' — آخر حالة حقيقية
 
 function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
   // أوقف أي أنيميشن سابق
@@ -317,6 +319,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
       doorPos[doorId] = toPos;
       delete doorTimers[doorId];
       var finalState = isOpen ? 'open' : 'close';
+      lastKnownState[doorId] = finalState;
       setTimeout(function() {
         _drawDoorStatic(imgEl, stateEl, finalState);
         updateDoorCardState(doorId, null, finalState, 'auto');
@@ -472,6 +475,7 @@ async function sendDoorAction(deviceId, action, duration) {
         stopDoorTimer(doorId, imgEl, stateEl);
         updateDoorCardState(doorId, deviceId, 'idle', 'app');
       } else {
+        lastKnownState[doorId] = (action === 'open' || action === 'open40') ? 'open' : 'close';
         startDoorTimer(doorId, imgEl, stateEl, secs, action);
       }
     }
@@ -815,6 +819,12 @@ async function fetchAndUpdateDoorImage(door) {
     imgEl = document.getElementById('door-img-' + door.id);
 
     if (doorTimers[door.id]) return; // تايمر شغال — لا نتدخل
+
+    // إذا Tuya قال idle → استخدم آخر حالة معروفة (مفتوح/مغلق)
+    // idle من Tuya = الريلاي في وضعه الطبيعي، ليس "متوقف"
+    if (state === 'idle' && lastKnownState[door.id]) {
+      state = lastKnownState[door.id];
+    }
 
     if (imgEl) _drawDoorStatic(imgEl, null, state);
     updateDoorCardState(door.id, door.device_id, state, 'poll');
@@ -1922,6 +1932,7 @@ async function userDoorAction(door, action) {
     if (action === 'stop') {
       stopDoorTimer(door.id, imgEl, stateEl);
     } else {
+      lastKnownState[door.id] = (action === 'open' || action === 'open40') ? 'open' : 'close';
       startDoorTimer(door.id, imgEl, stateEl, secs, action);
     }
   } catch(e) {
