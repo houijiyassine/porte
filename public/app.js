@@ -155,6 +155,32 @@ function connectWS() {
         updateDoorStatusUI(msg.action);
         loadRecentHistory();
       }
+      // تحديث حالة الباب من Polling أو Webhook (RC أو App)
+      if (msg.type === 'door_state') {
+        const state = msg.r1_on ? 'open' : msg.r2_on ? 'close' : 'idle';
+        updateDoorStatusUI(state);
+        // تحديث بطاقة الباب في صفحة المؤسسات
+        updateDoorCardState(msg.doorId, msg.deviceId, state, msg.source);
+        // تحديث بطاقة الباب في صفحة المستخدم
+        var userStateEl = document.getElementById('user-state-' + msg.doorId);
+        if (userStateEl) {
+          var color = msg.r1_on ? 'var(--success)' : msg.r2_on ? 'var(--danger)' : 'var(--muted)';
+          var text  = msg.r1_on ? '🔓 مفتوح' : msg.r2_on ? '🔒 مغلق' : '⏹ متوقف';
+          userStateEl.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' + text;
+          userStateEl.style.color = color;
+        }
+        // تحديث صورة الباب
+        updateDoorImage(msg.doorId, state);
+        // إذا جاء من RC → حدّث السجل
+        if (msg.source === 'rc') {
+          setTimeout(loadRecentHistory, 500);
+          // تحديث سجل الباب إذا مفتوح
+          var logsTitle = document.getElementById('door-logs-title');
+          if (logsTitle && window._openDoorLogsId === msg.doorId) {
+            setTimeout(function() { openDoorLogs(msg.doorId, logsTitle.textContent.replace('📋 ','')); }, 600);
+          }
+        }
+      }
       if (msg.type === 'user_location') {
         updateUserMarker(msg.userId, msg.coords);
       }
@@ -180,8 +206,68 @@ function updateDoorStatusUI(state) {
     state==='open'||state==='opened' ? 'open' :
     state==='close'||state==='closed' ? 'closed' : 'unknown'
   }`;
-  const labels = { open:'مفتوح', opened:'مفتوح', close:'مغلق', closed:'مغلق', stop:'متوقف', unknown:'غير معروف' };
+  const labels = { open:'مفتوح', opened:'مفتوح', close:'مغلق', closed:'مغلق', stop:'متوقف', idle:'متوقف', unknown:'غير معروف' };
   txt.textContent = labels[state] || state;
+}
+
+// تحديث بطاقة الباب في صفحة المؤسسات/الأدمن عبر WebSocket
+function updateDoorCardState(doorId, deviceId, state, source) {
+  // badge الحالة في بطاقة أدمن
+  var statusEl = document.getElementById('door-status-' + doorId);
+  if (statusEl) {
+    var label  = state==='open' ? 'مفتوح' : state==='close' ? 'مغلق' : 'متوقف';
+    var color  = state==='open' ? 'rgba(0,230,118,0.15)' : state==='close' ? 'rgba(255,61,113,0.15)' : 'rgba(255,179,0,0.15)';
+    var tcolor = state==='open' ? 'var(--success)' : state==='close' ? 'var(--danger)' : 'var(--warning)';
+    var icon   = state==='open' ? '🔓' : state==='close' ? '🔒' : '⏹';
+    statusEl.innerHTML = icon + ' ' + label + (source==='rc' ? ' <span style="font-size:0.62rem;opacity:0.7">RC</span>' : '');
+    statusEl.style.cssText = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + color + ';color:' + tcolor + ';border:1px solid ' + tcolor + '33';
+  }
+  // badge الحالة في بطاقة أدمن (adm-status-)
+  var admEl = document.getElementById('adm-status-' + doorId);
+  if (admEl) {
+    var label  = state==='open' ? 'مفتوح' : state==='close' ? 'مغلق' : 'متوقف';
+    var color  = state==='open' ? 'rgba(0,230,118,0.15)' : state==='close' ? 'rgba(255,61,113,0.15)' : 'rgba(255,179,0,0.15)';
+    var tcolor = state==='open' ? 'var(--success)' : state==='close' ? 'var(--danger)' : 'var(--warning)';
+    admEl.textContent = label;
+    admEl.style.cssText = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + color + ';color:' + tcolor;
+  }
+}
+
+// تحديث صورة/أيقونة الباب بناءً على حالته
+function updateDoorImage(doorId, state) {
+  var imgEl = document.getElementById('door-img-' + doorId);
+  if (!imgEl) return;
+  imgEl.setAttribute('data-state', state);
+  renderDoorSVG(imgEl, state);
+}
+
+function renderDoorSVG(container, state) {
+  var isOpen   = state === 'open';
+  var isStop   = state === 'idle' || state === 'stop';
+  var color    = isOpen ? '#00e676' : isStop ? '#ffb300' : '#ff3d71';
+  var shadow   = isOpen ? '0 0 18px #00e67688' : isStop ? '0 0 18px #ffb30088' : '0 0 18px #ff3d7188';
+  var angleDeg = isOpen ? -55 : 0; // الباب مفتوح = دوران
+  container.innerHTML = `
+    <svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;filter:drop-shadow(${shadow})">
+      <!-- إطار الباب -->
+      <rect x="6" y="4" width="68" height="92" rx="4" fill="none" stroke="${color}" stroke-width="2.5" opacity="0.35"/>
+      <!-- الباب نفسه -->
+      <g transform="rotate(${angleDeg}, 10, 50)" style="transform-origin:10px 50px;transform-box:fill-box;transition:transform 0.5s ease">
+        <rect x="10" y="8" width="58" height="84" rx="3"
+          fill="${color}" fill-opacity="${isOpen ? 0.18 : 0.22}"
+          stroke="${color}" stroke-width="2"/>
+        <!-- مقبض الباب -->
+        <circle cx="${isOpen ? 58 : 22}" cy="50" r="4"
+          fill="${color}" opacity="0.9"/>
+        <line x1="${isOpen ? 58 : 22}" y1="46" x2="${isOpen ? 58 : 22}" y2="54"
+          stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>
+      </g>
+      <!-- حالة نص -->
+      <text x="40" y="97" text-anchor="middle" font-size="7"
+        fill="${color}" font-family="Cairo,sans-serif" font-weight="700">
+        ${isOpen ? 'مفتوح' : isStop ? 'متوقف' : 'مغلق'}
+      </text>
+    </svg>`;
 }
 
 // ─── Door Control ─────────────────────────────
@@ -522,14 +608,27 @@ async function checkDoorStatus(deviceId, elemId) {
     const data = await apiFetch(`/api/device/status/${deviceId}`);
     const online = data.online === true;
     doorStatusCache[deviceId] = online;
-    el.textContent = online ? 'En ligne' : 'Hors ligne';
+    el.textContent = online ? '🟢 متصل' : '🔴 غير متصل';
     el.style.color = online ? 'var(--success)' : 'var(--danger)';
     el.style.background = online ? 'rgba(0,230,118,0.1)' : 'rgba(255,61,113,0.1)';
   } catch {
-    el.textContent = 'Hors ligne';
+    el.textContent = '🔴 غير متصل';
     el.style.color = 'var(--danger)';
     el.style.background = 'rgba(255,61,113,0.1)';
   }
+}
+
+// جلب حالة الباب الحقيقية (مفتوح/مغلق/متوقف) وتحديث الصورة والـ badge
+async function fetchAndUpdateDoorImage(door) {
+  try {
+    var data = await apiFetch('/api/door/status?deviceId=' + door.device_id);
+    var state = data.r1_on ? 'open' : data.r2_on ? 'close' : 'idle';
+    // تحديث الصورة
+    var imgEl = document.getElementById('door-img-' + door.id);
+    if (imgEl) renderDoorSVG(imgEl, state);
+    // تحديث badge الحالة
+    updateDoorCardState(door.id, door.device_id, state, 'poll');
+  } catch(e) {}
 }
 
 // ─── Door Logs ────────────────────────────────────────
@@ -793,9 +892,13 @@ function renderInstDetail(inst) {
     doorsHtml += `
       <div style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:14px;margin-bottom:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px">
-          <div>
-            <div style="font-weight:800;font-size:0.95rem">⏳ ${doorName}</div>
-            <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-top:2px">ID: ${deviceId.substring(0,16)}...</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <!-- صورة الباب -->
+            <div id="door-img-${doorId}" data-state="idle" style="width:52px;height:64px;flex-shrink:0"></div>
+            <div>
+              <div style="font-weight:800;font-size:0.95rem">🚪 ${doorName}</div>
+              <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-top:2px">ID: ${deviceId.substring(0,16)}...</div>
+            </div>
           </div>
           <span id="door-status-${doorId}" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>
         </div>
@@ -862,6 +965,11 @@ function renderInstDetail(inst) {
   setTimeout(function() {
     (inst.doors||[]).forEach(function(door) {
       checkDoorStatus(door.device_id, 'door-status-' + door.id);
+      // رسم صورة الباب الأولية
+      var imgEl = document.getElementById('door-img-' + door.id);
+      if (imgEl) renderDoorSVG(imgEl, 'idle');
+      // جلب الحالة الحقيقية من Tuya
+      fetchAndUpdateDoorImage(door);
     });
   }, 300);
 }
@@ -1416,9 +1524,12 @@ async function loadUserDoors() {
       var hdr = document.createElement('div');
       hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
       hdr.innerHTML =
-        '<div>' +
-          '<div style="font-size:1.05rem;font-weight:800">🚪 ' + door.name + '</div>' +
-          (door.location ? '<div style="font-size:0.75rem;color:var(--muted);margin-top:3px">📍 ' + door.location + '</div>' : '') +
+        '<div style="display:flex;align-items:center;gap:12px">' +
+          '<div id="door-img-' + door.id + '" data-state="idle" style="width:52px;height:64px;flex-shrink:0"></div>' +
+          '<div>' +
+            '<div style="font-size:1.05rem;font-weight:800">' + door.name + '</div>' +
+            (door.location ? '<div style="font-size:0.75rem;color:var(--muted);margin-top:3px">📍 ' + door.location + '</div>' : '') +
+          '</div>' +
         '</div>' +
         '<span id="user-online-' + door.id + '" style="font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface2);color:var(--muted)">...</span>';
       card.appendChild(hdr);
@@ -1503,7 +1614,9 @@ async function loadUserDoors() {
       card.appendChild(btns);
       container.appendChild(card);
 
-      // جلب الحالة
+      // رسم صورة الباب الأولية + جلب الحالة
+      var imgEl2 = document.getElementById('door-img-' + door.id);
+      if (imgEl2) renderDoorSVG(imgEl2, 'idle');
       checkDoorStatus(door.device_id, 'user-online-' + door.id);
       fetchUserDoorState(door);
     });
@@ -1530,12 +1643,16 @@ async function fetchUserDoorState(door) {
   try {
     var data = await apiFetch('/api/door/status?deviceId=' + door.device_id);
     var r1 = data.r1_on, r2 = data.r2_on;
+    var state = r1 ? 'open' : r2 ? 'close' : 'idle';
     var text, color;
     if (r1)      { text = '🔓 مفتوح';  color = 'var(--success)'; }
     else if (r2) { text = '🔒 مغلق';   color = 'var(--danger)'; }
     else         { text = '⏹ متوقف';  color = 'var(--muted)'; }
     el.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' + text;
     el.style.color = color;
+    // تحديث صورة الباب
+    var imgEl = document.getElementById('door-img-' + door.id);
+    if (imgEl) renderDoorSVG(imgEl, state);
   } catch(e) {
     el.innerHTML = '<span style="color:var(--muted)">—</span>';
   }
