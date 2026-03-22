@@ -1117,10 +1117,12 @@ async function checkDeviceOnline(deviceId) {
 async function pollAllDoors() {
   try {
     const { data: doors } = await supabase
-      .from('doors').select('id,inst_id,name,device_id');
+      .from('doors').select('id,inst_id,name,device_id')
+      .not('device_id', 'is', null);
     if (!doors?.length) return;
 
     for (const door of doors) {
+      if (!door.inst_id) continue; // تخطى الأبواب بدون مؤسسة
       try {
         const token   = await getTuyaToken();
         const t       = Date.now().toString();
@@ -1142,32 +1144,40 @@ async function pollAllDoors() {
         data.result.forEach(s => { sm[s.code] = s.value; });
         const r1 = sm['switch_1'] === true  || sm['switch_1'] === 'true'  || sm['switch_1'] === 1;
         const r2 = sm['switch_2'] === true  || sm['switch_2'] === 'true'  || sm['switch_2'] === 1;
-        const prev    = doorStateCache.get(door.device_id);
-        const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
+        const prev      = doorStateCache.get(door.device_id);
+        const changed   = !prev || prev.r1 !== r1 || prev.r2 !== r2;
         const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
 
-        // دائماً حدّث الـ cache
         doorStateCache.set(door.device_id, { r1, r2 });
 
         const lastApp   = appLastAction.get(door.device_id);
         const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
 
-        // كشف RC: تغيير لم يأتِ من التطبيق
+        // ─── كشف RC: تغيير لم يأتِ من التطبيق ───
         if (changed && !isFromApp && (r1 || r2)) {
-          await supabase.from('door_logs').insert({
-            door_id: door.id, inst_id: door.inst_id,
-            value: doorAction, source: 'RC (جهاز تحكم)',
+          const { error: rcErr } = await supabase.from('door_logs').insert({
+            door_id:    door.id,
+            inst_id:    door.inst_id,
+            user_id:    null,
+            value:      doorAction,
+            source:     'RC (جهاز تحكم)',
             created_at: new Date().toISOString(),
           });
+          if (rcErr) console.error('[Polling] RC insert error:', rcErr.message);
         }
 
-        // بث تحديث الحالة فقط إذا تغيرت
+        // بث التغيير عبر WebSocket
         if (changed) {
           broadcast({
-            type: 'door_state', deviceId: door.device_id,
-            doorId: door.id, instId: door.inst_id,
-            r1_on: r1, r2_on: r2, state: doorAction,
-            source: isFromApp ? 'app' : 'rc', timestamp: Date.now(),
+            type:     'door_state',
+            deviceId:  door.device_id,
+            doorId:    door.id,
+            instId:    door.inst_id,
+            r1_on:     r1,
+            r2_on:     r2,
+            state:     doorAction,
+            source:    isFromApp ? 'app' : 'rc',
+            timestamp: Date.now(),
           });
         }
       } catch(e) {}
