@@ -182,19 +182,22 @@ function connectWS() {
           // open أو close جديد
 
 
-          // إذا source=app والتايمر شغال → App يتحكم، لا نتدخل
-          if (msg.source === 'app' && hasTimer) {
-            // التايمر من sendDoorAction/userDoorAction يتحكم
+          var newImgEl   = document.getElementById('door-img-'      + doorId);
+          var newStateEl = document.getElementById('user-state-'    + doorId)
+                        || document.getElementById('door-progress-' + doorId);
+          var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
+          var newSecs = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
+
+          if (msg.source === 'rc') {
+            // RC دائماً يشغّل أنيميشن — يقطع أي تايمر شغال
+            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
+            updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
-            // لا تايمر → RC أو حدث خارجي → شغّل أنيميشن
-            var newImgEl   = document.getElementById('door-img-'      + doorId);
-            var newStateEl = document.getElementById('user-state-'    + doorId)
-                          || document.getElementById('door-progress-' + doorId);
-            var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
-            var newSecs = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
+            // App أو polling بدون تايمر → شغّل أنيميشن
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           }
+          // source=app + تايمر شغال → App يتحكم، لا نتدخل
         }
 
         // تحديث السجل إذا جاء من RC
