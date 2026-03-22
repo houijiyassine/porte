@@ -160,8 +160,9 @@ function connectWS() {
         var r1 = msg.r1_on, r2 = msg.r2_on;
         var rawState = r1 ? 'open' : r2 ? 'close' : 'idle';
         var doorId   = msg.doorId;
-        var imgEl    = document.getElementById('door-img-' + doorId);
-        var stateEl  = document.getElementById('user-state-' + doorId);
+        var imgEl    = document.getElementById('door-img-'      + doorId);
+        var stateEl  = document.getElementById('user-state-'    + doorId)
+                    || document.getElementById('door-progress-' + doorId);
         var hasTimer = !!doorTimers[doorId];
 
         updateDoorStatusUI(rawState);
@@ -175,10 +176,8 @@ function connectWS() {
           // إذا لم يكن هناك تايمر → لا نغير (إشارة عابرة من Tuya)
         } else {
           if (msg.source === 'rc' || !hasTimer) {
-            // RC أو فتح/غلق جديد من الخارج → عرض الحالة الثابتة
             _cancelDoorTimer(doorId);
-            if (imgEl) _drawDoorStatic(imgEl, stateEl, rawState);
-            else if (stateEl) _drawDoorStatic(null, stateEl, rawState);
+            _drawDoorStatic(imgEl, stateEl, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           }
           // إذا تايمر شغال من App → لا نتدخل
@@ -428,8 +427,10 @@ async function sendDoorAction(deviceId, action, duration) {
     // تشغيل التايمر على الباب المناسب
     var doorId = _findDoorIdByDeviceId(deviceId);
     if (doorId) {
-      var imgEl   = document.getElementById('door-img-' + doorId);
-      var stateEl = document.getElementById('user-state-' + doorId);
+      var imgEl   = document.getElementById('door-img-'      + doorId);
+      // stateEl: يكون user-state (صفحة مستخدم) أو door-progress (صفحة أدمن)
+      var stateEl = document.getElementById('user-state-'    + doorId)
+                 || document.getElementById('door-progress-' + doorId);
       var secs    = (action === 'stop') ? 0 : (action === 'open40' ? 40 : (duration || 5));
       if (action === 'stop') {
         stopDoorTimer(doorId, imgEl, stateEl);
@@ -445,13 +446,14 @@ async function sendDoorAction(deviceId, action, duration) {
 
 // إيجاد doorId من deviceId (من الكاش)
 function _findDoorIdByDeviceId(deviceId) {
-  var el = document.querySelector('[data-device-id="' + deviceId + '"]');
-  if (el) return el.getAttribute('data-door-id-ref');
-  // بحث في الـ DOM
-  var allImgs = document.querySelectorAll('[id^="door-img-"]');
+  // البحث في كل عناصر door-img التي لديها data-device-id
+  var allImgs = document.querySelectorAll('[data-device-id]');
   for (var i = 0; i < allImgs.length; i++) {
-    var did = allImgs[i].getAttribute('data-device-id');
-    if (did === deviceId) return allImgs[i].id.replace('door-img-', '');
+    if (allImgs[i].getAttribute('data-device-id') === deviceId) {
+      // نأخذ data-door-id أو نستخرجه من id="door-img-XXXX"
+      var did = allImgs[i].getAttribute('data-door-id') || allImgs[i].id.replace('door-img-', '');
+      if (did) return did;
+    }
   }
   return null;
 }
@@ -1040,15 +1042,19 @@ function renderInstDetail(inst) {
     doorsHtml += `
       <div style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:14px;margin-bottom:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px">
-          <div style="display:flex;align-items:center;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px;flex:1">
             <!-- صورة الباب -->
-            <div id="door-img-${doorId}" data-state="idle" data-device-id="${deviceId}" style="width:52px;height:64px;flex-shrink:0"></div>
-            <div>
-              <div style="font-weight:800;font-size:0.95rem">🚪 ${doorName}</div>
-              <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-top:2px">ID: ${deviceId.substring(0,16)}...</div>
+            <div id="door-img-${doorId}" data-state="idle" data-device-id="${deviceId}" data-door-id="${doorId}" style="width:52px;height:64px;flex-shrink:0"></div>
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px">
+                <div style="font-weight:800;font-size:0.95rem">🚪 ${doorName}</div>
+                <span id="door-status-${doorId}" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>
+              </div>
+              <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-bottom:6px">ID: ${deviceId.substring(0,16)}...</div>
+              <!-- progress bar الأدمن -->
+              <div id="door-progress-${doorId}" style="font-size:0.8rem;color:var(--muted)"></div>
             </div>
           </div>
-          <span id="door-status-${doorId}" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
           <button onclick="sendDoorAction('${deviceId}','open',${duration})" style="background:rgba(0,230,118,0.15);border:1px solid rgba(0,230,118,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--success)">🟢<span>فتح</span></button>
@@ -1918,15 +1924,19 @@ async function loadAdminDoors() {
       var card = document.createElement('div');
       card.style.cssText = 'background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:16px;margin-bottom:12px';
 
-      // Header: اسم + En ligne
+      // Header: صورة الباب + اسم + حالة
       var hdr = document.createElement('div');
-      hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px';
+      hdr.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:12px';
       hdr.innerHTML =
-        '<div>' +
-          '<div style="font-weight:800">⏳ ' + door.name + '</div>' +
-          '<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted)">ID: ' + (door.device_id||'').substring(0,16) + '...</div>' +
-        '</div>' +
-        '<span id="adm-status-' + door.id + '" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>';
+        '<div id="door-img-' + door.id + '" data-device-id="' + door.device_id + '" data-door-id="' + door.id + '" style="width:52px;height:64px;flex-shrink:0"></div>' +
+        '<div style="flex:1">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+            '<div style="font-weight:800">🚪 ' + door.name + '</div>' +
+            '<span id="adm-status-' + door.id + '" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
+          '</div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-bottom:5px">ID: ' + (door.device_id||'').substring(0,16) + '...</div>' +
+          '<div id="door-progress-' + door.id + '" style="font-size:0.8rem;color:var(--muted)"></div>' +
+        '</div>';
       card.appendChild(hdr);
 
       // أزرار التحكم 4 في grid
@@ -2011,6 +2021,10 @@ async function loadAdminDoors() {
       card.appendChild(logRow);
       container.appendChild(card);
       checkDoorStatus(door.device_id, 'adm-status-' + door.id);
+      // رسم صورة الباب الأولية وجلب الحالة
+      var admImg = document.getElementById('door-img-' + door.id);
+      if (admImg) _drawDoorStatic(admImg, null, 'close');
+      fetchAndUpdateDoorImage(door);
     });
 
   } catch(e) {
