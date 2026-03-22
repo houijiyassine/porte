@@ -182,23 +182,28 @@ function connectWS() {
 
         } else {
           // open أو close جديد
-          var newIsOpen   = (rawState === 'open');
-          var isNewAction = !curTimer || curTimer.isFrozen || (timerAction !== rawState);
+          var newIsOpen = (rawState === 'open');
 
-          if (isNewAction) {
-            // إذا الاتجاه مختلف عن التجميد → امسح التجميد
-            if (curTimer && curTimer.isFrozen && curTimer.isOpen !== newIsOpen) {
-              delete doorTimers[doorId];
+          // إذا source=app والتايمر شغال (غير مجمّد) → App يتحكم، لا نتدخل
+          if (msg.source === 'app' && curTimer && !curTimer.isFrozen) {
+            // لا شيء — التايمر من sendDoorAction/userDoorAction يتحكم
+          } else {
+            var isNewAction = !curTimer || curTimer.isFrozen || (timerAction !== rawState);
+            if (isNewAction) {
+              // إذا الاتجاه مختلف عن التجميد → امسح التجميد
+              if (curTimer && curTimer.isFrozen && curTimer.isOpen !== newIsOpen) {
+                delete doorTimers[doorId];
+              }
+              var newImgEl   = document.getElementById('door-img-'      + doorId);
+              var newStateEl = document.getElementById('user-state-'    + doorId)
+                            || document.getElementById('door-progress-' + doorId);
+              var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
+              var newSecs = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
+              startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
+              updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
             }
-            var newImgEl   = document.getElementById('door-img-'      + doorId);
-            var newStateEl = document.getElementById('user-state-'    + doorId)
-                          || document.getElementById('door-progress-' + doorId);
-            var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
-            var newSecs = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
-            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
-            updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
+            // نفس الحدث والتايمر شغال → لا نتدخل
           }
-          // نفس الحدث والتايمر شغال → لا نتدخل
         }
 
         // تحديث السجل إذا جاء من RC
@@ -460,14 +465,12 @@ async function sendDoorAction(deviceId, action, duration) {
     toast(labels[action] || '✅ تم', 'success');
     // تشغيل التايمر على الباب المناسب
     var doorId = _findDoorIdByDeviceId(deviceId);
-    console.log('[sendDoorAction] deviceId='+deviceId+' doorId='+doorId+' action='+action+' timerKeys='+JSON.stringify(Object.keys(doorTimers)));
     if (doorId) {
       var imgEl   = document.getElementById('door-img-'      + doorId);
       var stateEl = document.getElementById('user-state-'    + doorId)
                  || document.getElementById('door-progress-' + doorId);
       var secs    = (action === 'stop') ? 0 : (action === 'open40' ? 40 : (duration || 5));
       if (action === 'stop') {
-        console.log('[sendDoorAction] timer='+JSON.stringify(doorTimers[doorId]));
         stopDoorTimer(doorId, imgEl, stateEl);
         updateDoorCardState(doorId, deviceId, 'idle', 'app');
       } else {
