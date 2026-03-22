@@ -284,9 +284,13 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
     if (pct < 1) {
       t._raf = requestAnimationFrame(tick);
     } else {
+      // ارسم 100% أولاً — انتظر 400ms ثم انتقل للحالة النهائية
       delete doorTimers[doorId];
-      _drawDoorStatic(imgEl, stateEl, isOpen ? 'close' : 'open');
-      updateDoorCardState(doorId, null, isOpen ? 'close' : 'open', 'auto');
+      setTimeout(function() {
+        var finalState = isOpen ? 'close' : 'open';
+        _drawDoorStatic(imgEl, stateEl, finalState);
+        updateDoorCardState(doorId, null, finalState, 'auto');
+      }, 400);
     }
   }
 
@@ -313,10 +317,10 @@ function _cancelDoorTimer(doorId) {
 function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped) {
   var pctInt = Math.round(pct * 100);
   var color  = isStopped ? '#ffb300' : isOpen ? '#00e676' : '#ff3d71';
-  var statusTxt = isStopped ? ('\u23f9 \u0645\u062a\u0648\u0642\u0641 \u2014 ' + pctInt + '%')
-                : isOpen    ? ('\U0001f513 \u064a\u0641\u062a\u062d... \u2014 ' + pctInt + '%')
-                :             ('\U0001f512 \u064a\u063a\u0644\u0642... \u2014 ' + pctInt + '%');
-  var label = isStopped ? '\u0645\u062a\u0648\u0642\u0641' : isOpen ? '\u064a\u0641\u062a\u062d...' : '\u064a\u063a\u0644\u0642...';
+  var statusTxt = isStopped ? ('⏹ متوقف — ' + pctInt + '%')
+                : isOpen    ? ('🔓 يفتح... — ' + pctInt + '%')
+                :             ('🔒 يغلق... — ' + pctInt + '%');
+  var label = isStopped ? 'متوقف' : isOpen ? 'يفتح...' : 'يغلق...';
 
   // زاوية الباب: فتح 0→-55 | غلق -55→0
   var angleDeg = isOpen ? -(pct * 55) : -((1 - pct) * 55);
@@ -357,8 +361,8 @@ function _drawDoorStatic(imgEl, stateEl, state) {
   var color    = state === 'open' ? '#00e676' : state === 'close' ? '#ff3d71' : '#ffb300';
   var angleDeg = state === 'open' ? -55 : state === 'idle' ? -27 : 0;
   var handleX  = state === 'open' ? 58 : state === 'idle' ? 40 : 22;
-  var label    = state === 'open' ? '\u0645\u0641\u062a\u0648\u062d' : state === 'close' ? '\u0645\u063a\u0644\u0642' : '\u0645\u062a\u0648\u0642\u0641';
-  var icon     = state === 'open' ? '\U0001f513' : state === 'close' ? '\U0001f512' : '\u23f9';
+  var label    = state === 'open' ? 'مفتوح' : state === 'close' ? 'مغلق' : 'متوقف';
+  var icon     = state === 'open' ? '🔓' : state === 'close' ? '🔒' : '⏹';
 
   if (imgEl) {
     imgEl.innerHTML =
