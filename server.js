@@ -1156,13 +1156,14 @@ async function pollAllDoors() {
         const lastApp    = appLastAction.get(door.device_id);
         const isFromApp  = lastApp && (Date.now() - lastApp.time) < 15000;
 
+        console.log(`[Polling] RC check: changed=${changed} isFromApp=${isFromApp} r1=${r1} r2=${r2} doorAction=${doorAction}`);
         if (changed && !isFromApp && (r1 || r2)) {
-          await supabase.from('door_logs').insert({
+          const { error: insertErr } = await supabase.from('door_logs').insert({
             door_id: door.id, inst_id: door.inst_id,
             value: doorAction, source: 'RC (جهاز تحكم)',
             created_at: new Date().toISOString(),
-          }).catch(() => {});
-          console.log(`[Polling] 📻 RC → ${door.name}: ${doorAction}`);
+          });
+          console.log(`[Polling] 📻 RC insert: ${insertErr ? insertErr.message : '✅ نجح'}`);
         }
 
         // بث تحديث الحالة فقط إذا تغيرت
