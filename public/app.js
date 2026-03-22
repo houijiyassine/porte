@@ -157,27 +157,43 @@ function connectWS() {
       }
       // تحديث حالة الباب من Polling أو Webhook (RC أو App)
       if (msg.type === 'door_state') {
-        const state = msg.r1_on ? 'open' : msg.r2_on ? 'close' : 'idle';
-        updateDoorStatusUI(state);
-        // تحديث بطاقة الباب في صفحة المؤسسات
-        updateDoorCardState(msg.doorId, msg.deviceId, state, msg.source);
-        // تحديث بطاقة الباب في صفحة المستخدم
-        var userStateEl = document.getElementById('user-state-' + msg.doorId);
-        if (userStateEl) {
-          var color = msg.r1_on ? 'var(--success)' : msg.r2_on ? 'var(--danger)' : 'var(--muted)';
-          var text  = msg.r1_on ? '🔓 مفتوح' : msg.r2_on ? '🔒 مغلق' : '⏹ متوقف';
-          userStateEl.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' + text;
-          userStateEl.style.color = color;
+        var r1 = msg.r1_on, r2 = msg.r2_on;
+        var rawState = r1 ? 'open' : r2 ? 'close' : 'idle';
+        var doorId   = msg.doorId;
+        var imgEl    = document.getElementById('door-img-' + doorId);
+        var stateEl  = document.getElementById('user-state-' + doorId);
+        var hasTimer = !!doorTimers[doorId];
+
+        updateDoorStatusUI(rawState);
+
+        if (rawState === 'idle') {
+          // Tuya أفاد أن الجهاز في حالة idle
+          if (hasTimer) {
+            // تم إيقافه قبل انتهاء الوقت (من RC أو يدوياً)
+            stopDoorTimer(doorId);
+            if (imgEl) renderDoorSVG(imgEl, 'idle');
+            if (stateEl) _updateStateEl(stateEl, 'idle');
+            updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
+          }
+          // إذا لم يكن هناك تايمر شغال → لا نغير الصورة (سببها إشارة عابرة)
+        } else {
+          // open أو close — إذا جاء من RC وليس من تايمر نشط
+          if (msg.source === 'rc' || !hasTimer) {
+            // RC بدأ تشغيل جديد → لا نعرف المدة، نعرض الحالة فقط
+            stopDoorTimer(doorId);
+            if (imgEl) renderDoorSVG(imgEl, rawState);
+            if (stateEl) _updateStateEl(stateEl, rawState);
+            updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
+          }
+          // إذا من app وتايمر شغال → التايمر يتحكم، لا نتدخل
         }
-        // تحديث صورة الباب
-        updateDoorImage(msg.doorId, state);
-        // إذا جاء من RC → حدّث السجل
+
+        // تحديث السجل إذا جاء من RC
         if (msg.source === 'rc') {
           setTimeout(loadRecentHistory, 500);
-          // تحديث سجل الباب إذا مفتوح
           var logsTitle = document.getElementById('door-logs-title');
-          if (logsTitle && window._openDoorLogsId === msg.doorId) {
-            setTimeout(function() { openDoorLogs(msg.doorId, logsTitle.textContent.replace('📋 ','')); }, 600);
+          if (logsTitle && window._openDoorLogsId === doorId) {
+            setTimeout(function() { openDoorLogs(doorId, logsTitle.textContent.replace('📋 ','')); }, 600);
           }
         }
       }
@@ -273,6 +289,106 @@ function renderDoorSVG(container, state) {
 // ─── Door Control ─────────────────────────────
 let timerInterval = null;
 
+// ─── Per-door countdown timers ────────────────
+// doorTimers[doorId] = { interval, remaining, total, action }
+const doorTimers = {};
+
+function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
+  // إلغاء أي تايمر سابق لنفس الباب
+  if (doorTimers[doorId]) {
+    clearInterval(doorTimers[doorId].interval);
+    delete doorTimers[doorId];
+  }
+  if (!seconds || seconds <= 0) return;
+
+  doorTimers[doorId] = { remaining: seconds, total: seconds, action, interval: null };
+
+  // رسم أول مرة فوراً
+  _renderDoorWithTimer(doorId, imgEl, stateEl, seconds, seconds, action);
+
+  doorTimers[doorId].interval = setInterval(function() {
+    var t = doorTimers[doorId];
+    if (!t) return;
+    t.remaining--;
+    if (t.remaining <= 0) {
+      clearInterval(t.interval);
+      delete doorTimers[doorId];
+      // انتهى الوقت → الباب يعود للحالة المقابلة
+      var finalState = (action === 'open' || action === 'open40') ? 'close' : 'open';
+      if (imgEl) renderDoorSVG(imgEl, finalState);
+      if (stateEl) _updateStateEl(stateEl, finalState);
+      updateDoorCardState(doorId, null, finalState, 'auto');
+    } else {
+      _renderDoorWithTimer(doorId, imgEl, stateEl, t.remaining, t.total, action);
+    }
+  }, 1000);
+}
+
+function stopDoorTimer(doorId) {
+  if (doorTimers[doorId]) {
+    clearInterval(doorTimers[doorId].interval);
+    delete doorTimers[doorId];
+  }
+}
+
+function _updateStateEl(el, state) {
+  if (!el) return;
+  var color = state === 'open' ? 'var(--success)' : state === 'close' ? 'var(--danger)' : 'var(--warning)';
+  var text  = state === 'open' ? '🔓 مفتوح' : state === 'close' ? '🔒 مغلق' : '⏹ متوقف';
+  el.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' + text;
+  el.style.color = color;
+}
+
+function _renderDoorWithTimer(doorId, imgEl, stateEl, remaining, total, action) {
+  var state    = (action === 'open' || action === 'open40') ? 'open' : 'close';
+  var color    = state === 'open' ? '#00e676' : '#ff3d71';
+  var shadow   = state === 'open' ? '0 0 18px #00e67688' : '0 0 18px #ff3d7188';
+  var angleDeg = state === 'open' ? -55 : 0;
+  var pct      = total > 0 ? (remaining / total) : 1;
+  var arc      = _describeArc(40, 40, 30, 0, pct * 360);
+  var label    = state === 'open' ? 'مفتوح' : 'مغلق';
+
+  if (imgEl) {
+    imgEl.innerHTML = \`
+    <svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;filter:drop-shadow(\${shadow})">
+      <!-- إطار -->
+      <rect x="6" y="4" width="68" height="92" rx="4" fill="none" stroke="\${color}" stroke-width="2.5" opacity="0.3"/>
+      <!-- الباب -->
+      <g style="transform-origin:10px 50px">
+        <rect x="10" y="8" width="58" height="84" rx="3"
+          fill="\${color}" fill-opacity="0.18" stroke="\${color}" stroke-width="2"
+          style="transform:rotate(\${angleDeg}deg);transform-origin:10px 50px;transition:transform 0.5s"/>
+        <circle cx="\${state==='open'?58:22}" cy="50" r="4" fill="\${color}" opacity="0.9"/>
+      </g>
+      <!-- دائرة العداد -->
+      <circle cx="40" cy="40" r="30" fill="none" stroke="\${color}22" stroke-width="4"/>
+      <path d="\${arc}" fill="none" stroke="\${color}" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+      <!-- رقم العداد -->
+      <text x="40" y="45" text-anchor="middle" font-size="13" fill="\${color}" font-family="JetBrains Mono,monospace" font-weight="800">\${remaining}</text>
+      <!-- حالة -->
+      <text x="40" y="97" text-anchor="middle" font-size="7" fill="\${color}" font-family="Cairo,sans-serif" font-weight="700">\${label}</text>
+    </svg>\`;
+  }
+  if (stateEl) {
+    var stateText = label + ' — ' + remaining + 'ث';
+    stateEl.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' + stateText;
+    stateEl.style.color = color;
+  }
+}
+
+// رسم قوس SVG
+function _describeArc(cx, cy, r, startDeg, endDeg) {
+  if (endDeg >= 360) endDeg = 359.99;
+  var s = _polar(cx, cy, r, startDeg - 90);
+  var e = _polar(cx, cy, r, endDeg - 90);
+  var large = endDeg > 180 ? 1 : 0;
+  return \`M \${s.x} \${s.y} A \${r} \${r} 0 \${large} 1 \${e.x} \${e.y}\`;
+}
+function _polar(cx, cy, r, deg) {
+  var rad = (deg * Math.PI) / 180;
+  return { x: +(cx + r * Math.cos(rad)).toFixed(3), y: +(cy + r * Math.sin(rad)).toFixed(3) };
+}
+
 async function sendAction(action) {
   try {
     await apiFetch('/api/door/control', 'POST', { action });
@@ -290,17 +406,45 @@ async function sendAction(action) {
   }
 }
 
-// إرسال أمر لباب محدد من صفحة المؤسسات
+// إرسال أمر لباب محدد من صفحة المؤسسات (أدمن)
 async function sendDoorAction(deviceId, action, duration) {
   try {
     var body = { action, deviceId, duration };
-    // أرسل الموقع دائماً إذا كان متوفراً
     if (userLocation) { body.lat = userLocation.lat; body.lng = userLocation.lng; body.accuracy = userLocation.accuracy || 999; }
     await apiFetch('/api/door/control', 'POST', body);
-    toast(`تم: ${action}`, 'success');
+    var labels = { open:'✅ تم الفتح', close:'✅ تم الغلق', stop:'✅ تم الإيقاف', open40:'✅ فتح 40 ثانية' };
+    toast(labels[action] || '✅ تم', 'success');
+    // تشغيل التايمر على الباب المناسب
+    var doorId = _findDoorIdByDeviceId(deviceId);
+    if (doorId) {
+      var imgEl   = document.getElementById('door-img-' + doorId);
+      var stateEl = document.getElementById('user-state-' + doorId);
+      var secs    = (action === 'stop') ? 0 : (action === 'open40' ? 40 : (duration || 5));
+      if (action === 'stop') {
+        stopDoorTimer(doorId);
+        if (imgEl) renderDoorSVG(imgEl, 'idle');
+        updateDoorCardState(doorId, deviceId, 'idle', 'app');
+      } else {
+        startDoorTimer(doorId, imgEl, stateEl, secs, action);
+        updateDoorCardState(doorId, deviceId, action === 'open' || action === 'open40' ? 'open' : 'close', 'app');
+      }
+    }
   } catch(e) {
-    toast(e.message, 'error');
+    toast(e.message || 'خطأ في الاتصال', 'error');
   }
+}
+
+// إيجاد doorId من deviceId (من الكاش)
+function _findDoorIdByDeviceId(deviceId) {
+  var el = document.querySelector('[data-device-id="' + deviceId + '"]');
+  if (el) return el.getAttribute('data-door-id-ref');
+  // بحث في الـ DOM
+  var allImgs = document.querySelectorAll('[id^="door-img-"]');
+  for (var i = 0; i < allImgs.length; i++) {
+    var did = allImgs[i].getAttribute('data-device-id');
+    if (did === deviceId) return allImgs[i].id.replace('door-img-', '');
+  }
+  return null;
 }
 
 function startTimer(seconds) {
@@ -623,11 +767,13 @@ async function fetchAndUpdateDoorImage(door) {
   try {
     var data = await apiFetch('/api/door/status?deviceId=' + door.device_id);
     var state = data.r1_on ? 'open' : data.r2_on ? 'close' : 'idle';
-    // تحديث الصورة
-    var imgEl = document.getElementById('door-img-' + door.id);
-    if (imgEl) renderDoorSVG(imgEl, state);
-    // تحديث badge الحالة
-    updateDoorCardState(door.id, door.device_id, state, 'poll');
+    var imgEl   = document.getElementById('door-img-' + door.id);
+    var stateEl = document.getElementById('user-state-' + door.id);
+    // إذا لم يكن هناك تايمر شغال → رسم الحالة مباشرة
+    if (!doorTimers[door.id]) {
+      if (imgEl) renderDoorSVG(imgEl, state);
+      updateDoorCardState(door.id, door.device_id, state, 'poll');
+    }
   } catch(e) {}
 }
 
@@ -894,7 +1040,7 @@ function renderInstDetail(inst) {
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px">
           <div style="display:flex;align-items:center;gap:12px">
             <!-- صورة الباب -->
-            <div id="door-img-${doorId}" data-state="idle" style="width:52px;height:64px;flex-shrink:0"></div>
+            <div id="door-img-${doorId}" data-state="idle" data-device-id="${deviceId}" style="width:52px;height:64px;flex-shrink:0"></div>
             <div>
               <div style="font-weight:800;font-size:0.95rem">🚪 ${doorName}</div>
               <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-top:2px">ID: ${deviceId.substring(0,16)}...</div>
@@ -1525,7 +1671,7 @@ async function loadUserDoors() {
       hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
       hdr.innerHTML =
         '<div style="display:flex;align-items:center;gap:12px">' +
-          '<div id="door-img-' + door.id + '" data-state="idle" style="width:52px;height:64px;flex-shrink:0"></div>' +
+          '<div id="door-img-' + door.id + '" data-state="idle" data-device-id="' + door.device_id + '" style="width:52px;height:64px;flex-shrink:0"></div>' +
           '<div>' +
             '<div style="font-size:1.05rem;font-weight:800">' + door.name + '</div>' +
             (door.location ? '<div style="font-size:0.75rem;color:var(--muted);margin-top:3px">📍 ' + door.location + '</div>' : '') +
@@ -1650,9 +1796,11 @@ async function fetchUserDoorState(door) {
     else         { text = '⏹ متوقف';  color = 'var(--muted)'; }
     el.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' + text;
     el.style.color = color;
-    // تحديث صورة الباب
-    var imgEl = document.getElementById('door-img-' + door.id);
-    if (imgEl) renderDoorSVG(imgEl, state);
+    // تحديث صورة الباب فقط إذا لم يكن هناك تايمر شغال
+    if (!doorTimers[door.id]) {
+      var imgEl = document.getElementById('door-img-' + door.id);
+      if (imgEl) renderDoorSVG(imgEl, state);
+    }
   } catch(e) {
     el.innerHTML = '<span style="color:var(--muted)">—</span>';
   }
@@ -1715,7 +1863,17 @@ async function userDoorAction(door, action) {
     await apiFetch('/api/door/control', 'POST', body);
     var labels = { open:'✅ تم الفتح', close:'✅ تم الغلق', stop:'✅ تم الإيقاف', open40:'✅ فتح 40 ثانية' };
     toast(labels[action]||'✅ تم', 'success');
-    setTimeout(function(){ fetchUserDoorState(door); }, 1500);
+    // تشغيل التايمر
+    var imgEl   = document.getElementById('door-img-' + door.id);
+    var stateEl = document.getElementById('user-state-' + door.id);
+    var secs    = action === 'stop' ? 0 : (action === 'open40' ? 40 : (door.duration_seconds || 5));
+    if (action === 'stop') {
+      stopDoorTimer(door.id);
+      if (imgEl) renderDoorSVG(imgEl, 'idle');
+      if (stateEl) _updateStateEl(stateEl, 'idle');
+    } else {
+      startDoorTimer(door.id, imgEl, stateEl, secs, action);
+    }
   } catch(e) {
     var msg = e.message || 'خطأ';
     if (msg.includes('GPS') || msg.includes('بعيد')) toast('📍 ' + msg, 'error');
