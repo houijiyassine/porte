@@ -460,13 +460,14 @@ async function sendDoorAction(deviceId, action, duration) {
     toast(labels[action] || '✅ تم', 'success');
     // تشغيل التايمر على الباب المناسب
     var doorId = _findDoorIdByDeviceId(deviceId);
+    console.log('[sendDoorAction] deviceId='+deviceId+' doorId='+doorId+' action='+action+' timerKeys='+JSON.stringify(Object.keys(doorTimers)));
     if (doorId) {
       var imgEl   = document.getElementById('door-img-'      + doorId);
-      // stateEl: يكون user-state (صفحة مستخدم) أو door-progress (صفحة أدمن)
       var stateEl = document.getElementById('user-state-'    + doorId)
                  || document.getElementById('door-progress-' + doorId);
       var secs    = (action === 'stop') ? 0 : (action === 'open40' ? 40 : (duration || 5));
       if (action === 'stop') {
+        console.log('[sendDoorAction] timer='+JSON.stringify(doorTimers[doorId]));
         stopDoorTimer(doorId, imgEl, stateEl);
         updateDoorCardState(doorId, deviceId, 'idle', 'app');
       } else {
