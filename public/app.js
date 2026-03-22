@@ -808,22 +808,34 @@ async function checkDoorStatus(deviceId, elemId) {
 
 // جلب حالة الباب الحقيقية (مفتوح/مغلق/متوقف) وتحديث الصورة والـ badge
 async function fetchAndUpdateDoorImage(door) {
-  // رسم spinner مؤقت أثناء الجلب
   var imgEl = document.getElementById('door-img-' + door.id);
   if (imgEl && !imgEl.innerHTML) {
     imgEl.innerHTML = '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:0.3"><rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="#8892b0" stroke-width="1.8"/><rect x="8" y="4" width="62" height="74" rx="3" fill="#8892b0" fill-opacity="0.1" stroke="#8892b0" stroke-width="1.6"/><text x="40" y="97" text-anchor="middle" font-size="7" fill="#8892b0" font-family="Cairo,sans-serif">...</text></svg>';
   }
   try {
+    // إذا lastKnownState فارغ → جلب آخر سجل من قاعدة البيانات
+    if (!lastKnownState[door.id]) {
+      try {
+        var logs = await apiFetch('/api/doors/' + door.id + '/logs');
+        if (logs && logs.length > 0) {
+          var lastVal = logs[0].value;
+          if (lastVal === 'open' || lastVal === 'open40') lastKnownState[door.id] = 'open';
+          else if (lastVal === 'close') lastKnownState[door.id] = 'close';
+        }
+      } catch(e) {}
+    }
+
     var data  = await apiFetch('/api/door/status?deviceId=' + door.device_id);
     var state = data.r1_on ? 'open' : data.r2_on ? 'close' : 'idle';
     imgEl = document.getElementById('door-img-' + door.id);
 
-    if (doorTimers[door.id]) return; // تايمر شغال — لا نتدخل
+    if (doorTimers[door.id]) return;
 
-    // إذا Tuya قال idle → استخدم آخر حالة معروفة (مفتوح/مغلق)
-    // idle من Tuya = الريلاي في وضعه الطبيعي، ليس "متوقف"
-    if (state === 'idle' && lastKnownState[door.id]) {
-      state = lastKnownState[door.id];
+    // idle من Tuya = ريلاي في وضعه الطبيعي، ليس "متوقف"
+    if (state === 'idle') {
+      state = lastKnownState[door.id] || 'close'; // افتراضي: مغلق
+    } else {
+      lastKnownState[door.id] = state; // حدّث الحالة المعروفة
     }
 
     if (imgEl) _drawDoorStatic(imgEl, null, state);
@@ -1848,13 +1860,29 @@ async function fetchUserDoorState(door) {
     imgEl0.innerHTML = '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:0.3"><rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="#8892b0" stroke-width="1.8"/><rect x="8" y="4" width="62" height="74" rx="3" fill="#8892b0" fill-opacity="0.1" stroke="#8892b0" stroke-width="1.6"/><text x="40" y="97" text-anchor="middle" font-size="7" fill="#8892b0" font-family="Cairo,sans-serif">...</text></svg>';
   }
   try {
+    // إذا lastKnownState فارغ → جلب آخر سجل من قاعدة البيانات
+    if (!lastKnownState[door.id]) {
+      try {
+        var logs = await apiFetch('/api/doors/' + door.id + '/logs');
+        if (logs && logs.length > 0) {
+          var lv = logs[0].value;
+          if (lv === 'open' || lv === 'open40') lastKnownState[door.id] = 'open';
+          else if (lv === 'close') lastKnownState[door.id] = 'close';
+        }
+      } catch(e2) {}
+    }
     var data = await apiFetch('/api/door/status?deviceId=' + door.device_id);
     var r1 = data.r1_on, r2 = data.r2_on;
     var state = r1 ? 'open' : r2 ? 'close' : 'idle';
+    // idle من Tuya ليس "متوقف" — استخدم آخر حالة معروفة
+    if (state === 'idle') {
+      state = lastKnownState[door.id] || 'close';
+    } else {
+      lastKnownState[door.id] = state;
+    }
     var text, color;
-    if (r1)      { text = '🔓 مفتوح';  color = 'var(--success)'; }
-    else if (r2) { text = '🔒 مغلق';   color = 'var(--danger)'; }
-    else         { text = '⏹ متوقف';  color = 'var(--muted)'; }
+    if (state === 'open')  { text = '🔓 مفتوح'; color = 'var(--success)'; }
+    else                   { text = '🔒 مغلق';  color = 'var(--danger)'; }
     el.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' + text;
     el.style.color = color;
     // تحديث صورة الباب فقط إذا لم يكن هناك تايمر شغال
