@@ -1278,6 +1278,25 @@ async function toggleDoorGps(doorId, key, value) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
+async function toggleDoorRcNotify(doorId, value) {
+  try {
+    await apiFetch('/api/doors/' + doorId, 'PUT', { rc_notify: value });
+    // تحديث الكاش
+    institutesCache.forEach(function(inst) {
+      (inst.doors||[]).forEach(function(door) {
+        if (door.id === doorId) door.rc_notify = value;
+      });
+    });
+    // تحديث نص الـ toggle
+    var lbl = document.querySelector('#rc-toggle-' + doorId)?.closest('div[style]')?.querySelector('div > div:last-child');
+    if (lbl) {
+      lbl.style.color = value ? 'var(--success)' : 'var(--danger)';
+      lbl.textContent = value ? 'مفعّل ✅' : 'معطّل ❌';
+    }
+    toast(value ? '🔔 سيتم إشعارك عند استخدام RC' : '🔕 تم إيقاف الإشعار', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
 // ─── Doors ────────────────────────────────────
 function changeDuration(delta) {
   const input = document.getElementById('door-duration');
@@ -2045,33 +2064,11 @@ async function loadAdminDoors() {
       });
       card.appendChild(grid);
 
-      // صف الإدارة: تعديل + حذف + GPS
-      var adminRow = document.createElement('div');
-      adminRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px';
-
-      var btnEdit = document.createElement('button');
-      btnEdit.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(124,92,252,0.3);background:rgba(124,92,252,0.1);color:var(--accent2);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
-      btnEdit.textContent = '✏️ تعديل';
-      btnEdit.addEventListener('click', (function(d){ return function(){ openEditDoor(inst.id, d.id, d.name, d.location||'', d.device_id, d.duration_seconds||5); }; })(door));
-      adminRow.appendChild(btnEdit);
-
-      var btnDel = document.createElement('button');
-      btnDel.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(255,61,113,0.2);background:rgba(255,61,113,0.08);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
-      btnDel.textContent = '🗑 حذف';
-      btnDel.addEventListener('click', (function(did, iid){ return function(){ deleteDoor(did, iid); }; })(door.id, inst.id));
-      adminRow.appendChild(btnDel);
-
-      var btnGps = document.createElement('button');
+      // GPS متغيرات
       var gpsRange = (door.gps && door.gps.range !== undefined) ? door.gps.range : 100;
       var userReq  = door.gps && door.gps.user_required;
-      btnGps.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
-      btnGps.textContent = '📡 GPS ' + gpsRange + 'م';
-      btnGps.addEventListener('click', (function(d){ return function(){ openGpsModal(d.id, d.gps&&d.gps.range!==undefined?d.gps.range:100, d.gps&&d.gps.lat||null, d.gps&&d.gps.lng||null); }; })(door));
-      adminRow.appendChild(btnGps);
 
-      card.appendChild(adminRow);
-
-      // GPS toggle للمستخدمين (الأدمن يرى زر واحد فقط)
+      // GPS toggle للمستخدمين
       var gpsToggle = document.createElement('div');
       gpsToggle.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px';
       gpsToggle.innerHTML =
@@ -2084,13 +2081,35 @@ async function loadAdminDoors() {
           '<span class="toggle-knob"></span>' +
         '</label>';
       card.appendChild(gpsToggle);
-      // إضافة event listener للـ toggle
+      // event listener GPS toggle
       (function(did, ureq) {
         setTimeout(function() {
           var chk = document.getElementById('gps-toggle-' + did);
           if (chk) chk.addEventListener('change', function() { toggleDoorGps(did, 'user_required', this.checked); });
         }, 50);
       })(door.id, userReq);
+
+      // toggle: تلقي إشعار عند استخدام RC
+      var rcNotify = door.rc_notify === true;
+      var rcToggle = document.createElement('div');
+      rcToggle.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px';
+      rcToggle.innerHTML =
+        '<div>' +
+          '<div style="font-size:0.78rem;font-weight:700">📻 تلقي إشعار عند استخدام RC</div>' +
+          '<div style="font-size:0.7rem;color:' + (rcNotify?'var(--success)':'var(--danger)') + ';margin-top:2px;font-weight:700">' + (rcNotify?'مفعّل ✅':'معطّل ❌') + '</div>' +
+        '</div>' +
+        '<label class="toggle-switch">' +
+          '<input type="checkbox" ' + (rcNotify?'checked':'') + ' id="rc-toggle-' + door.id + '">' +
+          '<span class="toggle-knob"></span>' +
+        '</label>';
+      card.appendChild(rcToggle);
+
+      (function(did) {
+        setTimeout(function() {
+          var chk = document.getElementById('rc-toggle-' + did);
+          if (chk) chk.addEventListener('change', function() { toggleDoorRcNotify(did, this.checked); });
+        }, 50);
+      })(door.id);
 
       // أزرار السجل + الجدول
       var logRow = document.createElement('div');
