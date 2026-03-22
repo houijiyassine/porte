@@ -163,46 +163,37 @@ function connectWS() {
         var imgEl    = document.getElementById('door-img-'      + doorId);
         var stateEl  = document.getElementById('user-state-'    + doorId)
                     || document.getElementById('door-progress-' + doorId);
-        var hasTimer = !!(doorTimers[doorId] && !doorTimers[doorId].isFrozen);
+        var hasTimer = !!doorTimers[doorId];
 
         updateDoorStatusUI(rawState);
 
         // ─── منطق التايمر والحالات ───
-        var curTimer    = doorTimers[doorId];
-        var timerAction = curTimer ? (curTimer.isOpen ? 'open' : 'close') : null;
+        var curTimer    = doorTimers[doorId];  // موجود = شغال
+        var timerAction = null; // لا نحتاجه بعد الآن
 
         if (rawState === 'idle') {
-          var curT = doorTimers[doorId];
-          if (curT && !curT.isFrozen) {
-            // تايمر شغال → إيقاف مبكر من RC
+          if (hasTimer) {
             stopDoorTimer(doorId, imgEl, stateEl);
             updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
           }
-          // مجمّد أو لا تايمر → idle عابر من Tuya — نتجاهل
+          // لا تايمر → idle عابر من Tuya — نتجاهل
 
         } else {
           // open أو close جديد
-          var newIsOpen = (rawState === 'open');
 
-          // إذا source=app والتايمر شغال (غير مجمّد) → App يتحكم، لا نتدخل
-          if (msg.source === 'app' && curTimer && !curTimer.isFrozen) {
-            // لا شيء — التايمر من sendDoorAction/userDoorAction يتحكم
-          } else {
-            var isNewAction = !curTimer || curTimer.isFrozen || (timerAction !== rawState);
-            if (isNewAction) {
-              // إذا الاتجاه مختلف عن التجميد → امسح التجميد
-              if (curTimer && curTimer.isFrozen && curTimer.isOpen !== newIsOpen) {
-                delete doorTimers[doorId];
-              }
-              var newImgEl   = document.getElementById('door-img-'      + doorId);
-              var newStateEl = document.getElementById('user-state-'    + doorId)
-                            || document.getElementById('door-progress-' + doorId);
-              var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
-              var newSecs = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
-              startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
-              updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
-            }
-            // نفس الحدث والتايمر شغال → لا نتدخل
+
+          // إذا source=app والتايمر شغال → App يتحكم، لا نتدخل
+          if (msg.source === 'app' && hasTimer) {
+            // التايمر من sendDoorAction/userDoorAction يتحكم
+          } else if (!hasTimer) {
+            // لا تايمر → RC أو حدث خارجي → شغّل أنيميشن
+            var newImgEl   = document.getElementById('door-img-'      + doorId);
+            var newStateEl = document.getElementById('user-state-'    + doorId)
+                          || document.getElementById('door-progress-' + doorId);
+            var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
+            var newSecs = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
+            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
+            updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           }
         }
 
@@ -279,44 +270,48 @@ function updateDoorImage(doorId, state) {
 let timerInterval = null;
 
 // ═══════════════════════════════════════════════════════
-//  نظام الباب المتحرك — per-door timer
-//  - فتح/غلق: نسبة 0→100% + باب يتحرك بالتدريج
-//  - انتهاء الوقت: حالة نهائية تلقائية
-//  - إيقاف مبكر: يتجمد عند النسبة الحالية بلون برتقالي
+//  doorPos[doorId] = 0.0→1.0 (موضع الباب الحالي)
+//  0.0 = مغلق تماماً | 1.0 = مفتوح تماماً
+//  عند فتح: pos تزيد من pos_حالي إلى 1.0
+//  عند غلق: pos تنقص من pos_حالي إلى 0.0
+//  عند إيقاف: pos تتجمد حيث هي
 // ═══════════════════════════════════════════════════════
-// doorTimers[id] = { startTime, total, isOpen, frozenPct, isFrozen, _raf }
-// frozenPct: النسبة عند الإيقاف — نبدأ منها عند الاستئناف
-const doorTimers = {};
+const doorPos    = {};  // doorPos[doorId]    = موضع الباب (0→1)
+const doorTimers = {};  // doorTimers[doorId] = { _raf }
 
 function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
-  var isOpen = (action === 'open' || action === 'open40');
-  var total  = Math.max((seconds - 1.3), 0.5) * 1000;
+  // أوقف أي أنيميشن سابق
+  if (doorTimers[doorId] && doorTimers[doorId]._raf) {
+    cancelAnimationFrame(doorTimers[doorId]._raf);
+  }
 
-  // هل يوجد تجميد سابق لنفس الاتجاه؟ نكمل منه
-  var prev      = doorTimers[doorId];
-  var startPct  = (prev && prev.isFrozen && prev.isOpen === isOpen) ? prev.frozenPct : 0;
-  var startTime = Date.now() - (startPct * total);
+  var isOpen   = (action === 'open' || action === 'open40');
+  var total    = Math.max((seconds - 1.3), 0.5) * 1000;
+  var fromPos  = doorPos[doorId] !== undefined ? doorPos[doorId] : (isOpen ? 0 : 1);
+  var toPos    = isOpen ? 1.0 : 0.0;
+  var dist     = Math.abs(toPos - fromPos);  // المسافة المتبقية
+  var duration = total * dist;               // الوقت بناءً على المسافة
+  var startTime = Date.now();
 
-  // إلغاء الـ RAF السابق فقط
-  if (prev && prev._raf) cancelAnimationFrame(prev._raf);
+  if (dist <= 0.01) return; // وصل بالفعل
 
-  doorTimers[doorId] = {
-    startTime: startTime, total: total,
-    isOpen: isOpen, frozenPct: 0, isFrozen: false, _raf: null
-  };
+  doorTimers[doorId] = { _raf: null };
 
   function tick() {
-    var t = doorTimers[doorId];
-    if (!t || t.isFrozen) return;
-    var elapsed = Date.now() - t.startTime;
-    var pct     = Math.min(elapsed / t.total, 1);
+    var elapsed = Date.now() - startTime;
+    var progress = duration > 0 ? Math.min(elapsed / duration, 1) : 1;
+    // الموضع الحالي
+    var curPos = fromPos + (toPos - fromPos) * progress;
+    doorPos[doorId] = curPos;
 
-    _drawDoorProgress(imgEl, stateEl, pct, isOpen, false);
+    // النسبة للعرض: دائماً من منظور الحركة الحالية (0→100%)
+    var displayPct = progress;
+    _drawDoorProgress(imgEl, stateEl, displayPct, isOpen, false, curPos);
 
-    if (pct < 1) {
-      t._raf = requestAnimationFrame(tick);
+    if (progress < 1) {
+      doorTimers[doorId]._raf = requestAnimationFrame(tick);
     } else {
-      // اكتمل — امسح وارسم الحالة النهائية
+      doorPos[doorId] = toPos;
       delete doorTimers[doorId];
       var finalState = isOpen ? 'open' : 'close';
       setTimeout(function() {
@@ -330,26 +325,25 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
 }
 
 function stopDoorTimer(doorId, imgEl, stateEl) {
-  var t = doorTimers[doorId];
-  if (!t) return;
-  var elapsed    = Date.now() - t.startTime;
-  var pct        = Math.min(elapsed / t.total, 1);
-  if (t._raf) cancelAnimationFrame(t._raf);
-  // جمّد في مكانه — احفظ النسبة للاستئناف
-  t.isFrozen  = true;
-  t.frozenPct = pct;
-  _drawDoorProgress(imgEl, stateEl, pct, t.isOpen, true);
+  if (doorTimers[doorId] && doorTimers[doorId]._raf) {
+    cancelAnimationFrame(doorTimers[doorId]._raf);
+  }
+  delete doorTimers[doorId];
+  // doorPos[doorId] يبقى كما هو — التجميد في مكانه
+  var pos = doorPos[doorId] !== undefined ? doorPos[doorId] : 0;
+  _drawDoorProgress(imgEl, stateEl, pos, pos >= 0.5, true, pos);
 }
 
 function _cancelDoorTimer(doorId) {
-  var t = doorTimers[doorId];
-  if (t && t._raf) cancelAnimationFrame(t._raf);
-  // لا نحذف doorTimers[doorId] إذا كان مجمّداً — نتركه للاستئناف
-  if (t && !t.isFrozen) delete doorTimers[doorId];
+  if (doorTimers[doorId] && doorTimers[doorId]._raf) {
+    cancelAnimationFrame(doorTimers[doorId]._raf);
+  }
+  delete doorTimers[doorId];
+  // doorPos يبقى محفوظاً
 }
 
 // ─── رسم الباب أثناء الحركة ──────────────────
-function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped) {
+function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped, curPos) {
   var pctInt = Math.round(pct * 100);
   var color  = isStopped ? '#ffb300' : isOpen ? '#00e676' : '#ff3d71';
   var statusTxt = isStopped ? ('⏹ متوقف — ' + pctInt + '%')
@@ -357,9 +351,10 @@ function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped) {
                 :             ('🔒 يغلق... — ' + pctInt + '%');
   var label = isStopped ? 'متوقف' : isOpen ? 'يفتح...' : 'يغلق...';
 
-  // زاوية الباب: فتح 0→-55 | غلق -55→0
-  var angleDeg = isOpen ? -(pct * 55) : -((1 - pct) * 55);
-  var handleX  = isOpen ? (22 + pct * 36) : (58 - pct * 36);
+  // زاوية الباب بناءً على doorPos (0=مغلق، 1=مفتوح)
+  var pos      = (curPos !== undefined) ? curPos : (isOpen ? pct : 1 - pct);
+  var angleDeg = -(pos * 55);
+  var handleX  = 22 + (pos * 36);
   var arcPath  = pct > 0.005 ? _describeArc(40, 86, 10, 0, pct * 359.99) : '';
 
   if (imgEl) {
