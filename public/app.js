@@ -286,7 +286,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
     } else {
       // ارسم 100% أولاً — انتظر 400ms ثم انتقل للحالة النهائية
       delete doorTimers[doorId];
-      var finalState = isOpen ? 'close' : 'open';
+      var finalState = isOpen ? 'open' : 'close';  // بقاء على الحالة التي وصل إليها
       setTimeout(function() {
         _drawDoorStatic(imgEl, stateEl, finalState);
         updateDoorCardState(doorId, null, finalState, 'auto');
@@ -772,10 +772,15 @@ async function checkDoorStatus(deviceId, elemId) {
 
 // جلب حالة الباب الحقيقية (مفتوح/مغلق/متوقف) وتحديث الصورة والـ badge
 async function fetchAndUpdateDoorImage(door) {
+  // رسم spinner مؤقت أثناء الجلب
+  var imgEl = document.getElementById('door-img-' + door.id);
+  if (imgEl && !imgEl.innerHTML) {
+    imgEl.innerHTML = '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:0.3"><rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="#8892b0" stroke-width="1.8"/><rect x="8" y="4" width="62" height="74" rx="3" fill="#8892b0" fill-opacity="0.1" stroke="#8892b0" stroke-width="1.6"/><text x="40" y="97" text-anchor="middle" font-size="7" fill="#8892b0" font-family="Cairo,sans-serif">...</text></svg>';
+  }
   try {
     var data  = await apiFetch('/api/door/status?deviceId=' + door.device_id);
     var state = data.r1_on ? 'open' : data.r2_on ? 'close' : 'idle';
-    var imgEl = document.getElementById('door-img-' + door.id);
+    imgEl = document.getElementById('door-img-' + door.id);
 
     if (doorTimers[door.id]) return; // تايمر شغال — لا نتدخل
 
@@ -1123,9 +1128,7 @@ function renderInstDetail(inst) {
     (inst.doors||[]).forEach(function(door) {
       checkDoorStatus(door.device_id, 'door-status-' + door.id);
       // رسم صورة الباب الأولية
-      var imgEl = document.getElementById('door-img-' + door.id);
-      if (imgEl) renderDoorSVG(imgEl, 'idle');
-      // جلب الحالة الحقيقية من Tuya
+      // جلب الحالة الحقيقية من Tuya مباشرة (بدون idle مؤقت)
       fetchAndUpdateDoorImage(door);
     });
   }, 300);
@@ -1772,9 +1775,8 @@ async function loadUserDoors() {
       container.appendChild(card);
 
       // رسم صورة الباب الأولية + جلب الحالة
-      var imgEl2 = document.getElementById('door-img-' + door.id);
-      if (imgEl2) renderDoorSVG(imgEl2, 'idle');
       checkDoorStatus(door.device_id, 'user-online-' + door.id);
+      // جلب الحالة الحقيقية مباشرة
       fetchUserDoorState(door);
     });
 
@@ -1797,6 +1799,11 @@ async function loadUserDoors() {
 async function fetchUserDoorState(door) {
   var el = document.getElementById('user-state-' + door.id);
   if (!el) return;
+  // رسم spinner مؤقت
+  var imgEl0 = document.getElementById('door-img-' + door.id);
+  if (imgEl0 && !imgEl0.innerHTML) {
+    imgEl0.innerHTML = '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:0.3"><rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="#8892b0" stroke-width="1.8"/><rect x="8" y="4" width="62" height="74" rx="3" fill="#8892b0" fill-opacity="0.1" stroke="#8892b0" stroke-width="1.6"/><text x="40" y="97" text-anchor="middle" font-size="7" fill="#8892b0" font-family="Cairo,sans-serif">...</text></svg>';
+  }
   try {
     var data = await apiFetch('/api/door/status?deviceId=' + door.device_id);
     var r1 = data.r1_on, r2 = data.r2_on;
@@ -2025,8 +2032,6 @@ async function loadAdminDoors() {
       container.appendChild(card);
       checkDoorStatus(door.device_id, 'adm-status-' + door.id);
       // رسم صورة الباب الأولية وجلب الحالة
-      var admImg = document.getElementById('door-img-' + door.id);
-      if (admImg) _drawDoorStatic(admImg, null, 'close');
       fetchAndUpdateDoorImage(door);
     });
 
