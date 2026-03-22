@@ -347,27 +347,19 @@ function _renderDoorWithTimer(doorId, imgEl, stateEl, remaining, total, action) 
   var pct      = total > 0 ? (remaining / total) : 1;
   var arc      = _describeArc(40, 40, 30, 0, pct * 360);
   var label    = state === 'open' ? 'مفتوح' : 'مغلق';
+  var cx       = state === 'open' ? 58 : 22;
 
   if (imgEl) {
-    imgEl.innerHTML = \`
-    <svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;filter:drop-shadow(\${shadow})">
-      <!-- إطار -->
-      <rect x="6" y="4" width="68" height="92" rx="4" fill="none" stroke="\${color}" stroke-width="2.5" opacity="0.3"/>
-      <!-- الباب -->
-      <g style="transform-origin:10px 50px">
-        <rect x="10" y="8" width="58" height="84" rx="3"
-          fill="\${color}" fill-opacity="0.18" stroke="\${color}" stroke-width="2"
-          style="transform:rotate(\${angleDeg}deg);transform-origin:10px 50px;transition:transform 0.5s"/>
-        <circle cx="\${state==='open'?58:22}" cy="50" r="4" fill="\${color}" opacity="0.9"/>
-      </g>
-      <!-- دائرة العداد -->
-      <circle cx="40" cy="40" r="30" fill="none" stroke="\${color}22" stroke-width="4"/>
-      <path d="\${arc}" fill="none" stroke="\${color}" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
-      <!-- رقم العداد -->
-      <text x="40" y="45" text-anchor="middle" font-size="13" fill="\${color}" font-family="JetBrains Mono,monospace" font-weight="800">\${remaining}</text>
-      <!-- حالة -->
-      <text x="40" y="97" text-anchor="middle" font-size="7" fill="\${color}" font-family="Cairo,sans-serif" font-weight="700">\${label}</text>
-    </svg>\`;
+    imgEl.innerHTML =
+      '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;filter:drop-shadow(' + shadow + ')">' +
+      '<rect x="6" y="4" width="68" height="92" rx="4" fill="none" stroke="' + color + '" stroke-width="2.5" opacity="0.3"/>' +
+      '<rect x="10" y="8" width="58" height="84" rx="3" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="2" style="transform:rotate(' + angleDeg + 'deg);transform-origin:10px 50px;transition:transform 0.5s"/>' +
+      '<circle cx="' + cx + '" cy="50" r="4" fill="' + color + '" opacity="0.9"/>' +
+      '<circle cx="40" cy="40" r="30" fill="none" stroke="' + color + '44" stroke-width="4"/>' +
+      '<path d="' + arc + '" fill="none" stroke="' + color + '" stroke-width="4" stroke-linecap="round" opacity="0.9"/>' +
+      '<text x="40" y="45" text-anchor="middle" font-size="13" fill="' + color + '" font-family="JetBrains Mono,monospace" font-weight="800">' + remaining + '</text>' +
+      '<text x="40" y="97" text-anchor="middle" font-size="7" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + label + '</text>' +
+      '</svg>';
   }
   if (stateEl) {
     var stateText = label + ' — ' + remaining + 'ث';
@@ -382,7 +374,7 @@ function _describeArc(cx, cy, r, startDeg, endDeg) {
   var s = _polar(cx, cy, r, startDeg - 90);
   var e = _polar(cx, cy, r, endDeg - 90);
   var large = endDeg > 180 ? 1 : 0;
-  return \`M \${s.x} \${s.y} A \${r} \${r} 0 \${large} 1 \${e.x} \${e.y}\`;
+  return 'M ' + s.x + ' ' + s.y + ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + e.x + ' ' + e.y;
 }
 function _polar(cx, cy, r, deg) {
   var rad = (deg * Math.PI) / 180;
@@ -511,14 +503,7 @@ function formatTime(iso) {
 }
 
 // ─── Stats ────────────────────────────────────
-async function loadStats() {
-  try {
-    const data = await apiFetch('/api/stats');
-    document.getElementById('stat-today').textContent = data.today_actions ?? '—';
-    document.getElementById('stat-users').textContent = data.active_users ?? '—';
-    document.getElementById('stat-total').textContent = data.total_users ?? '—';
-  } catch {}
-}
+// (see full loadStats below)
 
 // ─── Users ────────────────────────────────────
 async function loadUsers() {
