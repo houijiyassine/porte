@@ -2041,7 +2041,10 @@ async function loadAdminDoors() {
         '<div style="flex:1">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
             '<div style="font-weight:800">🚪 ' + door.name + '</div>' +
-            '<span id="adm-status-' + door.id + '" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
+            '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">' +
+              '<span id="adm-online-' + door.id + '" style="font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
+              '<span id="adm-status-' + door.id + '" style="font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
+            '</div>' +
           '</div>' +
           '<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-bottom:5px">ID: ' + (door.device_id||'').substring(0,16) + '...</div>' +
           '<div id="door-progress-' + door.id + '" style="font-size:0.8rem;color:var(--muted)"></div>' +
@@ -2129,7 +2132,7 @@ async function loadAdminDoors() {
 
       card.appendChild(logRow);
       container.appendChild(card);
-      checkDoorStatus(door.device_id, 'adm-status-' + door.id);
+      checkDoorStatus(door.device_id, 'adm-online-' + door.id);
       // رسم صورة الباب الأولية وجلب الحالة
       fetchAndUpdateDoorImage(door);
     });
@@ -2141,7 +2144,11 @@ async function loadAdminDoors() {
 
 // تبويبة المستخدمين للمدير
 async function loadAdminUsers() {
-  var container = document.getElementById('institutes-list');
+  // استخدم users-table-section إذا كانت صفحة المستخدمين مفتوحة
+  var inUsersPage = document.getElementById('page-users')?.classList.contains('active');
+  var container = inUsersPage
+    ? document.getElementById('users-table-section')
+    : document.getElementById('institutes-list');
   if (!container) return;
   container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">⏳ جاري التحميل...</p>';
   try {
