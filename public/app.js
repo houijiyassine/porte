@@ -197,11 +197,13 @@ function connectWS() {
 
           if (msg.source === 'rc') {
             lastKnownState[doorId] = rawState;
-            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
+            // نحسب الـ delay بين لحظة حدوث الحدث ولحظة وصوله للتطبيق
+            var rcDelay = msg.timestamp ? Math.min((Date.now() - msg.timestamp) / 1000, newSecs - 0.5) : 0;
+            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState, rcDelay);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
             if (rawState !== 'idle') lastKnownState[doorId] = rawState;
-            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
+            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState, 0);
             updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           }
           // source=app + تايمر شغال → App يتحكم، لا نتدخل
@@ -290,37 +292,53 @@ const doorPos         = {};  // doorPos[doorId]    = موضع الباب (0→1)
 const doorTimers      = {};  // doorTimers[doorId] = { _raf }
 const lastKnownState  = {};  // lastKnownState[doorId] = 'open'|'close' — آخر حالة حقيقية
 
-function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
+function startDoorTimer(doorId, imgEl, stateEl, seconds, action, alreadyElapsedSec) {
   if (doorTimers[doorId] && doorTimers[doorId]._raf) {
     cancelAnimationFrame(doorTimers[doorId]._raf);
   }
 
-  var isOpen   = (action === 'open' || action === 'open40');
-  var n        = Math.max(seconds, 1);                    // المدة الكاملة بالثواني
-  var fromPos  = doorPos[doorId] !== undefined ? doorPos[doorId] : (isOpen ? 0 : 1);
-  var toPos    = isOpen ? 1.0 : 0.0;
-  var dist     = Math.abs(toPos - fromPos);
+  var isOpen  = (action === 'open' || action === 'open40');
+  var n       = Math.max(seconds, 1);       // المدة الكاملة بالثواني
+  var delay   = Math.max(alreadyElapsedSec || 0, 0); // الثواني التي مضت قبل وصول الإشعار
 
-  if (dist <= 0.01) return;
+  // الموضع المبدئي مع الأخذ بعين الاعتبار الـ delay
+  var storedPos = doorPos[doorId] !== undefined ? doorPos[doorId] : (isOpen ? 0 : 1);
+  // نحسب الموضع المقدّر بعد الـ delay
+  var delayPos  = isOpen
+    ? Math.min(storedPos + delay / n, 1)
+    : Math.max(storedPos - delay / n, 0);
 
-  // n0 الابتدائي = الثواني التي قطعها الباب فعلاً حتى الآن
-  // للفتح: fromPos يمثل نسبة الفتح، إذن n0 = fromPos * n
-  // للغلق: fromPos يمثل نسبة الفتح، والمسافة المقطوعة للغلق = (1-fromPos)*n
-  var n0_start = isOpen ? (fromPos * n) : ((1 - fromPos) * n);
+  var fromPos = delayPos;
+  var toPos   = isOpen ? 1.0 : 0.0;
+  var dist    = Math.abs(toPos - fromPos);
+
+  // حدّث doorPos فوراً ليعكس الموضع المقدّر
+  doorPos[doorId] = fromPos;
+
+  if (dist <= 0.01) {
+    // وصل بالفعل
+    doorPos[doorId] = toPos;
+    var fs = isOpen ? 'open' : 'close';
+    lastKnownState[doorId] = fs;
+    _drawDoorStatic(imgEl, stateEl, fs);
+    updateDoorCardState(doorId, null, fs, 'auto');
+    return;
+  }
+
+  var totalMs   = Math.max((n - 1.3), 0.5) * 1000;
   var startTime = Date.now();
-  var totalMs  = (n - 1.3) * 1000;  // وقت الأنيميشن الفعلي (n-1.3 ثانية)
 
   doorTimers[doorId] = { _raf: null };
 
   function tick() {
-    var elapsed  = Date.now() - startTime;          // ms منذ البدء
-    var progress = Math.min(elapsed / (dist * totalMs), 1); // تقدم الحركة 0→1
+    var elapsed  = Date.now() - startTime;
+    var progress = Math.min(elapsed / (dist * totalMs), 1);
     var curPos   = fromPos + (toPos - fromPos) * progress;
     doorPos[doorId] = curPos;
 
-    // n0 = الثواني الفعلية التي اشتغل فيها الباب (للفتح أو الغلق)
-    var n0_elapsed = isOpen ? (curPos * n) : ((1 - curPos) * n);
-    var displayPct = Math.min(n0_elapsed / n, 1);  // (n0/n)
+    // النسبة = (n0/n) — n0 هو الثواني الفعلية
+    var n0 = isOpen ? (curPos * n) : ((1 - curPos) * n);
+    var displayPct = Math.min(n0 / n, 1);
 
     _drawDoorProgress(imgEl, stateEl, displayPct, isOpen, false, curPos);
 
