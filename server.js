@@ -91,6 +91,7 @@ wss.on('connection', (ws, req) => {
   }
 
   ws.send(JSON.stringify({ type: 'connected' }));
+  triggerBurst(5);
 
   ws.on('message', async (raw) => {
     try {
@@ -525,7 +526,8 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
 
     // تسجيل أن الأمر جاء من التطبيق (للـ Webhook)
     markAppAction(deviceId, req.user.id, req.user.name, action);
-    if (typeof markActivity === "function") markActivity();
+    // burst polling لمدة duration+3 ثانية لكشف نهاية الحدث بدقة
+    triggerBurst((duration || DEFAULT_DURATION) + 3);
     // سجّل العملية — سيُسجّل الآن عبر Webhook تلقائياً
     // لكن نحتفظ بسجل مباشر كـ fallback
     const deviceId2 = req.body.deviceId || TUYA.DEVICE_ID;
@@ -1178,6 +1180,7 @@ async function pollAllDoors() {
         const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
 
         if (changed && !isFromApp && (r1 || r2)) {
+          triggerBurst(15); // RC detected → burst 15s
           const { error: rcErr } = await supabase.from('door_logs').insert({
             door_id: door.id, inst_id: door.inst_id, user_id: null,
             value: doorAction, source: 'RC (جهاز تحكم)',
@@ -1206,18 +1209,32 @@ async function pollAllDoors() {
   } catch(e) { console.error('[Polling Error]', e.message); }
 }
 
-// Adaptive polling: 1s active / 5s idle
-let _lastActivity = Date.now();
-function markActivity() { _lastActivity = Date.now(); }
+// ─── Burst Polling ───────────────────────────────────────────────────────────
+// عادي: كل 3 ثوانٍ
+// burst: كل 500ms لمدة n ثانية بعد أي حدث (App أو RC)
+const POLL_NORMAL = 3000;   // 3 ثوانٍ عادي
+const POLL_BURST  = 500;    // 500ms burst
+
+let _burstUntil = 0;        // timestamp انتهاء الـ burst
+let _pollTimer  = null;
+
+function triggerBurst(durationSec) {
+  // شغّل burst لمدة durationSec ثانية
+  _burstUntil = Date.now() + (durationSec || 10) * 1000;
+}
+
+function markActivity() {
+  // نستخدمها فقط لـ triggerBurst الآن
+}
 
 function startAdaptivePolling() {
   async function run() {
-    const idle = Date.now() - _lastActivity > 30000;
     await pollAllDoors();
-    setTimeout(run, idle ? 5000 : 1000);
+    const inBurst = Date.now() < _burstUntil;
+    _pollTimer = setTimeout(run, inBurst ? POLL_BURST : POLL_NORMAL);
   }
-  console.log('[Polling] Started (adaptive: 1s active / 5s idle)');
-  setTimeout(run, 5000);
+  console.log('[Polling] Started (burst: 500ms / normal: 3s)');
+  _pollTimer = setTimeout(run, 5000);
 }
 startAdaptivePolling();
 
