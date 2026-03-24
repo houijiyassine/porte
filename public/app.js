@@ -179,20 +179,9 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
-            // idle + تايمر شغال
-            // انتظر 800ms: إذا التايمر نفسه (gen) مازال شغالاً → إيقاف حقيقي من RC
-            var _stopDid = doorId;
-            var _stopImg = imgEl, _stopSt = stateEl;
-            var _stopGen = (doorTimers[_stopDid] || {gen: -1}).gen;
-            setTimeout(function() {
-              var t = doorTimers[_stopDid];
-              if (t && t.gen === _stopGen) {
-                // نفس التايمر لم يتغير → إيقاف حقيقي من RC
-                stopDoorTimer(_stopDid, _stopImg, _stopSt);
-                updateDoorCardState(_stopDid, msg.deviceId, 'idle', msg.source);
-              }
-              // gen تغير = بدأ حدث جديد → لا نفعل شيئاً
-            }, 800);
+            // idle + تايمر شغال → نتجاهله تماماً
+            // التايمر يكمل n ثانية بنفسه
+            // الإيقاف الحقيقي يتم من زر إيقاف في التطبيق فقط
           } else {
             var completed = doorCompletedAt[doorId];
             if (!completed || (Date.now() - completed) >= 3000) {
@@ -213,18 +202,9 @@ function connectWS() {
           if (msg.source === 'rc') {
             lastKnownState[doorId] = rawState;
             // نحسب الـ delay بين لحظة حدوث الحدث ولحظة وصوله للتطبيق
-            if (msg.timestamp) {
-              var elapsed = (Date.now() - msg.timestamp) / 1000;
-              if (elapsed >= newSecs - 1) {
-                // الإشعار وصل بعد انتهاء الحدث (أو قرب نهايته) → عرض الحالة النهائية مباشرة
-                lastKnownState[doorId] = rawState;
-                doorPos[doorId] = (rawState === 'open') ? 1.0 : 0.0;
-                _drawDoorStatic(newImgEl, newStateEl, rawState);
-                updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
-                return;
-              }
-            }
-            // نبدأ من الموضع الحالي (doorPos محفوظ)
+            // نبدأ التايمر فوراً من الموضع الحالي
+            // الأنيميشن يعتمد على الثواني الفعلية في التطبيق
+            lastKnownState[doorId] = rawState;
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
@@ -344,8 +324,8 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
 
   var fromPos   = curPos;
   var startTime = Date.now();
-  // المدة الفعلية = المسافة المتبقية × n
-  var totalMs   = dist * n * 1000;
+  // المدة = n ثانية كاملة دائماً (الجهاز يشتغل n ثانية)
+  var totalMs   = n * 1000;
 
   doorTimers[doorId] = { _raf: null, startTime: startTime, isOpen: isOpen,
                          gen: ((doorTimers[doorId]||{gen:0}).gen + 1) };
