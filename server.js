@@ -194,7 +194,13 @@ async function getTuyaToken() {
     headers: { 'client_id': TUYA.CLIENT_ID, 'sign': sign, 't': t, 'sign_method': 'HMAC-SHA256', 'nonce': '', 'Content-Type': 'application/json' },
   });
   const data = await res.json();
-  if (!data.success) throw new Error(`Tuya token error: ${data.msg}`);
+  if (!data.success) {
+    const msg = data.msg || data.message || JSON.stringify(data);
+    if (msg.includes('quota') || msg.includes('Trial') || msg.includes('upgrade')) {
+      console.error('[Tuya] حصة Trial انتهت — يجب ترقية حساب Tuya IoT Platform');
+    }
+    throw new Error(`Tuya token error: ${msg}`);
+  }
   tuyaTokenCache = { token: data.result.access_token, expiresAt: now + (data.result.expire_time * 1000) - 60000 };
   return tuyaTokenCache.token;
 }
@@ -286,19 +292,11 @@ async function sendPushToAll(notification) {
 async function sendPushToAdmins(instId, notification) {
   if (!VAPID_PRIVATE) return;
   try {
-    // جلب مشتركي الإشعارات من أدمن هذه المؤسسة
-    const { data: admins } = await supabase
-      .from('users')
-      .select('id')
-      .eq('inst_id', instId)
-      .in('role', ['admin','super_admin'])
-      .eq('status', 'active');
+    const { data: admins } = await supabase.from('users').select('id')
+      .eq('inst_id', instId).in('role', ['admin','super_admin']).eq('status','active');
     if (!admins?.length) return;
     const adminIds = admins.map(a => a.id);
-    const { data: subs } = await supabase
-      .from('push_subscriptions')
-      .select('*')
-      .in('user_id', adminIds);
+    const { data: subs } = await supabase.from('push_subscriptions').select('*').in('user_id', adminIds);
     if (!subs?.length) return;
     const payload = JSON.stringify(notification);
     await Promise.allSettled(subs.map(sub =>
@@ -527,6 +525,7 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
 
     // تسجيل أن الأمر جاء من التطبيق (للـ Webhook)
     markAppAction(deviceId, req.user.id, req.user.name, action);
+    if (typeof markActivity === "function") markActivity();
     // سجّل العملية — سيُسجّل الآن عبر Webhook تلقائياً
     // لكن نحتفظ بسجل مباشر كـ fallback
     const deviceId2 = req.body.deviceId || TUYA.DEVICE_ID;
@@ -713,7 +712,7 @@ app.put('/api/institutes/:id', authMiddleware, adminOnly, async (req, res) => {
     // تحديث أو إنشاء حساب المسؤول
     if (req.body.admin_phone || req.body.admin_pw) {
       const { data: existingAdmin } = await supabase
-        .from('users').select('id').eq('inst_id', id).eq('role', 'admin').limit(1).maybeSingle();
+        .from('users').select('id').eq('inst_id', id).eq('role', 'admin').single();
 
       if (existingAdmin) {
         const adminUpdates = {};
@@ -733,7 +732,7 @@ app.put('/api/institutes/:id', authMiddleware, adminOnly, async (req, res) => {
 
     // جلب بيانات المسؤول لإرجاعها
     const { data: adminData } = await supabase
-      .from('users').select('phone').eq('inst_id', id).eq('role', 'admin').limit(1).maybeSingle();
+      .from('users').select('phone').eq('inst_id', id).eq('role', 'admin').single();
 
     res.json({ ...data, admin_phone: adminData?.phone });
   } catch (err) {
@@ -1141,12 +1140,13 @@ async function checkDeviceOnline(deviceId) {
 
 async function pollAllDoors() {
   try {
-    const { data: doors, error: doorsErr } = await supabase
-      .from('doors').select('id,inst_id,name,device_id,rc_notify');
-    console.log('[Polling] أبواب:', doors?.length, doorsErr?.message);
+    const { data: doors } = await supabase
+      .from('doors').select('id,inst_id,name,device_id,rc_notify')
+      .not('device_id', 'is', null);
     if (!doors?.length) return;
 
     for (const door of doors) {
+      if (!door.inst_id) continue;
       try {
         const token   = await getTuyaToken();
         const t       = Date.now().toString();
@@ -1166,40 +1166,33 @@ async function pollAllDoors() {
 
         const sm = {};
         data.result.forEach(s => { sm[s.code] = s.value; });
-        const r1 = sm['switch_1'] === true  || sm['switch_1'] === 'true'  || sm['switch_1'] === 1;
-        const r2 = sm['switch_2'] === true  || sm['switch_2'] === 'true'  || sm['switch_2'] === 1;
-        const prev    = doorStateCache.get(door.device_id);
-        const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
-        const stateStr = r1 ? 'open' : r2 ? 'close' : 'idle';
-        console.log(`[Polling] ${door.name} → ${stateStr} R1=${r1} R2=${r2} changed=${changed}`);
+        const r1 = sm['switch_1'] === true || sm['switch_1'] === 'true' || sm['switch_1'] === 1;
+        const r2 = sm['switch_2'] === true || sm['switch_2'] === 'true' || sm['switch_2'] === 1;
+        const prev      = doorStateCache.get(door.device_id);
+        const changed   = !prev || prev.r1 !== r1 || prev.r2 !== r2;
+        const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
 
-        // دائماً حدّث الـ cache
         doorStateCache.set(door.device_id, { r1, r2 });
 
-        // بث تحديث الحالة دائماً (للواجهة)
-        const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
-        const lastApp    = appLastAction.get(door.device_id);
-        const isFromApp  = lastApp && (Date.now() - lastApp.time) < 15000;
+        const lastApp   = appLastAction.get(door.device_id);
+        const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
 
-        console.log(`[Polling] RC check: changed=${changed} isFromApp=${isFromApp} r1=${r1} r2=${r2} doorAction=${doorAction}`);
         if (changed && !isFromApp && (r1 || r2)) {
-          const { error: insertErr } = await supabase.from('door_logs').insert({
-            door_id: door.id, inst_id: door.inst_id,
+          const { error: rcErr } = await supabase.from('door_logs').insert({
+            door_id: door.id, inst_id: door.inst_id, user_id: null,
             value: doorAction, source: 'RC (جهاز تحكم)',
             created_at: new Date().toISOString(),
           });
-          if (insertErr) console.error('[Polling] RC insert error:', insertErr.message);
-          // إذا rc_notify مفعّل → أرسل push لأدمن المؤسسة
+          if (rcErr) console.error('[Polling] RC insert error:', rcErr.message);
           if (door.rc_notify) {
             const rcLabel = doorAction === 'open' ? 'فتح الباب' : 'غلق الباب';
             sendPushToAdmins(door.inst_id, {
-              title: 'إشعار RC 📻',
-              body:  rcLabel + ' بواسطة RC — ' + door.name,
+              title: 'إشعار RC',
+              body: rcLabel + ' بواسطة RC - ' + door.name,
             });
           }
         }
 
-        // بث تحديث الحالة فقط إذا تغيرت
         if (changed) {
           broadcast({
             type: 'door_state', deviceId: door.device_id,
@@ -1213,10 +1206,20 @@ async function pollAllDoors() {
   } catch(e) { console.error('[Polling Error]', e.message); }
 }
 
-setTimeout(function() {
-  console.log('[Polling] ✅ بدأ مراقبة الأبواب كل 3 ثوانٍ');
-  setInterval(pollAllDoors, 3000);
-}, 5000);
+// Adaptive polling: 1s active / 5s idle
+let _lastActivity = Date.now();
+function markActivity() { _lastActivity = Date.now(); }
+
+function startAdaptivePolling() {
+  async function run() {
+    const idle = Date.now() - _lastActivity > 30000;
+    await pollAllDoors();
+    setTimeout(run, idle ? 5000 : 1000);
+  }
+  console.log('[Polling] Started (adaptive: 1s active / 5s idle)');
+  setTimeout(run, 5000);
+}
+startAdaptivePolling();
 
 // مسار Webhook القديم كـ alias
 app.post('/api/webhook/tuya', async (req, res) => {
