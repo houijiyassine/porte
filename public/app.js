@@ -221,6 +221,10 @@ function connectWS() {
       if (msg.type === 'user_location') {
         updateUserMarker(msg.userId, msg.coords);
       }
+      // تحديث حالة اتصال الجهاز
+      if (msg.type === 'device_online') {
+        updateDeviceOnlineBadge(msg.deviceId, msg.online);
+      }
     } catch {}
   };
 
@@ -832,13 +836,50 @@ async function checkDoorStatus(deviceId, elemId) {
     const online = data.online === true;
     doorStatusCache[deviceId] = online;
     el.textContent = online ? '🟢 متصل' : '🔴 غير متصل';
-    el.style.color = online ? 'var(--success)' : 'var(--danger)';
-    el.style.background = online ? 'rgba(0,230,118,0.1)' : 'rgba(255,61,113,0.1)';
+    el.style.color  = online ? 'var(--success)' : 'var(--danger)';
+    el.style.background = online ? 'rgba(0,230,118,0.12)' : 'rgba(255,61,113,0.12)';
+    el.style.border = '1px solid ' + (online ? 'rgba(0,230,118,0.25)' : 'rgba(255,61,113,0.25)');
+    el.style.borderRadius = '20px';
+    el.style.padding = '2px 8px';
   } catch {
     el.textContent = '🔴 غير متصل';
     el.style.color = 'var(--danger)';
-    el.style.background = 'rgba(255,61,113,0.1)';
+    el.style.background = 'rgba(255,61,113,0.12)';
   }
+}
+
+// تحديث badge الاتصال لجميع البطاقات التي تملك نفس deviceId
+function updateDeviceOnlineBadge(deviceId, online) {
+  var color = online ? 'var(--success)' : 'var(--danger)';
+  var bg    = online ? 'rgba(0,230,118,0.12)' : 'rgba(255,61,113,0.12)';
+  var text  = online ? '🟢 متصل' : '🔴 غير متصل';
+
+  // بحث في كل عناصر adm-online وuser-online بناءً على data-device-id
+  document.querySelectorAll('[data-device-id="' + deviceId + '"]').forEach(function(el) {
+    var doorId = el.getAttribute('data-door-id') || el.id.replace('door-img-', '');
+    // adm-online (أدمن)
+    var admOnline = document.getElementById('adm-online-' + doorId);
+    if (admOnline) {
+      admOnline.textContent  = text;
+      admOnline.style.color  = color;
+      admOnline.style.background = bg;
+    }
+    // user-online (مستخدم)
+    var userOnline = document.getElementById('user-online-' + doorId);
+    if (userOnline) {
+      userOnline.textContent  = text;
+      userOnline.style.color  = color;
+      userOnline.style.background = bg;
+    }
+    // door-status (super admin)
+    var doorStatus = document.getElementById('door-status-' + doorId);
+    // لا نلمس door-status لأنه يعرض مفتوح/مغلق
+  });
+
+  // تحديث enligne counter في صفحة المؤسسات
+  document.querySelectorAll('[id^="enligne-"]').forEach(function(span) {
+    // سيُحدَّث عند إعادة تحميل loadInstitutes
+  });
 }
 
 // جلب حالة الباب الحقيقية (مفتوح/مغلق/متوقف) وتحديث الصورة والـ badge
