@@ -848,37 +848,47 @@ async function checkDoorStatus(deviceId, elemId) {
   }
 }
 
-// تحديث badge الاتصال لجميع البطاقات التي تملك نفس deviceId
+// تحديث badge الاتصال لجميع البطاقات + enligne counter
 function updateDeviceOnlineBadge(deviceId, online) {
   var color = online ? 'var(--success)' : 'var(--danger)';
   var bg    = online ? 'rgba(0,230,118,0.12)' : 'rgba(255,61,113,0.12)';
+  var bdr   = online ? 'rgba(0,230,118,0.3)' : 'rgba(255,61,113,0.3)';
   var text  = online ? '🟢 متصل' : '🔴 غير متصل';
 
-  // بحث في كل عناصر adm-online وuser-online بناءً على data-device-id
-  document.querySelectorAll('[data-device-id="' + deviceId + '"]').forEach(function(el) {
-    var doorId = el.getAttribute('data-door-id') || el.id.replace('door-img-', '');
-    // adm-online (أدمن)
+  // حدّث الـ cache
+  doorStatusCache[deviceId] = online;
+
+  // بحث في كل عناصر door-img بناءً على data-device-id
+  document.querySelectorAll('[data-device-id="' + deviceId + '"]').forEach(function(imgEl) {
+    var doorId = imgEl.getAttribute('data-door-id') || imgEl.id.replace('door-img-', '');
+
+    // adm-online (بطاقة أدمن)
     var admOnline = document.getElementById('adm-online-' + doorId);
     if (admOnline) {
-      admOnline.textContent  = text;
-      admOnline.style.color  = color;
-      admOnline.style.background = bg;
+      admOnline.textContent = text;
+      admOnline.style.cssText = 'font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:' + bg + ';color:' + color + ';border:1px solid ' + bdr;
     }
-    // user-online (مستخدم)
+
+    // user-online (بطاقة مستخدم)
     var userOnline = document.getElementById('user-online-' + doorId);
     if (userOnline) {
-      userOnline.textContent  = text;
-      userOnline.style.color  = color;
-      userOnline.style.background = bg;
+      userOnline.textContent = text;
+      userOnline.style.cssText = 'font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + bg + ';color:' + color;
     }
-    // door-status (super admin)
-    var doorStatus = document.getElementById('door-status-' + doorId);
-    // لا نلمس door-status لأنه يعرض مفتوح/مغلق
   });
 
-  // تحديث enligne counter في صفحة المؤسسات
+  // تحديث enligne counter في قائمة المؤسسات (super admin)
+  // نجد كل span enligne ونعيد حساب الأجهزة المتصلة
   document.querySelectorAll('[id^="enligne-"]').forEach(function(span) {
-    // سيُحدَّث عند إعادة تحميل loadInstitutes
+    var instId = span.id.replace('enligne-', '');
+    // نبحث عن كل أبواب هذه المؤسسة
+    var inst = institutesCache.find(function(i) { return i.id === instId; });
+    if (!inst || !inst.doors) return;
+    var total   = inst.doors.length;
+    var onlineN = inst.doors.filter(function(d) { return doorStatusCache[d.device_id] === true; }).length;
+    span.textContent = onlineN + '/' + total;
+    // لون حسب الحالة
+    span.parentElement.style.color = onlineN > 0 ? 'var(--success)' : 'var(--danger)';
   });
 }
 
@@ -905,6 +915,9 @@ async function fetchAndUpdateDoorImage(door) {
     var state = data.r1_on ? 'open' : data.r2_on ? 'close' : 'idle';
     imgEl = document.getElementById('door-img-' + door.id);
 
+    // الجهاز أجاب → متصل
+    updateDeviceOnlineBadge(door.device_id, true);
+
     if (doorTimers[door.id]) return;
 
     // idle من Tuya = ريلاي في وضعه الطبيعي، ليس "متوقف"
@@ -917,7 +930,9 @@ async function fetchAndUpdateDoorImage(door) {
     if (imgEl) _drawDoorStatic(imgEl, null, state);
     updateDoorCardState(door.id, door.device_id, state, 'poll');
   } catch(e) {
-    // خطأ في الاتصال بـ Tuya — رسم باب رمادي محايد
+    // خطأ في الاتصال بـ Tuya → offline
+    doorStatusCache[door.device_id] = false;
+    updateDeviceOnlineBadge(door.device_id, false);
     var imgElErr = document.getElementById('door-img-' + door.id);
     if (imgElErr && !imgElErr.innerHTML) {
       imgElErr.innerHTML =
@@ -1137,6 +1152,7 @@ function renderInstList(insts) {
                 return doorStatusCache[d.device_id] === true;
               }).length;
               el.textContent = count + '/' + total;
+              el.parentElement.style.color = count > 0 ? 'var(--success)' : 'var(--danger)';
             }
           })
           .catch(function() {
