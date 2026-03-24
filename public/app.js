@@ -344,7 +344,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action, alreadyElapsedS
     return;
   }
 
-  var totalMs   = Math.max((n - 0.6) * 1000, 300);  // ينتهي قبل 0.6ث من إغلاق الريلاي
+  var totalMs   = Math.max((n - 1.2) * 1000, 300);  // ينتهي قبل 1.2ث من إغلاق الريلاي
   var startTime = Date.now();
 
   doorTimers[doorId] = { _raf: null, startTime: Date.now() };
