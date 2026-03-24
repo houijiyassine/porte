@@ -179,16 +179,26 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
-            stopDoorTimer(doorId, imgEl, stateEl);
-            updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
+            // idle + تايمر شغال
+            // انتظر 800ms: إذا جاء open/close → الأنيميشن استمر (Tuya عابر)
+            // إذا لم يجِ شيء → إيقاف حقيقي من RC
+            var _stopDid = doorId;
+            var _stopImg = imgEl, _stopSt = stateEl;
+            var _stopTick = (doorTimers[_stopDid] || {})._raf;
+            setTimeout(function() {
+              // تحقق: هل التايمر مازال شغالاً بنفس الـ raf؟
+              var t = doorTimers[_stopDid];
+              if (t && t._raf === _stopTick) {
+                // لم يتغير شيء → إيقاف حقيقي
+                stopDoorTimer(_stopDid, _stopImg, _stopSt);
+                updateDoorCardState(_stopDid, msg.deviceId, 'idle', msg.source);
+              }
+              // وإلا: التايمر تغير (بدأ حدث جديد) → لا نفعل شيئاً
+            }, 800);
           } else {
-            // لا تايمر — تحقق: هل اكتمل الأنيميشن للتو؟
             var completed = doorCompletedAt[doorId];
-            if (completed && (Date.now() - completed) < 3000) {
-              // idle عابر بعد اكتمال الأنيميشن — تجاهل
-            } else {
+            if (!completed || (Date.now() - completed) >= 3000) {
               delete doorCompletedAt[doorId];
-              // idle حقيقي بعد 3 ثوانٍ من الاكتمال — تجاهل أيضاً (لا نغير الصورة)
             }
           }
 
