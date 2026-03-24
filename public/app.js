@@ -291,32 +291,37 @@ const doorTimers      = {};  // doorTimers[doorId] = { _raf }
 const lastKnownState  = {};  // lastKnownState[doorId] = 'open'|'close' — آخر حالة حقيقية
 
 function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
-  // أوقف أي أنيميشن سابق
   if (doorTimers[doorId] && doorTimers[doorId]._raf) {
     cancelAnimationFrame(doorTimers[doorId]._raf);
   }
 
   var isOpen   = (action === 'open' || action === 'open40');
-  var total    = Math.max((seconds - 1.3), 0.5) * 1000;
+  var n        = Math.max(seconds, 1);                    // المدة الكاملة بالثواني
   var fromPos  = doorPos[doorId] !== undefined ? doorPos[doorId] : (isOpen ? 0 : 1);
   var toPos    = isOpen ? 1.0 : 0.0;
-  var dist     = Math.abs(toPos - fromPos);  // المسافة المتبقية
-  var duration = total * dist;               // الوقت بناءً على المسافة
-  var startTime = Date.now();
+  var dist     = Math.abs(toPos - fromPos);
 
-  if (dist <= 0.01) return; // وصل بالفعل
+  if (dist <= 0.01) return;
+
+  // n0 الابتدائي = الثواني التي قطعها الباب فعلاً حتى الآن
+  // للفتح: fromPos يمثل نسبة الفتح، إذن n0 = fromPos * n
+  // للغلق: fromPos يمثل نسبة الفتح، والمسافة المقطوعة للغلق = (1-fromPos)*n
+  var n0_start = isOpen ? (fromPos * n) : ((1 - fromPos) * n);
+  var startTime = Date.now();
+  var totalMs  = (n - 1.3) * 1000;  // وقت الأنيميشن الفعلي (n-1.3 ثانية)
 
   doorTimers[doorId] = { _raf: null };
 
   function tick() {
-    var elapsed = Date.now() - startTime;
-    var progress = duration > 0 ? Math.min(elapsed / duration, 1) : 1;
-    // الموضع الحالي
-    var curPos = fromPos + (toPos - fromPos) * progress;
+    var elapsed  = Date.now() - startTime;          // ms منذ البدء
+    var progress = Math.min(elapsed / (dist * totalMs), 1); // تقدم الحركة 0→1
+    var curPos   = fromPos + (toPos - fromPos) * progress;
     doorPos[doorId] = curPos;
 
-    // النسبة للعرض: دائماً من منظور الحركة الحالية (0→100%)
-    var displayPct = progress;
+    // n0 = الثواني الفعلية التي اشتغل فيها الباب (للفتح أو الغلق)
+    var n0_elapsed = isOpen ? (curPos * n) : ((1 - curPos) * n);
+    var displayPct = Math.min(n0_elapsed / n, 1);  // (n0/n)
+
     _drawDoorProgress(imgEl, stateEl, displayPct, isOpen, false, curPos);
 
     if (progress < 1) {
@@ -341,9 +346,11 @@ function stopDoorTimer(doorId, imgEl, stateEl) {
     cancelAnimationFrame(doorTimers[doorId]._raf);
   }
   delete doorTimers[doorId];
-  // doorPos[doorId] يبقى كما هو — التجميد في مكانه
-  var pos = doorPos[doorId] !== undefined ? doorPos[doorId] : 0;
-  _drawDoorProgress(imgEl, stateEl, pos, pos >= 0.5, true, pos);
+  var pos    = doorPos[doorId] !== undefined ? doorPos[doorId] : 0;
+  var isOpen = pos >= 0.5; // نستنتج الاتجاه من الموضع
+  // النسبة المجمّدة = n0/n حسب آخر موضع
+  // لا نعرف n هنا بدقة، نستخدم pos مباشرة كنسبة للعرض
+  _drawDoorProgress(imgEl, stateEl, pos, isOpen, true, pos);
 }
 
 function _cancelDoorTimer(doorId) {
@@ -850,7 +857,19 @@ async function fetchAndUpdateDoorImage(door) {
 
     if (imgEl) _drawDoorStatic(imgEl, null, state);
     updateDoorCardState(door.id, door.device_id, state, 'poll');
-  } catch(e) {}
+  } catch(e) {
+    // خطأ في الاتصال بـ Tuya — رسم باب رمادي محايد
+    var imgElErr = document.getElementById('door-img-' + door.id);
+    if (imgElErr && !imgElErr.innerHTML) {
+      imgElErr.innerHTML =
+        '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:0.4">' +
+        '<rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="#8892b0" stroke-width="1.8"/>' +
+        '<rect x="8" y="4" width="62" height="74" rx="3" fill="#8892b0" fill-opacity="0.1" stroke="#8892b0" stroke-width="1.6"/>' +
+        '<circle cx="22" cy="41" r="3" fill="#8892b0" opacity="0.6"/>' +
+        '<text x="40" y="97" text-anchor="middle" font-size="7" fill="#8892b0" font-family="Cairo,sans-serif">غير متصل</text>' +
+        '</svg>';
+    }
+  }
 }
 
 // ─── Door Logs ────────────────────────────────────────
