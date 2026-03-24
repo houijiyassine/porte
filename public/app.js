@@ -179,14 +179,16 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
-            // تايمر شغال + idle
-            // إذا جاء من زر إيقاف App → أوقف التايمر
-            // إذا جاء من Polling (Tuya عابر) → تجاهل تماماً
-            if (msg.source === 'app') {
+            var t = doorTimers[doorId];
+            var timerElapsed = t ? (Date.now() - (t.startTime || 0)) / 1000 : 999;
+            // إذا التايمر بدأ منذ أقل من 2 ثانية → idle عابر من Tuya (انتهاء النبضة)
+            // إذا التايمر شغال منذ أكثر من 2 ثانية + جاء idle → إيقاف حقيقي
+            var isTransient = timerElapsed < 2.0;
+            if (!isTransient) {
               stopDoorTimer(doorId, imgEl, stateEl);
               updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
             }
-            // source='rc' أو polling → idle عابر من Tuya بعد انتهاء النبضة — نتجاهل
+            // وإلا: idle عابر بعد بدء النبضة — نتجاهل
           }
           // لا تايمر → idle عابر — نتجاهل
 
@@ -351,7 +353,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action, alreadyElapsedS
   var totalMs   = n * 1000;  // المدة الكاملة — idle من Tuya لن يوقفنا
   var startTime = Date.now();
 
-  doorTimers[doorId] = { _raf: null };
+  doorTimers[doorId] = { _raf: null, startTime: Date.now() };
 
   function tick() {
     var elapsed  = Date.now() - startTime;
