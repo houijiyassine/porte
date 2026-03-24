@@ -198,7 +198,20 @@ function connectWS() {
           if (msg.source === 'rc') {
             lastKnownState[doorId] = rawState;
             // نحسب الـ delay بين لحظة حدوث الحدث ولحظة وصوله للتطبيق
-            var rcDelay = msg.timestamp ? Math.min((Date.now() - msg.timestamp) / 1000, newSecs - 0.5) : 0;
+            var rcDelay = 0;
+            if (msg.timestamp) {
+              var elapsed = (Date.now() - msg.timestamp) / 1000;
+              if (elapsed >= newSecs) {
+                // الإشعار وصل بعد انتهاء الحدث كاملاً → عرض الحالة النهائية مباشرة
+                lastKnownState[doorId] = rawState;
+                doorPos[doorId] = (rawState === 'open') ? 1.0 : 0.0;
+                _drawDoorStatic(newImgEl, newStateEl, rawState);
+                updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
+                return;
+              }
+              // تأخر جزئي — لا نعوّض أكثر من نصف المدة لتجنب القفز
+              rcDelay = Math.min(elapsed, newSecs * 0.5);
+            }
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState, rcDelay);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
