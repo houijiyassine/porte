@@ -198,21 +198,20 @@ function connectWS() {
           if (msg.source === 'rc') {
             lastKnownState[doorId] = rawState;
             // نحسب الـ delay بين لحظة حدوث الحدث ولحظة وصوله للتطبيق
-            var rcDelay = 0;
             if (msg.timestamp) {
               var elapsed = (Date.now() - msg.timestamp) / 1000;
-              if (elapsed >= newSecs) {
-                // الإشعار وصل بعد انتهاء الحدث كاملاً → عرض الحالة النهائية مباشرة
+              if (elapsed >= newSecs - 1) {
+                // الإشعار وصل بعد انتهاء الحدث (أو قرب نهايته) → عرض الحالة النهائية مباشرة
                 lastKnownState[doorId] = rawState;
                 doorPos[doorId] = (rawState === 'open') ? 1.0 : 0.0;
                 _drawDoorStatic(newImgEl, newStateEl, rawState);
                 updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
                 return;
               }
-              // تأخر جزئي — لا نعوّض أكثر من نصف المدة لتجنب القفز
-              rcDelay = Math.min(elapsed, newSecs * 0.5);
             }
-            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState, rcDelay);
+            // لا نعوّض الـ delay — نبدأ الأنيميشن من الصفر دائماً
+            doorPos[doorId] = (rawState === 'open') ? 0 : 1;
+            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState, 0);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
             if (rawState !== 'idle') lastKnownState[doorId] = rawState;
