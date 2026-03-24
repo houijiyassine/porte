@@ -1164,7 +1164,25 @@ async function pollAllDoors() {
           },
         });
         const data = await r.json();
-        if (!data.success || !data.result) continue;
+
+        // كشف حالة الاتصال من نفس الاستجابة
+        if (!data.success) {
+          // فشل الاستعلام = الجهاز offline أو خطأ
+          const wasOn = deviceOnlineCache.get(door.device_id);
+          if (wasOn !== false) {
+            deviceOnlineCache.set(door.device_id, false);
+            broadcast({ type: 'device_online', deviceId: door.device_id, online: false, timestamp: Date.now() });
+          }
+          continue;
+        }
+        if (!data.result) continue;
+
+        // إذا نجح الاستعلام = الجهاز online
+        const wasOn = deviceOnlineCache.get(door.device_id);
+        if (wasOn !== true) {
+          deviceOnlineCache.set(door.device_id, true);
+          broadcast({ type: 'device_online', deviceId: door.device_id, online: true, timestamp: Date.now() });
+        }
 
         const sm = {};
         data.result.forEach(s => { sm[s.code] = s.value; });
