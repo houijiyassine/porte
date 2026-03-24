@@ -179,12 +179,18 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
-            // التايمر شغال + وصل idle → إيقاف حقيقي (RC أو App)
-            // الأنيميشن ينتهي قبل الريلاي بـ 0.6ث، إذن idle بعد انتهاء الأنيميشن = hasTimer false
             stopDoorTimer(doorId, imgEl, stateEl);
             updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
+          } else {
+            // لا تايمر — تحقق: هل اكتمل الأنيميشن للتو؟
+            var completed = doorCompletedAt[doorId];
+            if (completed && (Date.now() - completed) < 3000) {
+              // idle عابر بعد اكتمال الأنيميشن — تجاهل
+            } else {
+              delete doorCompletedAt[doorId];
+              // idle حقيقي بعد 3 ثوانٍ من الاكتمال — تجاهل أيضاً (لا نغير الصورة)
+            }
           }
-          // لا تايمر → idle عابر بعد انتهاء الأنيميشن — نتجاهل
 
         } else {
           // open أو close جديد
@@ -308,6 +314,7 @@ let timerInterval = null;
 //  عند إيقاف: pos تتجمد حيث هي
 // ═══════════════════════════════════════════════════════
 const doorPos         = {};  // doorPos[doorId]    = موضع الباب (0→1)
+const doorCompletedAt = {};  // doorCompletedAt[doorId] = timestamp اكتمال الأنيميشن
 const doorTimers      = {};  // doorTimers[doorId] = { _raf }
 const lastKnownState  = {};  // lastKnownState[doorId] = 'open'|'close' — آخر حالة حقيقية
 
@@ -344,7 +351,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action, alreadyElapsedS
     return;
   }
 
-  var totalMs   = Math.max(n * 0.85 * 1000, 300);  // 85% من المدة — ينتهي قبل idle
+  var totalMs   = n * 1000;  // المدة الكاملة
   var startTime = Date.now();
 
   doorTimers[doorId] = { _raf: null, startTime: Date.now(), isOpen: isOpen };
@@ -368,6 +375,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action, alreadyElapsedS
       delete doorTimers[doorId];
       var finalState = isOpen ? 'open' : 'close';
       lastKnownState[doorId] = finalState;
+      doorCompletedAt[doorId] = Date.now(); // احفظ وقت الاكتمال
       setTimeout(function() {
         _drawDoorStatic(imgEl, stateEl, finalState);
         updateDoorCardState(doorId, null, finalState, 'auto');
