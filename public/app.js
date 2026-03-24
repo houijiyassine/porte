@@ -342,7 +342,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action, alreadyElapsedS
     return;
   }
 
-  var totalMs   = Math.max((n - 1.3), 0.5) * 1000;
+  var totalMs   = Math.max((n - 0.5), 0.3) * 1000;  // n-0.5 ثانية فقط
   var startTime = Date.now();
 
   doorTimers[doorId] = { _raf: null };
@@ -872,8 +872,21 @@ function updateDeviceOnlineBadge(deviceId, online) {
   doorStatusCache[deviceId] = online;
 
   // بحث في كل عناصر door-img بناءً على data-device-id
+  var foundIds = [];
   document.querySelectorAll('[data-device-id="' + deviceId + '"]').forEach(function(imgEl) {
     var doorId = imgEl.getAttribute('data-door-id') || imgEl.id.replace('door-img-', '');
+    if (doorId && !foundIds.includes(doorId)) foundIds.push(doorId);
+  });
+  // إذا لم نجد من DOM، ابحث في institutesCache
+  if (foundIds.length === 0 && window.institutesCache) {
+    institutesCache.forEach(function(inst) {
+      (inst.doors||[]).forEach(function(d) {
+        if (d.device_id === deviceId) foundIds.push(d.id);
+      });
+    });
+  }
+  foundIds.forEach(function(doorId) {
+    var imgEl = document.getElementById('door-img-' + doorId);
 
     // adm-online (بطاقة أدمن)
     var admOnline = document.getElementById('adm-online-' + doorId);
