@@ -180,20 +180,18 @@ function connectWS() {
         if (rawState === 'idle') {
           if (hasTimer) {
             // idle + تايمر شغال
-            // انتظر 800ms: إذا جاء open/close → الأنيميشن استمر (Tuya عابر)
-            // إذا لم يجِ شيء → إيقاف حقيقي من RC
+            // انتظر 800ms: إذا التايمر نفسه (gen) مازال شغالاً → إيقاف حقيقي من RC
             var _stopDid = doorId;
             var _stopImg = imgEl, _stopSt = stateEl;
-            var _stopTick = (doorTimers[_stopDid] || {})._raf;
+            var _stopGen = (doorTimers[_stopDid] || {gen: -1}).gen;
             setTimeout(function() {
-              // تحقق: هل التايمر مازال شغالاً بنفس الـ raf؟
               var t = doorTimers[_stopDid];
-              if (t && t._raf === _stopTick) {
-                // لم يتغير شيء → إيقاف حقيقي
+              if (t && t.gen === _stopGen) {
+                // نفس التايمر لم يتغير → إيقاف حقيقي من RC
                 stopDoorTimer(_stopDid, _stopImg, _stopSt);
                 updateDoorCardState(_stopDid, msg.deviceId, 'idle', msg.source);
               }
-              // وإلا: التايمر تغير (بدأ حدث جديد) → لا نفعل شيئاً
+              // gen تغير = بدأ حدث جديد → لا نفعل شيئاً
             }, 800);
           } else {
             var completed = doorCompletedAt[doorId];
