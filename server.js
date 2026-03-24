@@ -1222,7 +1222,7 @@ async function pollAllDoors() {
 // عادي: كل 3 ثوانٍ
 // burst: كل 500ms لمدة n ثانية بعد أي حدث (App أو RC)
 const POLL_NORMAL = 3000;   // 3 ثوانٍ عادي
-const POLL_BURST  = 500;    // 500ms burst
+const POLL_BURST  = 300;    // 300ms burst عند الحدث
 
 let _burstUntil = 0;        // timestamp انتهاء الـ burst
 let _pollTimer  = null;
