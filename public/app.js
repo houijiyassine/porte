@@ -279,12 +279,14 @@ function updateDoorCardState(doorId, deviceId, state, source) {
   // badge الحالة في بطاقة أدمن (adm-status-)
   var admEl = document.getElementById('adm-status-' + doorId);
   if (admEl) {
-    var label  = state==='open' ? 'مفتوح' : state==='close' ? 'مغلق' : 'متوقف';
+    var label  = state==='open' ? '🔓 مفتوح' : state==='close' ? '🔒 مغلق' : '⏹ متوقف';
     var color  = state==='open' ? 'rgba(0,230,118,0.15)' : state==='close' ? 'rgba(255,61,113,0.15)' : 'rgba(255,179,0,0.15)';
     var tcolor = state==='open' ? 'var(--success)' : state==='close' ? 'var(--danger)' : 'var(--warning)';
     admEl.textContent = label;
     admEl.style.cssText = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + color + ';color:' + tcolor;
   }
+
+  // adm-online: لا نلمسه هنا — يُحدَّث فقط من updateDeviceOnlineBadge
 }
 
 // تحديث صورة/أيقونة الباب بناءً على حالته
@@ -2265,8 +2267,7 @@ async function loadAdminDoors() {
 
       card.appendChild(logRow);
       container.appendChild(card);
-      checkDoorStatus(door.device_id, 'adm-online-' + door.id);
-      // رسم صورة الباب الأولية وجلب الحالة
+      // fetchAndUpdateDoorImage تحدّث adm-online تلقائياً
       fetchAndUpdateDoorImage(door);
     });
 
