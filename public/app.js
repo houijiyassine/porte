@@ -179,11 +179,16 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
-            // تايمر شغال → أوقفه (إيقاف مبكر من RC أو يدوي)
-            stopDoorTimer(doorId, imgEl, stateEl);
-            updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
+            // تايمر شغال + idle
+            // إذا جاء من زر إيقاف App → أوقف التايمر
+            // إذا جاء من Polling (Tuya عابر) → تجاهل تماماً
+            if (msg.source === 'app') {
+              stopDoorTimer(doorId, imgEl, stateEl);
+              updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
+            }
+            // source='rc' أو polling → idle عابر من Tuya بعد انتهاء النبضة — نتجاهل
           }
-          // لا تايمر → idle عابر من Tuya — نتجاهل (الصورة تبقى على lastKnownState)
+          // لا تايمر → idle عابر — نتجاهل
 
         } else {
           // open أو close جديد
@@ -343,7 +348,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action, alreadyElapsedS
     return;
   }
 
-  var totalMs   = Math.max((n - 0.5), 0.3) * 1000;  // n-0.5 ثانية فقط
+  var totalMs   = n * 1000;  // المدة الكاملة — idle من Tuya لن يوقفنا
   var startTime = Date.now();
 
   doorTimers[doorId] = { _raf: null };
