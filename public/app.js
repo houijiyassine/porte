@@ -344,10 +344,10 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action, alreadyElapsedS
     return;
   }
 
-  var totalMs   = Math.max((n - 1.2) * 1000, 300);  // ينتهي قبل 1.2ث من إغلاق الريلاي
+  var totalMs   = Math.max(n * 0.85 * 1000, 300);  // 85% من المدة — ينتهي قبل idle
   var startTime = Date.now();
 
-  doorTimers[doorId] = { _raf: null, startTime: Date.now() };
+  doorTimers[doorId] = { _raf: null, startTime: Date.now(), isOpen: isOpen };
 
   function tick() {
     var elapsed  = Date.now() - startTime;
@@ -379,15 +379,54 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action, alreadyElapsedS
 }
 
 function stopDoorTimer(doorId, imgEl, stateEl) {
-  if (doorTimers[doorId] && doorTimers[doorId]._raf) {
-    cancelAnimationFrame(doorTimers[doorId]._raf);
-  }
+  var t = doorTimers[doorId];
+  if (t && t._raf) cancelAnimationFrame(t._raf);
+  // نأخذ isOpen من التايمر قبل حذفه
+  var isOpenDir = t ? t.isOpen : null;
   delete doorTimers[doorId];
   var pos    = doorPos[doorId] !== undefined ? doorPos[doorId] : 0;
-  var isOpen = pos >= 0.5; // نستنتج الاتجاه من الموضع
-  // النسبة المجمّدة = n0/n حسب آخر موضع
-  // لا نعرف n هنا بدقة، نستخدم pos مباشرة كنسبة للعرض
-  _drawDoorProgress(imgEl, stateEl, pos, isOpen, true, pos);
+  // إذا ما عندنا isOpen من التايمر، نحدده من الموضع
+  var isOpen = (isOpenDir !== null && isOpenDir !== undefined) ? isOpenDir : (pos >= 0.5);
+  var pctInt = Math.round(pos * 100);
+  var stopText = '⏹ متوقف — ' + pctInt + '%';
+  var stopCss  = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(255,179,0,0.15);color:var(--warning);border:1px solid rgba(255,179,0,0.3)';
+
+  // رسم الحالة المجمّدة في صورة الباب
+  var img = imgEl || document.getElementById('door-img-' + doorId);
+  var ste = stateEl
+         || document.getElementById('user-state-'    + doorId)
+         || document.getElementById('door-progress-' + doorId);
+  _drawDoorProgress(img, ste, pos, isOpen, true, pos);
+
+  // badge الحالة — كل الأنواع
+  ['adm-status-', 'door-status-'].forEach(function(prefix) {
+    var el = document.getElementById(prefix + doorId);
+    if (el) {
+      el.innerHTML = stopText;
+      el.style.cssText = stopCss;
+    }
+  });
+
+  // user-state
+  var userSt = document.getElementById('user-state-' + doorId);
+  if (userSt) {
+    userSt.style.color = 'var(--warning)';
+    userSt.innerHTML =
+      '<span style="width:9px;height:9px;border-radius:50%;background:var(--warning);display:inline-block;box-shadow:0 0 6px var(--warning)"></span>' +
+      ' ' + stopText;
+  }
+
+  // progress bar
+  var prog = document.getElementById('door-progress-' + doorId);
+  if (prog && prog !== ste) {
+    prog.innerHTML =
+      '<div style="flex:1">' +
+        '<div style="font-size:0.85rem;font-weight:700;margin-bottom:5px;color:var(--warning)">' + stopText + '</div>' +
+        '<div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden">' +
+          '<div style="height:100%;width:' + pctInt + '%;background:var(--warning);border-radius:3px"></div>' +
+        '</div>' +
+      '</div>';
+  }
 }
 
 function _cancelDoorTimer(doorId) {
