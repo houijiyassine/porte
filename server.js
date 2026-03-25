@@ -91,7 +91,6 @@ wss.on('connection', (ws, req) => {
   }
 
   ws.send(JSON.stringify({ type: 'connected' }));
-  triggerBurst(5);
 
   ws.on('message', async (raw) => {
     try {
@@ -195,13 +194,7 @@ async function getTuyaToken() {
     headers: { 'client_id': TUYA.CLIENT_ID, 'sign': sign, 't': t, 'sign_method': 'HMAC-SHA256', 'nonce': '', 'Content-Type': 'application/json' },
   });
   const data = await res.json();
-  if (!data.success) {
-    const msg = data.msg || data.message || JSON.stringify(data);
-    if (msg.includes('quota') || msg.includes('Trial') || msg.includes('upgrade')) {
-      console.error('[Tuya] حصة Trial انتهت — يجب ترقية حساب Tuya IoT Platform');
-    }
-    throw new Error(`Tuya token error: ${msg}`);
-  }
+  if (!data.success) throw new Error(`Tuya token error: ${data.msg}`);
   tuyaTokenCache = { token: data.result.access_token, expiresAt: now + (data.result.expire_time * 1000) - 60000 };
   return tuyaTokenCache.token;
 }
@@ -281,23 +274,6 @@ async function sendPushToAll(notification) {
   if (!VAPID_PRIVATE) return;
   try {
     const { data: subs } = await supabase.from('push_subscriptions').select('*');
-    if (!subs?.length) return;
-    const payload = JSON.stringify(notification);
-    await Promise.allSettled(subs.map(sub =>
-      webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload)
-        .catch(err => { if (err.statusCode === 410) supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); })
-    ));
-  } catch {}
-}
-
-async function sendPushToAdmins(instId, notification) {
-  if (!VAPID_PRIVATE) return;
-  try {
-    const { data: admins } = await supabase.from('users').select('id')
-      .eq('inst_id', instId).in('role', ['admin','super_admin']).eq('status','active');
-    if (!admins?.length) return;
-    const adminIds = admins.map(a => a.id);
-    const { data: subs } = await supabase.from('push_subscriptions').select('*').in('user_id', adminIds);
     if (!subs?.length) return;
     const payload = JSON.stringify(notification);
     await Promise.allSettled(subs.map(sub =>
@@ -526,7 +502,6 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
 
     // تسجيل أن الأمر جاء من التطبيق (للـ Webhook)
     markAppAction(deviceId, req.user.id, req.user.name, action);
-    // burst polling لمدة duration+3 ثانية لكشف نهاية الحدث بدقة
     triggerBurst((duration || DEFAULT_DURATION) + 3);
     // سجّل العملية — سيُسجّل الآن عبر Webhook تلقائياً
     // لكن نحتفظ بسجل مباشر كـ fallback
@@ -661,9 +636,9 @@ app.get('/api/institutes', authMiddleware, async (req, res) => {
         supabase.from('doors').select('*').eq('inst_id', inst.id),
         supabase.from('users').select('id', { count: 'exact' }).eq('inst_id', inst.id),
       ]);
-      const { data: adminUsers } = await supabase
-        .from('users').select('phone').eq('inst_id', inst.id).eq('role', 'admin').limit(1);
-      return { ...inst, doors: doors||[], users_count: usersCount||0, admin_phone: adminUsers?.[0]?.phone };
+      const { data: adminUser } = await supabase
+        .from('users').select('phone').eq('inst_id', inst.id).eq('role', 'admin').limit(1).maybeSingle();
+      return { ...inst, doors: doors||[], users_count: usersCount||0, admin_phone: adminUser?.phone };
     }));
 
     res.json(enriched);
@@ -1140,12 +1115,31 @@ async function checkDeviceOnline(deviceId) {
   } catch(e) { return deviceOnlineCache.get(deviceId) ?? false; }
 }
 
+// ─── نظام Polling الذكي ───────────────────────────────
+// عادي:   3000ms
+// نشاط:    200ms (عند تغيير حالة الباب)
+// offline: 30000ms (عند عدم الاستجابة)
+// يرجع للـ 3000ms بعد n ثانية بدون تغيير
+
+const POLL_NORMAL  = 3000;
+const POLL_FAST    = 200;
+const POLL_OFFLINE = 30000;
+
+let _pollInterval    = POLL_NORMAL;
+let _lastChange      = 0;        // آخر تغيير في الحالة
+let _lastChangeDur   = 5;        // مدة n للباب الذي تغير
+let _pollTimer       = null;
+const deviceOffline  = new Map(); // deviceId → true إذا offline
+
 async function pollAllDoors() {
   try {
     const { data: doors } = await supabase
       .from('doors').select('id,inst_id,name,device_id,rc_notify')
       .not('device_id', 'is', null);
     if (!doors?.length) return;
+
+    let anyOffline = false;
+    let anyChange  = false;
 
     for (const door of doors) {
       if (!door.inst_id) continue;
@@ -1164,52 +1158,52 @@ async function pollAllDoors() {
           },
         });
         const data = await r.json();
-        if (!data.success || !data.result) continue;
 
-        // كشف online من result — إذا فارغ = offline
-        const isOnline = Array.isArray(data.result) && data.result.length > 0;
-        const wasOn    = deviceOnlineCache.get(door.device_id);
-        if (wasOn !== isOnline) {
-          deviceOnlineCache.set(door.device_id, isOnline);
+        // كشف offline: result فارغ أو success=false
+        const isOnline = data.success && Array.isArray(data.result) && data.result.length > 0;
+        const wasOnline = !deviceOffline.get(door.device_id);
+        if (wasOnline !== isOnline) {
+          deviceOffline.set(door.device_id, !isOnline);
           broadcast({ type: 'device_online', deviceId: door.device_id, online: isOnline, timestamp: Date.now() });
         }
-        if (!isOnline) continue; // الجهاز offline — لا نعالج الحالة
+        if (!isOnline) { anyOffline = true; continue; }
 
         const sm = {};
         data.result.forEach(s => { sm[s.code] = s.value; });
         const r1 = sm['switch_1'] === true || sm['switch_1'] === 'true' || sm['switch_1'] === 1;
         const r2 = sm['switch_2'] === true || sm['switch_2'] === 'true' || sm['switch_2'] === 1;
-        const prev      = doorStateCache.get(door.device_id);
-        const changed   = !prev || prev.r1 !== r1 || prev.r2 !== r2;
+
+        const prev    = doorStateCache.get(door.device_id);
+        const changed = !prev || prev.r1 !== r1 || prev.r2 !== r2;
         const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
 
         doorStateCache.set(door.device_id, { r1, r2 });
 
-        // عند أي تغيير → burst فوري
-        if (changed) triggerBurst(20);
-
-        const lastApp   = appLastAction.get(door.device_id);
-        const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
-        if (changed) console.log(`[Poll] ${door.name}: r1=${r1} r2=${r2} → ${doorAction} | isFromApp=${isFromApp}`);
-
-        if (changed && !isFromApp && (r1 || r2)) {
-          triggerBurst(20); // RC detected → burst 20s
-          const { error: rcErr } = await supabase.from('door_logs').insert({
-            door_id: door.id, inst_id: door.inst_id, user_id: null,
-            value: doorAction, source: 'RC (جهاز تحكم)',
-            created_at: new Date().toISOString(),
-          });
-          if (rcErr) console.error('[Polling] RC insert error:', rcErr.message);
-          if (door.rc_notify) {
-            const rcLabel = doorAction === 'open' ? 'فتح الباب' : 'غلق الباب';
-            sendPushToAdmins(door.inst_id, {
-              title: 'إشعار RC',
-              body: rcLabel + ' بواسطة RC - ' + door.name,
-            });
-          }
-        }
-
         if (changed) {
+          anyChange = true;
+          _lastChange    = Date.now();
+
+          const lastApp   = appLastAction.get(door.device_id);
+          const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
+
+          // RC insert
+          if (!isFromApp && (r1 || r2)) {
+            supabase.from('door_logs').insert({
+              door_id: door.id, inst_id: door.inst_id, user_id: null,
+              value: doorAction, source: 'RC (جهاز تحكم)',
+              created_at: new Date().toISOString(),
+            }).then(({ error }) => { if (error) console.error('[RC insert]', error.message); });
+
+            if (door.rc_notify) {
+              const rcLabel = doorAction === 'open' ? 'فتح الباب' : 'غلق الباب';
+              sendPushToAdmins(door.inst_id, {
+                title: 'إشعار RC 📻',
+                body: rcLabel + ' بواسطة RC — ' + door.name,
+              });
+            }
+          }
+
+          // بث للواجهة
           broadcast({
             type: 'door_state', deviceId: door.device_id,
             doorId: door.id, instId: door.inst_id,
@@ -1219,37 +1213,41 @@ async function pollAllDoors() {
         }
       } catch(e) {}
     }
+
+    // حساب الـ interval التالي
+    const now       = Date.now();
+    const sinceChange = (now - _lastChange) / 1000; // ثوانٍ منذ آخر تغيير
+    const n         = _lastChangeDur || 5;
+
+    if (sinceChange < n + 1) {
+      // ما زلنا في فترة الحدث → 200ms
+      _pollInterval = POLL_FAST;
+    } else if (anyOffline && !anyChange) {
+      // كل الأجهزة offline → 30s
+      _pollInterval = POLL_OFFLINE;
+    } else {
+      // هدوء → 3s
+      _pollInterval = POLL_NORMAL;
+    }
+
   } catch(e) { console.error('[Polling Error]', e.message); }
 }
 
-// ─── Burst Polling ───────────────────────────────────────────────────────────
-// عادي: كل 3 ثوانٍ
-// burst: كل 500ms لمدة n ثانية بعد أي حدث (App أو RC)
-const POLL_NORMAL = 3000;   // 3 ثوانٍ عادي
-const POLL_BURST  = 100;    // 100ms burst عند الحدث
-
-let _burstUntil = 0;        // timestamp انتهاء الـ burst
-let _pollTimer  = null;
-
 function triggerBurst(durationSec) {
-  // شغّل burst لمدة durationSec ثانية
-  _burstUntil = Date.now() + (durationSec || 10) * 1000;
+  _lastChange    = Date.now();
+  _lastChangeDur = durationSec || 10;
+  _pollInterval  = POLL_FAST;
 }
 
-function markActivity() {
-  // نستخدمها فقط لـ triggerBurst الآن
-}
-
-function startAdaptivePolling() {
+function startPolling() {
   async function run() {
     await pollAllDoors();
-    const inBurst = Date.now() < _burstUntil;
-    _pollTimer = setTimeout(run, inBurst ? POLL_BURST : POLL_NORMAL);
+    _pollTimer = setTimeout(run, _pollInterval);
   }
-  console.log('[Polling] Started (burst: 500ms / normal: 3s)');
+  console.log('[Polling] بدأ (عادي:3s / نشاط:0.2s / offline:30s)');
   _pollTimer = setTimeout(run, 5000);
 }
-startAdaptivePolling();
+startPolling();
 
 // مسار Webhook القديم كـ alias
 app.post('/api/webhook/tuya', async (req, res) => {
