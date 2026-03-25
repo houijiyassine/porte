@@ -340,13 +340,15 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
   }
 
   var isOpen = (action === 'open' || action === 'open40');
-  // نضيف 2 ثانية كهامش حتى يبقى التايمر شغالاً عند ضغط RC إيقاف
   var n      = Math.max(seconds, 1) + 2;
-  // لكن النسبة تُحسب من seconds الأصلية
   var nDisplay = Math.max(seconds, 1);
 
   // الموضع الحالي الفيزيائي
-  var curPos = doorPos[doorId] !== undefined ? doorPos[doorId] : (isOpen ? 0 : 1);
+  // إذا doorPos غير معروف → نفترض البداية المنطقية
+  if (doorPos[doorId] === undefined) {
+    doorPos[doorId] = isOpen ? 0.0 : 1.0;
+  }
+  var curPos = doorPos[doorId];
   var toPos  = isOpen ? 1.0 : 0.0;
   var dist   = Math.abs(toPos - curPos);
 
