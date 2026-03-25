@@ -162,7 +162,6 @@ function connectWS() {
         loadRecentHistory();
       }
       // تحديث حالة الباب من Polling أو Webhook (RC أو App)
-      console.log('[WS RCV]', msg.type, msg.r1_on, msg.r2_on, msg.source, msg.doorId);
       if (msg.type === 'door_state') {
         var r1       = msg.r1_on, r2 = msg.r2_on;
         var rawState = r1 ? 'open' : r2 ? 'close' : 'idle';
@@ -315,7 +314,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
   }
 
   var isOpen = (action === 'open' || action === 'open40');
-  var n      = Math.max(seconds, 1) + 2; // +2 ثانية هامش للإيقاف
+  var n      = Math.max(seconds, 1) + 5; // +5 ثانية هامش للإيقاف
 
   if (doorPos[doorId] === undefined) {
     doorPos[doorId] = isOpen ? 0.0 : 1.0;
