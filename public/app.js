@@ -179,17 +179,8 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
-            var _t = doorTimers[doorId];
-            var _elapsed = _t ? (Date.now() - _t.startTime) : 0;
-            var _durEl = document.querySelector('[data-door-id="' + doorId + '"]');
-            var _n = _durEl ? parseInt(_durEl.getAttribute('data-duration') || '5') : 5;
-            // إذا مضى أقل من n-1 ثانية → إيقاف حقيقي من RC
-            // إذا مضى أكثر → idle طبيعي بعد انتهاء النبضة → تجاهل
-            if (_elapsed < (_n - 1) * 1000) {
-              stopDoorTimer(doorId, imgEl, stateEl);
-              updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
-            }
-            // وإلا: idle طبيعي → التايمر يكمل لوحده
+            // idle أثناء التايمر = نبضة Tuya عابرة (switch يرجع false بعد pulse)
+            // لا نوقف التايمر — يكمل n ثانية بنفسه
           } else {
             var completed = doorCompletedAt[doorId];
             if (!completed || (Date.now() - completed) >= 3000) {
@@ -208,8 +199,18 @@ function connectWS() {
           var newSecs = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
 
           if (msg.source === 'rc') {
-            doorIdleCount[doorId] = 0; // صفّر عداد idle
+            doorIdleCount[doorId] = 0;
             lastKnownState[doorId] = rawState;
+            // إذا التايمر شغال باتجاه معاكس → إيقاف أولاً
+            var curTimer = doorTimers[doorId];
+            if (curTimer) {
+              var timerIsOpen = curTimer.isOpen;
+              var newIsOpen   = (rawState === 'open' || rawState === 'open40');
+              if (timerIsOpen !== newIsOpen) {
+                // اتجاه معاكس → RC ضغط زر آخر = إيقاف ضمني
+                stopDoorTimer(doorId, newImgEl, newStateEl);
+              }
+            }
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
