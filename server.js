@@ -1181,7 +1181,9 @@ async function pollAllDoors() {
 
         if (changed) {
           anyChange = true;
-          _lastChange    = Date.now();
+          // تغيير حدث → burst فوري لـ 0.2s
+          triggerBurst(_lastChangeDur || 10);
+          _lastChange = Date.now();
 
           const lastApp   = appLastAction.get(door.device_id);
           const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
