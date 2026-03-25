@@ -371,10 +371,8 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
     var pos      = fromPos + (toPos - fromPos) * progress;
     doorPos[doorId] = pos;
 
-    // النسبة تعتمد على nDisplay (بدون الهامش)
-    // للفتح: pos يصل 1.0 في nDisplay ثانية فعلياً
-    // للغلق: (1-pos) يصل 1.0 في nDisplay ثانية
-    var displayPct = isOpen ? Math.min(pos / (nDisplay/n), 1) : Math.min((1-pos) / (nDisplay/n), 1);
+    // النسبة: للفتح = pos، للغلق = (1-pos)
+    var displayPct = isOpen ? pos : (1 - pos);
 
     _drawDoorProgress(imgEl, stateEl, displayPct, isOpen, false, pos);
 
