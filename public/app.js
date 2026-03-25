@@ -204,13 +204,15 @@ function connectWS() {
             var newIsOpen = (rawState === 'open' || rawState === 'open40');
             if (curTimer) {
               if (curTimer.isOpen !== newIsOpen) {
-                // اتجاه معاكس → إيقاف
+                // اتجاه معاكس = RC ضغط إيقاف → أوقف التايمر فقط
                 stopDoorTimer(doorId, newImgEl, newStateEl);
+                return; // لا نبدأ تايمر جديد — الباب توقف
               } else {
-                // نفس الاتجاه → تجاهل
+                // نفس الاتجاه → تجاهل (fin de course)
                 return;
               }
             }
+            // لا تايمر شغال → ابدأ تايمر جديد
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
