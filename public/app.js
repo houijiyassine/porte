@@ -326,7 +326,10 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
   }
 
   var isOpen = (action === 'open' || action === 'open40');
-  var n      = Math.max(seconds, 1);
+  // نضيف 2 ثانية كهامش حتى يبقى التايمر شغالاً عند ضغط RC إيقاف
+  var n      = Math.max(seconds, 1) + 2;
+  // لكن النسبة تُحسب من seconds الأصلية
+  var nDisplay = Math.max(seconds, 1);
 
   // الموضع الحالي الفيزيائي
   var curPos = doorPos[doorId] !== undefined ? doorPos[doorId] : (isOpen ? 0 : 1);
@@ -352,10 +355,10 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
     var pos      = fromPos + (toPos - fromPos) * progress;
     doorPos[doorId] = pos;
 
-    // النسبة:
-    // للفتح: doorPos × 100  (كم % مفتوح)
-    // للغلق: (1 - doorPos) × 100  (كم % أُغلق)
-    var displayPct = isOpen ? pos : (1 - pos);
+    // النسبة تعتمد على nDisplay (بدون الهامش)
+    // للفتح: pos يصل 1.0 في nDisplay ثانية فعلياً
+    // للغلق: (1-pos) يصل 1.0 في nDisplay ثانية
+    var displayPct = isOpen ? Math.min(pos / (nDisplay/n), 1) : Math.min((1-pos) / (nDisplay/n), 1);
 
     _drawDoorProgress(imgEl, stateEl, displayPct, isOpen, false, pos);
 
