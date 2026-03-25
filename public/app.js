@@ -1,3 +1,23 @@
+// تحديث بطاقة الباب في صفحة المؤسسات/الأدمن
+function updateDoorCardState(doorId, deviceId, state, source) {
+  var statusEl = document.getElementById('door-status-' + doorId);
+  if (statusEl) {
+    var label  = state==='open' ? 'مفتوح' : state==='close' ? 'مغلق' : 'متوقف';
+    var color  = state==='open' ? 'rgba(0,230,118,0.15)' : state==='close' ? 'rgba(255,61,113,0.15)' : 'rgba(255,179,0,0.15)';
+    var tcolor = state==='open' ? 'var(--success)' : state==='close' ? 'var(--danger)' : 'var(--warning)';
+    var icon   = state==='open' ? '🔓' : state==='close' ? '🔒' : '⏹';
+    statusEl.innerHTML = icon + ' ' + label + (source==='rc' ? ' <span style="font-size:0.62rem;opacity:0.7">RC</span>' : '');
+    statusEl.style.cssText = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + color + ';color:' + tcolor + ';border:1px solid ' + tcolor + '33';
+  }
+  var admEl = document.getElementById('adm-status-' + doorId);
+  if (admEl) {
+    var label  = state==='open' ? '🔓 مفتوح' : state==='close' ? '🔒 مغلق' : '⏹ متوقف';
+    var color  = state==='open' ? 'rgba(0,230,118,0.15)' : state==='close' ? 'rgba(255,61,113,0.15)' : 'rgba(255,179,0,0.15)';
+    var tcolor = state==='open' ? 'var(--success)' : state==='close' ? 'var(--danger)' : 'var(--warning)';
+    admEl.textContent = label;
+    admEl.style.cssText = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + color + ';color:' + tcolor;
+  }
+}
 /* ─────────────────────────────────────────────
    PORTE — Frontend App v2
    ───────────────────────────────────────────── */
