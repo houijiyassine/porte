@@ -166,7 +166,6 @@ function connectWS() {
         var r1 = msg.r1_on, r2 = msg.r2_on;
         var rawState = r1 ? 'open' : r2 ? 'close' : 'idle';
         var doorId   = msg.doorId;
-        console.log('[WS]', rawState, 'doorId=', doorId, 'hasTimer=', !!doorTimers[doorId]);
         var imgEl    = document.getElementById('door-img-'      + doorId);
         var stateEl  = document.getElementById('user-state-'    + doorId)
                     || document.getElementById('door-progress-' + doorId);
