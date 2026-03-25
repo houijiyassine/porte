@@ -215,9 +215,12 @@ function connectWS() {
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
             if (rawState !== 'idle') lastKnownState[doorId] = rawState;
-            // إذا RC أرسل close بعد انتهاء التايمر → الباب مفتوح كاملاً
-            if (msg.source === 'rc' && rawState === 'close' && doorPos[doorId] === undefined) {
-              doorPos[doorId] = 1.0; // الباب كان مفتوحاً كاملاً
+            // إذا RC close بدون تايمر → الباب في موضعه الحالي
+            // إذا doorPos غير معروف → نفترض الوضع المنطقي
+            if (rawState === 'close' && (doorPos[doorId] === undefined || doorPos[doorId] > 0.95)) {
+              doorPos[doorId] = 1.0; // مفتوح كاملاً
+            } else if (rawState === 'open' && (doorPos[doorId] === undefined || doorPos[doorId] < 0.05)) {
+              doorPos[doorId] = 0.0; // مغلق كاملاً
             }
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
