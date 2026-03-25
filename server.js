@@ -1187,6 +1187,7 @@ async function pollAllDoors() {
 
         const lastApp   = appLastAction.get(door.device_id);
         const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
+        if (changed) console.log(`[Poll] ${door.name}: r1=${r1} r2=${r2} → ${doorAction} | isFromApp=${isFromApp}`);
 
         if (changed && !isFromApp && (r1 || r2)) {
           triggerBurst(15); // RC detected → burst 15s
