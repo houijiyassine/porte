@@ -113,26 +113,20 @@ function bootApp() {
     if (navStats)  navStats.style.display  = 'flex';
     showPage('institutes', document.getElementById('nav-institutes'));
   } else if (user.role === 'admin') {
-    // ── 4 تبويبات للمسؤول: الأبواب | المستخدمون | الإحصاء | التنبيهات ──
     document.querySelectorAll('.nav-item').forEach(function(n){ n.style.display = 'none'; });
-    ['nav-institutes','nav-users','nav-stats','nav-alerts'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el) el.style.display = 'flex';
-    });
-    // تحديث أيقونة وعنوان تبويب الأبواب للأدمن
-    var navInst = document.getElementById('nav-institutes');
-    if (navInst) navInst.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>الأبواب';
-    // الصفحة الافتراضية: الأبواب
+    document.getElementById('nav-institutes').style.display = 'flex';
+    document.getElementById('nav-users').style.display = 'flex';
+    var navAl = document.getElementById('nav-alerts');
+    var navSt = document.getElementById('nav-stats');
+    if (navAl) navAl.style.display = 'flex';
+    if (navSt) navSt.style.display = 'flex';
     document.getElementById('nav-institutes').classList.add('active');
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('page-institutes').classList.add('active');
     loadAdminDoors();
-    // إخفاء زر إضافة مؤسسة
+    // إخفاء زر إضافة مؤسسة للمدير
     var addInstBtn = document.getElementById('inst-add-btn');
     if (addInstBtn) addInstBtn.style.display = 'none';
-    // تحميل عدد التنبيهات للـ badge
-    loadAlerts();
   } else {
     document.querySelectorAll('.nav-item').forEach(function(n){ n.style.display = 'none'; });
     document.getElementById('nav-institutes').style.display = 'flex';
@@ -161,7 +155,7 @@ function connectWS() {
         updateDoorStatusUI(msg.action);
         loadRecentHistory();
       }
-      // تحديث حالة الباب من Polling أو Webhook (RC أو App)
+      // تحديث حالة الباب من Polling
       if (msg.type === 'door_state') {
         var r1       = msg.r1_on, r2 = msg.r2_on;
         var rawState = r1 ? 'open' : r2 ? 'close' : 'idle';
@@ -170,12 +164,9 @@ function connectWS() {
 
         updateDoorStatusUI(rawState);
 
-        if (rawState === 'idle') {
-          // idle: تجاهل دائماً — Tuya يبعثه بعد كل نبضة
-          return;
-        }
+        // idle: تجاهل — Tuya يبعثه بعد كل نبضة
+        if (rawState === 'idle') return;
 
-        // open أو close
         var imgEl   = document.getElementById('door-img-' + doorId);
         var stateEl = document.getElementById('user-state-' + doorId)
                    || document.getElementById('door-progress-' + doorId);
@@ -185,11 +176,10 @@ function connectWS() {
 
         if (msg.source === 'rc') {
           lastKnownState[doorId] = rawState;
-
           if (hasTimer) {
             var t = doorTimers[doorId];
             if (t.isOpen === newIsOpen) {
-              // نفس الاتجاه → إيقاف
+              // نفس الاتجاه = ضغط نفس الزر → إيقاف
               stopDoorTimer(doorId, imgEl, stateEl);
             } else {
               // اتجاه معاكس → أوقف وابدأ الجديد
@@ -201,37 +191,22 @@ function connectWS() {
               updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
             }
           } else {
-            // لا تايمر → ابدأ من الموضع الفيزيائي الصحيح
             doorPos[doorId] = newIsOpen ? 0.0 : 1.0;
             startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           }
-
-        } else {
-          // مصدر App أو polling
-          if (!hasTimer) {
-            lastKnownState[doorId] = rawState;
-            startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
-            updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
-          }
-          // تايمر شغال من App → لا نتدخل
-        }
-
-        // تحديث السجل إذا جاء من RC
-        if (msg.source === 'rc') {
           setTimeout(loadRecentHistory, 500);
-          var logsTitle = document.getElementById('door-logs-title');
-          if (logsTitle && window._openDoorLogsId === doorId) {
-            setTimeout(function() { openDoorLogs(doorId, logsTitle.textContent.replace('📋 ','')); }, 600);
-          }
+        } else if (!hasTimer) {
+          lastKnownState[doorId] = rawState;
+          startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
+          updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
         }
+      }
+      if (msg.type === 'device_online') {
+        updateDeviceOnlineBadge(msg.deviceId, msg.online);
       }
       if (msg.type === 'user_location') {
         updateUserMarker(msg.userId, msg.coords);
-      }
-      // تحديث حالة اتصال الجهاز
-      if (msg.type === 'device_online') {
-        updateDeviceOnlineBadge(msg.deviceId, msg.online);
       }
     } catch {}
   };
@@ -255,58 +230,20 @@ function updateDoorStatusUI(state) {
     state==='open'||state==='opened' ? 'open' :
     state==='close'||state==='closed' ? 'closed' : 'unknown'
   }`;
-  const labels = { open:'مفتوح', opened:'مفتوح', close:'مغلق', closed:'مغلق', stop:'متوقف', idle:'متوقف', unknown:'غير معروف' };
+  const labels = { open:'مفتوح', opened:'مفتوح', close:'مغلق', closed:'مغلق', stop:'متوقف', unknown:'غير معروف' };
   txt.textContent = labels[state] || state;
-}
-
-// تحديث بطاقة الباب في صفحة المؤسسات/الأدمن عبر WebSocket
-function updateDoorCardState(doorId, deviceId, state, source) {
-  // badge الحالة في بطاقة أدمن
-  var statusEl = document.getElementById('door-status-' + doorId);
-  if (statusEl) {
-    var label  = state==='open' ? 'مفتوح' : state==='close' ? 'مغلق' : 'متوقف';
-    var color  = state==='open' ? 'rgba(0,230,118,0.15)' : state==='close' ? 'rgba(255,61,113,0.15)' : 'rgba(255,179,0,0.15)';
-    var tcolor = state==='open' ? 'var(--success)' : state==='close' ? 'var(--danger)' : 'var(--warning)';
-    var icon   = state==='open' ? '🔓' : state==='close' ? '🔒' : '⏹';
-    statusEl.innerHTML = icon + ' ' + label + (source==='rc' ? ' <span style="font-size:0.62rem;opacity:0.7">RC</span>' : '');
-    statusEl.style.cssText = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + color + ';color:' + tcolor + ';border:1px solid ' + tcolor + '33';
-  }
-  // badge الحالة في بطاقة أدمن (adm-status-)
-  var admEl = document.getElementById('adm-status-' + doorId);
-  if (admEl) {
-    var label  = state==='open' ? '🔓 مفتوح' : state==='close' ? '🔒 مغلق' : '⏹ متوقف';
-    var color  = state==='open' ? 'rgba(0,230,118,0.15)' : state==='close' ? 'rgba(255,61,113,0.15)' : 'rgba(255,179,0,0.15)';
-    var tcolor = state==='open' ? 'var(--success)' : state==='close' ? 'var(--danger)' : 'var(--warning)';
-    admEl.textContent = label;
-    admEl.style.cssText = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + color + ';color:' + tcolor;
-  }
-
-  // adm-online: لا نلمسه هنا — يُحدَّث فقط من updateDeviceOnlineBadge
-}
-
-// تحديث صورة/أيقونة الباب بناءً على حالته
-function updateDoorImage(doorId, state) {
-  var imgEl = document.getElementById('door-img-' + doorId);
-  if (!imgEl) return;
-  imgEl.setAttribute('data-state', state);
-  renderDoorSVG(imgEl, state);
 }
 
 // ─── Door Control ─────────────────────────────
 let timerInterval = null;
 
-// ═══════════════════════════════════════════════════════
-//  doorPos[doorId] = 0.0→1.0 (موضع الباب الحالي)
-//  0.0 = مغلق تماماً | 1.0 = مفتوح تماماً
-//  عند فتح: pos تزيد من pos_حالي إلى 1.0
-//  عند غلق: pos تنقص من pos_حالي إلى 0.0
-//  عند إيقاف: pos تتجمد حيث هي
-// ═══════════════════════════════════════════════════════
-const doorPos         = {};  // doorPos[doorId]    = موضع الباب (0→1)
-const doorCompletedAt = {};  // doorCompletedAt[doorId] = timestamp اكتمال الأنيميشن
-const doorIdleCount   = {};  // عدد مرات idle المتتالية أثناء التايمر
-const doorTimers      = {};  // doorTimers[doorId] = { _raf }
-const lastKnownState  = {};  // lastKnownState[doorId] = 'open'|'close' — آخر حالة حقيقية
+// ═══════════════════════════════════════════
+// نظام تتبع موضع الباب (0=مغلق، 1=مفتوح)
+// ═══════════════════════════════════════════
+const doorPos         = {};
+const doorTimers      = {};
+const doorCompletedAt = {};
+const lastKnownState  = {};
 
 function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
   if (doorTimers[doorId] && doorTimers[doorId]._raf) {
@@ -314,7 +251,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
   }
 
   var isOpen = (action === 'open' || action === 'open40');
-  var n      = Math.max(seconds, 1) + 5; // +5 ثانية هامش للإيقاف
+  var n      = Math.max(seconds, 1) + 5; // +5 ثانية هامش
 
   if (doorPos[doorId] === undefined) {
     doorPos[doorId] = isOpen ? 0.0 : 1.0;
@@ -324,7 +261,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
   var toPos   = isOpen ? 1.0 : 0.0;
   var dist    = Math.abs(toPos - fromPos);
 
-  if (dist <= 0.01) return; // وصل بالفعل
+  if (dist <= 0.01) return;
 
   var startTime = Date.now();
   var totalMs   = n * 1000;
@@ -336,9 +273,9 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
     var t = doorTimers[doorId];
     if (!t || t.gen !== gen) return;
 
-    var elapsed  = Date.now() - startTime;
-    var progress = Math.min(elapsed / totalMs, 1);
-    var pos      = fromPos + (toPos - fromPos) * progress;
+    var elapsed    = Date.now() - startTime;
+    var progress   = Math.min(elapsed / totalMs, 1);
+    var pos        = fromPos + (toPos - fromPos) * progress;
     doorPos[doorId] = pos;
 
     // النسبة: للفتح = pos، للغلق = (1-pos)
@@ -366,7 +303,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
 function stopDoorTimer(doorId, imgEl, stateEl) {
   var t = doorTimers[doorId];
   if (t && t._raf) cancelAnimationFrame(t._raf);
-  var isOpen = t ? t.isOpen : (doorPos[doorId] >= 0.5);
+  var isOpen = t ? t.isOpen : ((doorPos[doorId] || 0) >= 0.5);
   delete doorTimers[doorId];
 
   var pos        = doorPos[doorId] !== undefined ? doorPos[doorId] : 0;
@@ -393,20 +330,16 @@ function _cancelDoorTimer(doorId) {
     cancelAnimationFrame(doorTimers[doorId]._raf);
   }
   delete doorTimers[doorId];
-  // doorPos يبقى محفوظاً
 }
 
-// ─── رسم الباب أثناء الحركة ──────────────────
+// رسم الباب أثناء الحركة
 function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped, curPos) {
-  var pctInt = Math.round(pct * 100);
-  var color  = isStopped ? '#ffb300' : isOpen ? '#00e676' : '#ff3d71';
+  var pctInt    = Math.round(pct * 100);
+  var color     = isStopped ? '#ffb300' : isOpen ? '#00e676' : '#ff3d71';
   var statusTxt = isStopped ? ('⏹ متوقف — ' + pctInt + '%')
                 : isOpen    ? ('🔓 يفتح... — ' + pctInt + '%')
                 :             ('🔒 يغلق... — ' + pctInt + '%');
-  var label = isStopped ? 'متوقف' : isOpen ? 'يفتح...' : 'يغلق...';
-
-  // زاوية الباب بناءً على doorPos (0=مغلق، 1=مفتوح)
-  var pos      = (curPos !== undefined) ? curPos : (isOpen ? pct : 1 - pct);
+  var pos      = curPos !== undefined ? curPos : (isOpen ? pct : 1 - pct);
   var angleDeg = -(pos * 55);
   var handleX  = 22 + (pos * 36);
   var arcPath  = pct > 0.005 ? _describeArc(40, 86, 10, 0, pct * 359.99) : '';
@@ -419,32 +352,31 @@ function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped, curPos) {
         '<rect x="8" y="4" width="62" height="74" rx="3" fill="' + color + '" fill-opacity="0.15" stroke="' + color + '" stroke-width="1.6"/>' +
         '<circle cx="' + handleX.toFixed(1) + '" cy="41" r="3.2" fill="' + color + '" opacity="0.95"/>' +
       '</g>' +
-      (arcPath
-        ? '<circle cx="40" cy="86" r="10" fill="none" stroke="' + color + '33" stroke-width="3"/>' +
-          '<path d="' + arcPath + '" fill="none" stroke="' + color + '" stroke-width="3" stroke-linecap="round"/>'
-        : '') +
+      (arcPath ? '<circle cx="40" cy="86" r="10" fill="none" stroke="' + color + '33" stroke-width="3"/><path d="' + arcPath + '" fill="none" stroke="' + color + '" stroke-width="3" stroke-linecap="round"/>' : '') +
       '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + pctInt + '%</text>' +
       '</svg>';
   }
 
   if (stateEl) {
-    stateEl.style.color = color;
+    stateEl.style.color      = color;
     stateEl.style.background = 'var(--surface2)';
+    stateEl.style.display    = 'flex';
+    stateEl.style.alignItems = 'center';
     stateEl.innerHTML =
       '<div style="flex:1">' +
         '<div style="font-size:0.85rem;font-weight:700;margin-bottom:5px">' + statusTxt + '</div>' +
         '<div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden">' +
-          '<div style="height:100%;width:' + pctInt + '%;background:' + color + ';border-radius:3px"></div>' +
+          '<div style="height:100%;width:' + pctInt + '%;background:' + color + ';border-radius:3px;transition:width 0.1s"></div>' +
         '</div>' +
       '</div>';
   }
 }
 
-// ─── رسم الباب في حالة ثابتة ─────────────────
+// رسم الباب في حالة ثابتة
 function _drawDoorStatic(imgEl, stateEl, state) {
   var color    = state === 'open' ? '#00e676' : state === 'close' ? '#ff3d71' : '#ffb300';
-  var angleDeg = state === 'open' ? -55 : state === 'idle' ? -27 : 0;
-  var handleX  = state === 'open' ? 58 : state === 'idle' ? 40 : 22;
+  var angleDeg = state === 'open' ? -55 : 0;
+  var handleX  = state === 'open' ? 58 : 22;
   var label    = state === 'open' ? 'مفتوح' : state === 'close' ? 'مغلق' : 'متوقف';
   var icon     = state === 'open' ? '🔓' : state === 'close' ? '🔒' : '⏹';
 
@@ -459,24 +391,16 @@ function _drawDoorStatic(imgEl, stateEl, state) {
       '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + label + '</text>' +
       '</svg>';
   }
-
   if (stateEl) {
-    stateEl.style.color = color;
+    stateEl.style.color      = color;
     stateEl.style.background = 'var(--surface2)';
-    stateEl.innerHTML = icon + ' ' + label;
+    stateEl.innerHTML        = icon + ' ' + label;
   }
 }
 
-// ─── renderDoorSVG (alias للحالة الثابتة) ────
-function renderDoorSVG(container, state) {
-  _drawDoorStatic(container, null, state);
-}
+function renderDoorSVG(container, state) { _drawDoorStatic(container, null, state); }
+function _updateStateEl(el, state)       { _drawDoorStatic(null, el, state); }
 
-function _updateStateEl(el, state) {
-  _drawDoorStatic(null, el, state);
-}
-
-// ─── قوس SVG ──────────────────────────────────
 function _describeArc(cx, cy, r, startDeg, endDeg) {
   if (endDeg >= 360) endDeg = 359.99;
   function polar(deg) {
@@ -484,9 +408,9 @@ function _describeArc(cx, cy, r, startDeg, endDeg) {
     return { x: (cx + r * Math.cos(rad)).toFixed(2), y: (cy + r * Math.sin(rad)).toFixed(2) };
   }
   var s = polar(startDeg), e = polar(endDeg);
-  var large = endDeg > 180 ? 1 : 0;
-  return 'M ' + s.x + ' ' + s.y + ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + e.x + ' ' + e.y;
+  return 'M ' + s.x + ' ' + s.y + ' A ' + r + ' ' + r + ' 0 ' + (endDeg > 180 ? 1 : 0) + ' 1 ' + e.x + ' ' + e.y;
 }
+
 async function sendAction(action) {
   try {
     await apiFetch('/api/door/control', 'POST', { action });
@@ -504,46 +428,17 @@ async function sendAction(action) {
   }
 }
 
-// إرسال أمر لباب محدد من صفحة المؤسسات (أدمن)
+// إرسال أمر لباب محدد من صفحة المؤسسات
 async function sendDoorAction(deviceId, action, duration) {
   try {
     var body = { action, deviceId, duration };
+    // أرسل الموقع دائماً إذا كان متوفراً
     if (userLocation) { body.lat = userLocation.lat; body.lng = userLocation.lng; body.accuracy = userLocation.accuracy || 999; }
     await apiFetch('/api/door/control', 'POST', body);
-    var labels = { open:'✅ تم الفتح', close:'✅ تم الغلق', stop:'✅ تم الإيقاف', open40:'✅ فتح 40 ثانية' };
-    toast(labels[action] || '✅ تم', 'success');
-    // تشغيل التايمر على الباب المناسب
-    var doorId = _findDoorIdByDeviceId(deviceId);
-    if (doorId) {
-      var imgEl   = document.getElementById('door-img-'      + doorId);
-      var stateEl = document.getElementById('user-state-'    + doorId)
-                 || document.getElementById('door-progress-' + doorId);
-      var secs    = (action === 'stop') ? 0 : (action === 'open40' ? 40 : (duration || 5));
-      if (action === 'stop') {
-        stopDoorTimer(doorId, imgEl, stateEl);
-        updateDoorCardState(doorId, deviceId, 'idle', 'app');
-      } else {
-        lastKnownState[doorId] = (action === 'open' || action === 'open40') ? 'open' : 'close';
-        startDoorTimer(doorId, imgEl, stateEl, secs, action);
-      }
-    }
+    toast(`تم: ${action}`, 'success');
   } catch(e) {
-    toast(e.message || 'خطأ في الاتصال', 'error');
+    toast(e.message, 'error');
   }
-}
-
-// إيجاد doorId من deviceId (من الكاش)
-function _findDoorIdByDeviceId(deviceId) {
-  // البحث في كل عناصر door-img التي لديها data-device-id
-  var allImgs = document.querySelectorAll('[data-device-id]');
-  for (var i = 0; i < allImgs.length; i++) {
-    if (allImgs[i].getAttribute('data-device-id') === deviceId) {
-      // نأخذ data-door-id أو نستخرجه من id="door-img-XXXX"
-      var did = allImgs[i].getAttribute('data-door-id') || allImgs[i].id.replace('door-img-', '');
-      if (did) return did;
-    }
-  }
-  return null;
 }
 
 function startTimer(seconds) {
@@ -608,9 +503,6 @@ function formatTime(iso) {
   const d = new Date(iso);
   return d.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}) + '\n' + d.toLocaleDateString('ar');
 }
-
-// ─── Stats ────────────────────────────────────
-// (see full loadStats below)
 
 // ─── Users ────────────────────────────────────
 async function loadUsers() {
@@ -739,12 +631,8 @@ async function saveUser() {
     if (id) { await apiFetch(`/api/users/${id}`, 'PUT', body); }
     else    { await apiFetch('/api/users', 'POST', body); }
     closeModal('modal-user');
+    loadUsers();
     toast('تم الحفظ بنجاح', 'success');
-    if (user && user.role === 'admin') {
-      loadAdminUsers();
-    } else {
-      loadUsers();
-    }
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -848,127 +736,13 @@ async function checkDoorStatus(deviceId, elemId) {
     const data = await apiFetch(`/api/device/status/${deviceId}`);
     const online = data.online === true;
     doorStatusCache[deviceId] = online;
-    el.textContent = online ? '🟢 متصل' : '🔴 غير متصل';
-    el.style.color  = online ? 'var(--success)' : 'var(--danger)';
-    el.style.background = online ? 'rgba(0,230,118,0.12)' : 'rgba(255,61,113,0.12)';
-    el.style.border = '1px solid ' + (online ? 'rgba(0,230,118,0.25)' : 'rgba(255,61,113,0.25)');
-    el.style.borderRadius = '20px';
-    el.style.padding = '2px 8px';
+    el.textContent = online ? 'En ligne' : 'Hors ligne';
+    el.style.color = online ? 'var(--success)' : 'var(--danger)';
+    el.style.background = online ? 'rgba(0,230,118,0.1)' : 'rgba(255,61,113,0.1)';
   } catch {
-    el.textContent = '🔴 غير متصل';
+    el.textContent = 'Hors ligne';
     el.style.color = 'var(--danger)';
-    el.style.background = 'rgba(255,61,113,0.12)';
-  }
-}
-
-// تحديث badge الاتصال لجميع البطاقات + enligne counter
-function updateDeviceOnlineBadge(deviceId, online) {
-  var color = online ? 'var(--success)' : 'var(--danger)';
-  var bg    = online ? 'rgba(0,230,118,0.12)' : 'rgba(255,61,113,0.12)';
-  var bdr   = online ? 'rgba(0,230,118,0.3)' : 'rgba(255,61,113,0.3)';
-  var text  = online ? '🟢 متصل' : '🔴 غير متصل';
-
-  // حدّث الـ cache
-  doorStatusCache[deviceId] = online;
-
-  // بحث في كل عناصر door-img بناءً على data-device-id
-  var foundIds = [];
-  document.querySelectorAll('[data-device-id="' + deviceId + '"]').forEach(function(imgEl) {
-    var doorId = imgEl.getAttribute('data-door-id') || imgEl.id.replace('door-img-', '');
-    if (doorId && !foundIds.includes(doorId)) foundIds.push(doorId);
-  });
-  // إذا لم نجد من DOM، ابحث في institutesCache
-  if (foundIds.length === 0 && window.institutesCache) {
-    institutesCache.forEach(function(inst) {
-      (inst.doors||[]).forEach(function(d) {
-        if (d.device_id === deviceId) foundIds.push(d.id);
-      });
-    });
-  }
-  foundIds.forEach(function(doorId) {
-    var imgEl = document.getElementById('door-img-' + doorId);
-
-    // adm-online (بطاقة أدمن)
-    var admOnline = document.getElementById('adm-online-' + doorId);
-    if (admOnline) {
-      admOnline.textContent = text;
-      admOnline.style.cssText = 'font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:' + bg + ';color:' + color + ';border:1px solid ' + bdr;
-    }
-
-    // user-online (بطاقة مستخدم)
-    var userOnline = document.getElementById('user-online-' + doorId);
-    if (userOnline) {
-      userOnline.textContent = text;
-      userOnline.style.cssText = 'font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + bg + ';color:' + color;
-    }
-  });
-
-  // تحديث enligne counter في قائمة المؤسسات (super admin)
-  // نجد كل span enligne ونعيد حساب الأجهزة المتصلة
-  document.querySelectorAll('[id^="enligne-"]').forEach(function(span) {
-    var instId = span.id.replace('enligne-', '');
-    // نبحث عن كل أبواب هذه المؤسسة
-    var inst = institutesCache.find(function(i) { return i.id === instId; });
-    if (!inst || !inst.doors) return;
-    var total   = inst.doors.length;
-    var onlineN = inst.doors.filter(function(d) { return doorStatusCache[d.device_id] === true; }).length;
-    span.textContent = onlineN + '/' + total;
-    // لون حسب الحالة
-    span.parentElement.style.color = onlineN > 0 ? 'var(--success)' : 'var(--danger)';
-  });
-}
-
-// جلب حالة الباب الحقيقية (مفتوح/مغلق/متوقف) وتحديث الصورة والـ badge
-async function fetchAndUpdateDoorImage(door) {
-  var imgEl = document.getElementById('door-img-' + door.id);
-  if (imgEl && !imgEl.innerHTML) {
-    imgEl.innerHTML = '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:0.3"><rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="#8892b0" stroke-width="1.8"/><rect x="8" y="4" width="62" height="74" rx="3" fill="#8892b0" fill-opacity="0.1" stroke="#8892b0" stroke-width="1.6"/><text x="40" y="97" text-anchor="middle" font-size="7" fill="#8892b0" font-family="Cairo,sans-serif">...</text></svg>';
-  }
-  try {
-    // إذا lastKnownState فارغ → جلب آخر سجل من قاعدة البيانات
-    if (!lastKnownState[door.id]) {
-      try {
-        var logs = await apiFetch('/api/doors/' + door.id + '/logs');
-        if (logs && logs.length > 0) {
-          var lastVal = logs[0].value;
-          if (lastVal === 'open' || lastVal === 'open40') lastKnownState[door.id] = 'open';
-          else if (lastVal === 'close') lastKnownState[door.id] = 'close';
-        }
-      } catch(e) {}
-    }
-
-    var data  = await apiFetch('/api/door/status?deviceId=' + door.device_id);
-    var state = data.r1_on ? 'open' : data.r2_on ? 'close' : 'idle';
-    imgEl = document.getElementById('door-img-' + door.id);
-
-    // الجهاز أجاب → متصل
-    updateDeviceOnlineBadge(door.device_id, true);
-
-    if (doorTimers[door.id]) return;
-
-    // idle من Tuya = ريلاي في وضعه الطبيعي، ليس "متوقف"
-    if (state === 'idle') {
-      state = lastKnownState[door.id] || 'close'; // افتراضي: مغلق
-    } else {
-      lastKnownState[door.id] = state; // حدّث الحالة المعروفة
-    }
-
-    if (imgEl) _drawDoorStatic(imgEl, null, state);
-    updateDoorCardState(door.id, door.device_id, state, 'poll');
-  } catch(e) {
-    // خطأ في الاتصال بـ Tuya → offline
-    doorStatusCache[door.device_id] = false;
-    updateDeviceOnlineBadge(door.device_id, false);
-    var imgElErr = document.getElementById('door-img-' + door.id);
-    if (imgElErr && !imgElErr.innerHTML) {
-      imgElErr.innerHTML =
-        '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:0.4">' +
-        '<rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="#8892b0" stroke-width="1.8"/>' +
-        '<rect x="8" y="4" width="62" height="74" rx="3" fill="#8892b0" fill-opacity="0.1" stroke="#8892b0" stroke-width="1.6"/>' +
-        '<circle cx="22" cy="41" r="3" fill="#8892b0" opacity="0.6"/>' +
-        '<text x="40" y="97" text-anchor="middle" font-size="7" fill="#8892b0" font-family="Cairo,sans-serif">غير متصل</text>' +
-        '</svg>';
-    }
+    el.style.background = 'rgba(255,61,113,0.1)';
   }
 }
 
@@ -1178,7 +952,6 @@ function renderInstList(insts) {
                 return doorStatusCache[d.device_id] === true;
               }).length;
               el.textContent = count + '/' + total;
-              el.parentElement.style.color = count > 0 ? 'var(--success)' : 'var(--danger)';
             }
           })
           .catch(function() {
@@ -1232,21 +1005,13 @@ function renderInstDetail(inst) {
     if (idx > 0) doorsHtml += '<div style="margin:10px 0"></div>';
 
     doorsHtml += `
-      <div data-door-id="${doorId}" data-duration="${duration}" style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:14px;margin-bottom:4px">
+      <div style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:14px;margin-bottom:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px">
-          <div style="display:flex;align-items:center;gap:12px;flex:1">
-            <!-- صورة الباب -->
-            <div id="door-img-${doorId}" data-state="idle" data-device-id="${deviceId}" data-door-id="${doorId}" style="width:52px;height:64px;flex-shrink:0"></div>
-            <div style="flex:1">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px">
-                <div style="font-weight:800;font-size:0.95rem">🚪 ${doorName}</div>
-                <span id="door-status-${doorId}" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>
-              </div>
-              <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-bottom:6px">ID: ${deviceId.substring(0,16)}...</div>
-              <!-- progress bar الأدمن -->
-              <div id="door-progress-${doorId}" style="font-size:0.8rem;color:var(--muted);display:flex;align-items:center;min-height:28px"></div>
-            </div>
+          <div>
+            <div style="font-weight:800;font-size:0.95rem">⏳ ${doorName}</div>
+            <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-top:2px">ID: ${deviceId.substring(0,16)}...</div>
           </div>
+          <span id="door-status-${doorId}" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
           <button onclick="sendDoorAction('${deviceId}','open',${duration})" style="background:rgba(0,230,118,0.15);border:1px solid rgba(0,230,118,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--success)">🟢<span>فتح</span></button>
@@ -1311,9 +1076,6 @@ function renderInstDetail(inst) {
   setTimeout(function() {
     (inst.doors||[]).forEach(function(door) {
       checkDoorStatus(door.device_id, 'door-status-' + door.id);
-      // رسم صورة الباب الأولية
-      // جلب الحالة الحقيقية من Tuya مباشرة (بدون idle مؤقت)
-      fetchAndUpdateDoorImage(door);
     });
   }, 300);
 }
@@ -1399,25 +1161,6 @@ async function toggleDoorGps(doorId, key, value) {
       });
     });
     toast('تم التحديث', 'success');
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function toggleDoorRcNotify(doorId, value) {
-  try {
-    await apiFetch('/api/doors/' + doorId, 'PUT', { rc_notify: value });
-    // تحديث الكاش
-    institutesCache.forEach(function(inst) {
-      (inst.doors||[]).forEach(function(door) {
-        if (door.id === doorId) door.rc_notify = value;
-      });
-    });
-    // تحديث نص الـ toggle
-    var lbl = document.querySelector('#rc-toggle-' + doorId)?.closest('div[style]')?.querySelector('div > div:last-child');
-    if (lbl) {
-      lbl.style.color = value ? 'var(--success)' : 'var(--danger)';
-      lbl.textContent = value ? 'مفعّل ✅' : 'معطّل ❌';
-    }
-    toast(value ? '🔔 سيتم إشعارك عند استخدام RC' : '🔕 تم إيقاف الإشعار', 'success');
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -1688,14 +1431,9 @@ async function openInstUsers(instId, instName) {
 async function changeUserStatus(userId, status, instId, instName) {
   try {
     await apiFetch('/api/users/' + userId, 'PUT', { request_status: status });
-    var labels = { approved:'✅ تمت الموافقة', pending:'⏳ تم الإرجاع للانتظار', rejected:'❌ تم الرفض' };
+    var labels = { approved:'موافق', pending:'انتظار', rejected:'مرفوض' };
     toast(labels[status] || status, 'success');
-    // أعد تحميل حسب الدور
-    if (user && user.role === 'admin') {
-      loadAdminUsers();
-    } else {
-      openInstUsers(instId, instName);
-    }
+    openInstUsers(instId, instName);
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -1735,11 +1473,7 @@ async function deleteUser(userId, instId, instName) {
   try {
     await apiFetch('/api/users/' + userId, 'DELETE');
     toast('تم الحذف', 'success');
-    if (user && user.role === 'admin') {
-      loadAdminUsers();
-    } else {
-      openInstUsers(instId, instName || '');
-    }
+    openInstUsers(instId, instName || '');
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -1880,7 +1614,6 @@ async function loadUserDoors() {
 
       var card = document.createElement('div');
       card.setAttribute('data-door-id', door.id);
-      card.setAttribute('data-duration', door.duration_seconds || 5);
       card.setAttribute('data-gps-lat', gpsLat||'');
       card.setAttribute('data-gps-lng', gpsLng||'');
       card.setAttribute('data-gps-range', gpsRange);
@@ -1897,12 +1630,9 @@ async function loadUserDoors() {
       var hdr = document.createElement('div');
       hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
       hdr.innerHTML =
-        '<div style="display:flex;align-items:center;gap:12px">' +
-          '<div id="door-img-' + door.id + '" data-state="idle" data-device-id="' + door.device_id + '" style="width:52px;height:64px;flex-shrink:0"></div>' +
-          '<div>' +
-            '<div style="font-size:1.05rem;font-weight:800">' + door.name + '</div>' +
-            (door.location ? '<div style="font-size:0.75rem;color:var(--muted);margin-top:3px">📍 ' + door.location + '</div>' : '') +
-          '</div>' +
+        '<div>' +
+          '<div style="font-size:1.05rem;font-weight:800">🚪 ' + door.name + '</div>' +
+          (door.location ? '<div style="font-size:0.75rem;color:var(--muted);margin-top:3px">📍 ' + door.location + '</div>' : '') +
         '</div>' +
         '<span id="user-online-' + door.id + '" style="font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface2);color:var(--muted)">...</span>';
       card.appendChild(hdr);
@@ -1987,9 +1717,8 @@ async function loadUserDoors() {
       card.appendChild(btns);
       container.appendChild(card);
 
-      // رسم صورة الباب الأولية + جلب الحالة
+      // جلب الحالة
       checkDoorStatus(door.device_id, 'user-online-' + door.id);
-      // جلب الحالة الحقيقية مباشرة
       fetchUserDoorState(door);
     });
 
@@ -2012,43 +1741,15 @@ async function loadUserDoors() {
 async function fetchUserDoorState(door) {
   var el = document.getElementById('user-state-' + door.id);
   if (!el) return;
-  // رسم spinner مؤقت
-  var imgEl0 = document.getElementById('door-img-' + door.id);
-  if (imgEl0 && !imgEl0.innerHTML) {
-    imgEl0.innerHTML = '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:0.3"><rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="#8892b0" stroke-width="1.8"/><rect x="8" y="4" width="62" height="74" rx="3" fill="#8892b0" fill-opacity="0.1" stroke="#8892b0" stroke-width="1.6"/><text x="40" y="97" text-anchor="middle" font-size="7" fill="#8892b0" font-family="Cairo,sans-serif">...</text></svg>';
-  }
   try {
-    // إذا lastKnownState فارغ → جلب آخر سجل من قاعدة البيانات
-    if (!lastKnownState[door.id]) {
-      try {
-        var logs = await apiFetch('/api/doors/' + door.id + '/logs');
-        if (logs && logs.length > 0) {
-          var lv = logs[0].value;
-          if (lv === 'open' || lv === 'open40') lastKnownState[door.id] = 'open';
-          else if (lv === 'close') lastKnownState[door.id] = 'close';
-        }
-      } catch(e2) {}
-    }
     var data = await apiFetch('/api/door/status?deviceId=' + door.device_id);
     var r1 = data.r1_on, r2 = data.r2_on;
-    var state = r1 ? 'open' : r2 ? 'close' : 'idle';
-    // idle من Tuya ليس "متوقف" — استخدم آخر حالة معروفة
-    if (state === 'idle') {
-      state = lastKnownState[door.id] || 'close';
-    } else {
-      lastKnownState[door.id] = state;
-    }
     var text, color;
-    if (state === 'open')  { text = '🔓 مفتوح'; color = 'var(--success)'; }
-    else                   { text = '🔒 مغلق';  color = 'var(--danger)'; }
+    if (r1)      { text = '🔓 مفتوح';  color = 'var(--success)'; }
+    else if (r2) { text = '🔒 مغلق';   color = 'var(--danger)'; }
+    else         { text = '⏹ متوقف';  color = 'var(--muted)'; }
     el.innerHTML = '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 6px ' + color + '"></span>' + text;
     el.style.color = color;
-    // تحديث صورة الباب فقط إذا لم يكن هناك تايمر شغال
-    if (!doorTimers[door.id]) {
-      var imgEl2b = document.getElementById('door-img-' + door.id);
-      var stEl2b  = document.getElementById('user-state-' + door.id);
-      if (imgEl2b) _drawDoorStatic(imgEl2b, stEl2b, state);
-    }
   } catch(e) {
     el.innerHTML = '<span style="color:var(--muted)">—</span>';
   }
@@ -2111,16 +1812,7 @@ async function userDoorAction(door, action) {
     await apiFetch('/api/door/control', 'POST', body);
     var labels = { open:'✅ تم الفتح', close:'✅ تم الغلق', stop:'✅ تم الإيقاف', open40:'✅ فتح 40 ثانية' };
     toast(labels[action]||'✅ تم', 'success');
-    // تشغيل التايمر
-    var imgEl   = document.getElementById('door-img-' + door.id);
-    var stateEl = document.getElementById('user-state-' + door.id);
-    var secs    = action === 'stop' ? 0 : (action === 'open40' ? 40 : (door.duration_seconds || 5));
-    if (action === 'stop') {
-      stopDoorTimer(door.id, imgEl, stateEl);
-    } else {
-      lastKnownState[door.id] = (action === 'open' || action === 'open40') ? 'open' : 'close';
-      startDoorTimer(door.id, imgEl, stateEl, secs, action);
-    }
+    setTimeout(function(){ fetchUserDoorState(door); }, 1500);
   } catch(e) {
     var msg = e.message || 'خطأ';
     if (msg.includes('GPS') || msg.includes('بعيد')) toast('📍 ' + msg, 'error');
@@ -2163,25 +1855,16 @@ async function loadAdminDoors() {
     (inst.doors||[]).forEach(function(door) {
       var card = document.createElement('div');
       card.style.cssText = 'background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:16px;margin-bottom:12px';
-      card.setAttribute('data-door-id', door.id);
-      card.setAttribute('data-duration', door.duration_seconds || 5);
 
-      // Header: صورة الباب + اسم + حالة
+      // Header: اسم + En ligne
       var hdr = document.createElement('div');
-      hdr.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:12px';
+      hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px';
       hdr.innerHTML =
-        '<div id="door-img-' + door.id + '" data-device-id="' + door.device_id + '" data-door-id="' + door.id + '" style="width:52px;height:64px;flex-shrink:0"></div>' +
-        '<div style="flex:1">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
-            '<div style="font-weight:800">🚪 ' + door.name + '</div>' +
-            '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">' +
-              '<span id="adm-online-' + door.id + '" style="font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
-              '<span id="adm-status-' + door.id + '" style="font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
-            '</div>' +
-          '</div>' +
-          '<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-bottom:5px">ID: ' + (door.device_id||'').substring(0,16) + '...</div>' +
-          '<div id="door-progress-' + door.id + '" style="font-size:0.8rem;color:var(--muted);display:flex;align-items:center;min-height:28px"></div>' +
-        '</div>';
+        '<div>' +
+          '<div style="font-weight:800">⏳ ' + door.name + '</div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted)">ID: ' + (door.device_id||'').substring(0,16) + '...</div>' +
+        '</div>' +
+        '<span id="adm-status-' + door.id + '" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>';
       card.appendChild(hdr);
 
       // أزرار التحكم 4 في grid
@@ -2200,11 +1883,33 @@ async function loadAdminDoors() {
       });
       card.appendChild(grid);
 
-      // GPS متغيرات
+      // صف الإدارة: تعديل + حذف + GPS
+      var adminRow = document.createElement('div');
+      adminRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px';
+
+      var btnEdit = document.createElement('button');
+      btnEdit.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(124,92,252,0.3);background:rgba(124,92,252,0.1);color:var(--accent2);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
+      btnEdit.textContent = '✏️ تعديل';
+      btnEdit.addEventListener('click', (function(d){ return function(){ openEditDoor(inst.id, d.id, d.name, d.location||'', d.device_id, d.duration_seconds||5); }; })(door));
+      adminRow.appendChild(btnEdit);
+
+      var btnDel = document.createElement('button');
+      btnDel.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(255,61,113,0.2);background:rgba(255,61,113,0.08);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
+      btnDel.textContent = '🗑 حذف';
+      btnDel.addEventListener('click', (function(did, iid){ return function(){ deleteDoor(did, iid); }; })(door.id, inst.id));
+      adminRow.appendChild(btnDel);
+
+      var btnGps = document.createElement('button');
       var gpsRange = (door.gps && door.gps.range !== undefined) ? door.gps.range : 100;
       var userReq  = door.gps && door.gps.user_required;
+      btnGps.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
+      btnGps.textContent = '📡 GPS ' + gpsRange + 'م';
+      btnGps.addEventListener('click', (function(d){ return function(){ openGpsModal(d.id, d.gps&&d.gps.range!==undefined?d.gps.range:100, d.gps&&d.gps.lat||null, d.gps&&d.gps.lng||null); }; })(door));
+      adminRow.appendChild(btnGps);
 
-      // GPS toggle للمستخدمين
+      card.appendChild(adminRow);
+
+      // GPS toggle للمستخدمين (الأدمن يرى زر واحد فقط)
       var gpsToggle = document.createElement('div');
       gpsToggle.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px';
       gpsToggle.innerHTML =
@@ -2217,35 +1922,13 @@ async function loadAdminDoors() {
           '<span class="toggle-knob"></span>' +
         '</label>';
       card.appendChild(gpsToggle);
-      // event listener GPS toggle
+      // إضافة event listener للـ toggle
       (function(did, ureq) {
         setTimeout(function() {
           var chk = document.getElementById('gps-toggle-' + did);
           if (chk) chk.addEventListener('change', function() { toggleDoorGps(did, 'user_required', this.checked); });
         }, 50);
       })(door.id, userReq);
-
-      // toggle: تلقي إشعار عند استخدام RC
-      var rcNotify = door.rc_notify === true;
-      var rcToggle = document.createElement('div');
-      rcToggle.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px';
-      rcToggle.innerHTML =
-        '<div>' +
-          '<div style="font-size:0.78rem;font-weight:700">📻 تلقي إشعار عند استخدام RC</div>' +
-          '<div style="font-size:0.7rem;color:' + (rcNotify?'var(--success)':'var(--danger)') + ';margin-top:2px;font-weight:700">' + (rcNotify?'مفعّل ✅':'معطّل ❌') + '</div>' +
-        '</div>' +
-        '<label class="toggle-switch">' +
-          '<input type="checkbox" ' + (rcNotify?'checked':'') + ' id="rc-toggle-' + door.id + '">' +
-          '<span class="toggle-knob"></span>' +
-        '</label>';
-      card.appendChild(rcToggle);
-
-      (function(did) {
-        setTimeout(function() {
-          var chk = document.getElementById('rc-toggle-' + did);
-          if (chk) chk.addEventListener('change', function() { toggleDoorRcNotify(did, this.checked); });
-        }, 50);
-      })(door.id);
 
       // أزرار السجل + الجدول
       var logRow = document.createElement('div');
@@ -2265,8 +1948,7 @@ async function loadAdminDoors() {
 
       card.appendChild(logRow);
       container.appendChild(card);
-      // fetchAndUpdateDoorImage تحدّث adm-online تلقائياً
-      fetchAndUpdateDoorImage(door);
+      checkDoorStatus(door.device_id, 'adm-status-' + door.id);
     });
 
   } catch(e) {
@@ -2276,11 +1958,7 @@ async function loadAdminDoors() {
 
 // تبويبة المستخدمين للمدير
 async function loadAdminUsers() {
-  // استخدم users-table-section إذا كانت صفحة المستخدمين مفتوحة
-  var inUsersPage = document.getElementById('page-users')?.classList.contains('active');
-  var container = inUsersPage
-    ? document.getElementById('users-table-section')
-    : document.getElementById('institutes-list');
+  var container = document.getElementById('institutes-list');
   if (!container) return;
   container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">⏳ جاري التحميل...</p>';
   try {
@@ -2361,10 +2039,11 @@ async function loadAdminUsers() {
 // ─── Stats Page ───────────────────────────────────────
 async function loadStats() {
   try {
-    const s    = await apiFetch('/api/stats/full');
+    const s = await apiFetch('/api/stats/full');
     const grid = document.getElementById('stats-grid');
     if (!grid) return;
 
+    // للسوبر أدمن: أضف إحصائيات المؤسسات
     var extraItems = [];
     if (user && user.role === 'super_admin') {
       try {
@@ -2374,78 +2053,21 @@ async function loadStats() {
     }
 
     const items = [
-      { label:'عمليات اليوم',  value: s.today_actions,                              color:'var(--accent)',  icon:'📊' },
-      { label:'إجمالي الفتح',  value: s.total_opens,                                color:'var(--success)', icon:'🔓' },
-      { label:'التنبيهات',     value: s.alert_count,                                color:'var(--danger)',  icon:'🔔' },
-      { label:'المستخدمون',    value: s.active_users + ' / ' + s.total_users,        color:'var(--accent2)', icon:'👥' },
+      { label:'عمليات اليوم',  value: s.today_actions, color:'var(--accent)',  icon:'📊' },
+      { label:'إجمالي الفتح',  value: s.total_opens,   color:'var(--success)', icon:'🔓' },
+      { label:'التنبيهات',     value: s.alert_count,   color:'var(--danger)',  icon:'🔔' },
+      { label:'المستخدمون',    value: s.active_users + '/' + s.total_users, color:'var(--accent2)', icon:'👥' },
     ].concat(extraItems);
 
-    grid.style.gridTemplateColumns = items.length >= 5 ? 'repeat(3,1fr)' : '1fr 1fr';
+    grid.style.gridTemplateColumns = items.length === 5 ? 'repeat(3,1fr)' : '1fr 1fr';
     grid.innerHTML = items.map(function(item) {
       return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;text-align:center">' +
         '<div style="font-size:1.6rem;margin-bottom:6px">' + item.icon + '</div>' +
-        '<div style="font-size:2rem;font-weight:900;font-family:JetBrains Mono,monospace;color:' + item.color + '">' + (item.value ?? '—') + '</div>' +
-        '<div style="font-size:0.75rem;color:var(--muted);margin-top:4px;font-weight:600">' + item.label + '</div>' +
+        '<div style="font-size:1.8rem;font-weight:900;font-family:JetBrains Mono,monospace;color:' + item.color + '">' + item.value + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--muted);margin-top:4px">' + item.label + '</div>' +
         '</div>';
     }).join('');
-
-    // رسم بياني لآخر 7 أيام
-    await loadWeekChart();
   } catch(e) { console.error('loadStats', e); }
-}
-
-async function loadWeekChart() {
-  const section = document.getElementById('stats-chart-section');
-  if (!section) return;
-  try {
-    const data = await apiFetch('/api/history');
-    if (!data || !data.length) { section.innerHTML = ''; return; }
-
-    // تجميع العمليات حسب اليوم (آخر 7 أيام)
-    var days = {};
-    for (var i = 6; i >= 0; i--) {
-      var d = new Date(); d.setDate(d.getDate() - i);
-      var key = d.toISOString().split('T')[0];
-      days[key] = { open: 0, close: 0 };
-    }
-    data.forEach(function(log) {
-      var day = (log.created_at || '').split('T')[0];
-      if (days[day]) {
-        if (log.value === 'open' || log.value === 'open40') days[day].open++;
-        else if (log.value === 'close') days[day].close++;
-      }
-    });
-
-    var keys   = Object.keys(days);
-    var opens  = keys.map(function(k){ return days[k].open; });
-    var closes = keys.map(function(k){ return days[k].close; });
-    var maxVal = Math.max.apply(null, opens.concat(closes).concat([1]));
-    var dayNames = ['أحد','اثن','ثلا','أرب','خمي','جمع','سبت'];
-
-    var bars = keys.map(function(key, i) {
-      var d    = new Date(key);
-      var name = dayNames[d.getDay()];
-      var oh   = Math.round((opens[i]  / maxVal) * 80);
-      var ch   = Math.round((closes[i] / maxVal) * 80);
-      return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">' +
-        '<div style="display:flex;align-items:flex-end;gap:2px;height:80px">' +
-          '<div title="فتح: '+opens[i]+'" style="width:10px;height:'+oh+'px;background:var(--success);border-radius:3px 3px 0 0;opacity:0.85;min-height:2px"></div>' +
-          '<div title="غلق: '+closes[i]+'" style="width:10px;height:'+ch+'px;background:var(--danger);border-radius:3px 3px 0 0;opacity:0.85;min-height:2px"></div>' +
-        '</div>' +
-        '<div style="font-size:0.65rem;color:var(--muted);font-weight:600">' + name + '</div>' +
-        '</div>';
-    }).join('');
-
-    section.innerHTML =
-      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px">' +
-        '<div style="font-size:0.8rem;font-weight:700;color:var(--muted);margin-bottom:12px">📅 آخر 7 أيام</div>' +
-        '<div style="display:flex;align-items:flex-end;gap:4px;height:100px">' + bars + '</div>' +
-        '<div style="display:flex;gap:16px;margin-top:8px">' +
-          '<span style="font-size:0.7rem;color:var(--success);font-weight:700">■ فتح</span>' +
-          '<span style="font-size:0.7rem;color:var(--danger);font-weight:700">■ غلق</span>' +
-        '</div>' +
-      '</div>';
-  } catch(e) { section.innerHTML = ''; }
 }
 
 // ─── Alerts Page ──────────────────────────────────────
@@ -2605,4 +2227,132 @@ async function apiFetch(url, method = 'GET', body = null, auth = true) {
     throw new Error(data.error || 'خطأ في الخادم');
   }
   return data;
+}
+
+
+// جلب حالة الباب الحقيقية (مفتوح/مغلق/متوقف) وتحديث الصورة والـ badge
+async function fetchAndUpdateDoorImage(door) {
+  var imgEl = document.getElementById('door-img-' + door.id);
+  if (imgEl && !imgEl.innerHTML) {
+    imgEl.innerHTML = '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:0.3"><rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="#8892b0" stroke-width="1.8"/><rect x="8" y="4" width="62" height="74" rx="3" fill="#8892b0" fill-opacity="0.1" stroke="#8892b0" stroke-width="1.6"/><text x="40" y="97" text-anchor="middle" font-size="7" fill="#8892b0" font-family="Cairo,sans-serif">...</text></svg>';
+  }
+  try {
+    // إذا lastKnownState فارغ → جلب آخر سجل من قاعدة البيانات
+    if (!lastKnownState[door.id]) {
+      try {
+        var logs = await apiFetch('/api/doors/' + door.id + '/logs');
+        if (logs && logs.length > 0) {
+          var lastVal = logs[0].value;
+          if (lastVal === 'open' || lastVal === 'open40') lastKnownState[door.id] = 'open';
+          else if (lastVal === 'close') lastKnownState[door.id] = 'close';
+        }
+      } catch(e) {}
+    }
+
+    var data  = await apiFetch('/api/door/status?deviceId=' + door.device_id);
+    var state = data.r1_on ? 'open' : data.r2_on ? 'close' : 'idle';
+    imgEl = document.getElementById('door-img-' + door.id);
+
+    // الجهاز أجاب → متصل
+    updateDeviceOnlineBadge(door.device_id, true);
+
+    if (doorTimers[door.id]) return;
+
+    // idle من Tuya = ريلاي في وضعه الطبيعي، ليس "متوقف"
+    if (state === 'idle') {
+      state = lastKnownState[door.id] || 'close'; // افتراضي: مغلق
+    } else {
+      lastKnownState[door.id] = state; // حدّث الحالة المعروفة
+    }
+
+    if (imgEl) _drawDoorStatic(imgEl, null, state);
+    updateDoorCardState(door.id, door.device_id, state, 'poll');
+  } catch(e) {
+    // خطأ في الاتصال بـ Tuya → offline
+    doorStatusCache[door.device_id] = false;
+    updateDeviceOnlineBadge(door.device_id, false);
+    var imgElErr = document.getElementById('door-img-' + door.id);
+    if (imgElErr && !imgElErr.innerHTML) {
+      imgElErr.innerHTML =
+        '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:0.4">' +
+        '<rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="#8892b0" stroke-width="1.8"/>' +
+        '<rect x="8" y="4" width="62" height="74" rx="3" fill="#8892b0" fill-opacity="0.1" stroke="#8892b0" stroke-width="1.6"/>' +
+        '<circle cx="22" cy="41" r="3" fill="#8892b0" opacity="0.6"/>' +
+        '<text x="40" y="97" text-anchor="middle" font-size="7" fill="#8892b0" font-family="Cairo,sans-serif">غير متصل</text>' +
+        '</svg>';
+    }
+  }
+}
+
+async function loadWeekChart() {
+  const section = document.getElementById('stats-chart-section');
+  if (!section) return;
+  try {
+    const data = await apiFetch('/api/history');
+    if (!data || !data.length) { section.innerHTML = ''; return; }
+
+    // تجميع العمليات حسب اليوم (آخر 7 أيام)
+    var days = {};
+    for (var i = 6; i >= 0; i--) {
+      var d = new Date(); d.setDate(d.getDate() - i);
+      var key = d.toISOString().split('T')[0];
+      days[key] = { open: 0, close: 0 };
+    }
+    data.forEach(function(log) {
+      var day = (log.created_at || '').split('T')[0];
+      if (days[day]) {
+        if (log.value === 'open' || log.value === 'open40') days[day].open++;
+        else if (log.value === 'close') days[day].close++;
+      }
+    });
+
+    var keys   = Object.keys(days);
+    var opens  = keys.map(function(k){ return days[k].open; });
+    var closes = keys.map(function(k){ return days[k].close; });
+    var maxVal = Math.max.apply(null, opens.concat(closes).concat([1]));
+    var dayNames = ['أحد','اثن','ثلا','أرب','خمي','جمع','سبت'];
+
+    var bars = keys.map(function(key, i) {
+      var d    = new Date(key);
+      var name = dayNames[d.getDay()];
+      var oh   = Math.round((opens[i]  / maxVal) * 80);
+      var ch   = Math.round((closes[i] / maxVal) * 80);
+      return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">' +
+        '<div style="display:flex;align-items:flex-end;gap:2px;height:80px">' +
+          '<div title="فتح: '+opens[i]+'" style="width:10px;height:'+oh+'px;background:var(--success);border-radius:3px 3px 0 0;opacity:0.85;min-height:2px"></div>' +
+          '<div title="غلق: '+closes[i]+'" style="width:10px;height:'+ch+'px;background:var(--danger);border-radius:3px 3px 0 0;opacity:0.85;min-height:2px"></div>' +
+        '</div>' +
+        '<div style="font-size:0.65rem;color:var(--muted);font-weight:600">' + name + '</div>' +
+        '</div>';
+    }).join('');
+
+    section.innerHTML =
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px">' +
+        '<div style="font-size:0.8rem;font-weight:700;color:var(--muted);margin-bottom:12px">📅 آخر 7 أيام</div>' +
+        '<div style="display:flex;align-items:flex-end;gap:4px;height:100px">' + bars + '</div>' +
+        '<div style="display:flex;gap:16px;margin-top:8px">' +
+          '<span style="font-size:0.7rem;color:var(--success);font-weight:700">■ فتح</span>' +
+          '<span style="font-size:0.7rem;color:var(--danger);font-weight:700">■ غلق</span>' +
+        '</div>' +
+      '</div>';
+  } catch(e) { section.innerHTML = ''; }
+}
+
+async function toggleDoorRcNotify(doorId, value) {
+  try {
+    await apiFetch('/api/doors/' + doorId, 'PUT', { rc_notify: value });
+    // تحديث الكاش
+    institutesCache.forEach(function(inst) {
+      (inst.doors||[]).forEach(function(door) {
+        if (door.id === doorId) door.rc_notify = value;
+      });
+    });
+    // تحديث نص الـ toggle
+    var lbl = document.querySelector('#rc-toggle-' + doorId)?.closest('div[style]')?.querySelector('div > div:last-child');
+    if (lbl) {
+      lbl.style.color = value ? 'var(--success)' : 'var(--danger)';
+      lbl.textContent = value ? 'مفعّل ✅' : 'معطّل ❌';
+    }
+    toast(value ? '🔔 سيتم إشعارك عند استخدام RC' : '🔕 تم إيقاف الإشعار', 'success');
+  } catch(e) { toast(e.message, 'error'); }
 }
