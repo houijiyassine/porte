@@ -80,6 +80,7 @@ async function doLogin() {
 
 // ─── Boot ─────────────────────────────────────
 function bootApp() {
+  selectedInstId = null; // صفّر عند كل تشغيل
   document.getElementById('main-app').style.display = 'block';
 
   const roleBadge = document.getElementById('header-role-badge');
@@ -1844,6 +1845,7 @@ async function userDoorAction(door, action) {
 
 // ─── Admin Interface ───────────────────────────────────
 async function loadAdminDoors() {
+  selectedInstId = null;
   var container = document.getElementById('institutes-list');
   if (!container) return;
   container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">⏳ جاري التحميل...</p>';
@@ -1871,23 +1873,31 @@ async function loadAdminDoors() {
     btnAddDoor.addEventListener('click', function() { openAddDoor(inst.id); });
     container.appendChild(btnAddDoor);
 
-    // قائمة الأبواب
     (inst.doors||[]).forEach(function(door) {
       var card = document.createElement('div');
       card.style.cssText = 'background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:16px;margin-bottom:12px';
+      card.setAttribute('data-door-id', door.id);
+      card.setAttribute('data-duration', door.duration_seconds || 5);
 
-      // Header: اسم + En ligne
+      // Header: صورة + اسم + badges
       var hdr = document.createElement('div');
-      hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px';
+      hdr.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:12px';
       hdr.innerHTML =
-        '<div>' +
-          '<div style="font-weight:800">⏳ ' + door.name + '</div>' +
-          '<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted)">ID: ' + (door.device_id||'').substring(0,16) + '...</div>' +
-        '</div>' +
-        '<span id="adm-status-' + door.id + '" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>';
+        '<div id="door-img-' + door.id + '" data-device-id="' + door.device_id + '" data-door-id="' + door.id + '" style="width:52px;height:64px;flex-shrink:0"></div>' +
+        '<div style="flex:1">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+            '<div style="font-weight:800">🚪 ' + door.name + '</div>' +
+            '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">' +
+              '<span id="adm-online-' + door.id + '" style="font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
+              '<span id="adm-status-' + door.id + '" style="font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-bottom:5px">ID: ' + (door.device_id||'').substring(0,16) + '...</div>' +
+          '<div id="door-progress-' + door.id + '" style="font-size:0.8rem;color:var(--muted);display:flex;align-items:center;min-height:28px"></div>' +
+        '</div>';
       card.appendChild(hdr);
 
-      // أزرار التحكم 4 في grid
+      // أزرار التحكم
       var grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px';
       [['🟢','فتح','open','rgba(0,230,118,0.15)','rgba(0,230,118,0.3)','var(--success)'],
@@ -1903,33 +1913,8 @@ async function loadAdminDoors() {
       });
       card.appendChild(grid);
 
-      // صف الإدارة: تعديل + حذف + GPS
-      var adminRow = document.createElement('div');
-      adminRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px';
-
-      var btnEdit = document.createElement('button');
-      btnEdit.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(124,92,252,0.3);background:rgba(124,92,252,0.1);color:var(--accent2);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
-      btnEdit.textContent = '✏️ تعديل';
-      btnEdit.addEventListener('click', (function(d){ return function(){ openEditDoor(inst.id, d.id, d.name, d.location||'', d.device_id, d.duration_seconds||5); }; })(door));
-      adminRow.appendChild(btnEdit);
-
-      var btnDel = document.createElement('button');
-      btnDel.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(255,61,113,0.2);background:rgba(255,61,113,0.08);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
-      btnDel.textContent = '🗑 حذف';
-      btnDel.addEventListener('click', (function(did, iid){ return function(){ deleteDoor(did, iid); }; })(door.id, inst.id));
-      adminRow.appendChild(btnDel);
-
-      var btnGps = document.createElement('button');
-      var gpsRange = (door.gps && door.gps.range !== undefined) ? door.gps.range : 100;
-      var userReq  = door.gps && door.gps.user_required;
-      btnGps.style.cssText = 'padding:9px;border-radius:10px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
-      btnGps.textContent = '📡 GPS ' + gpsRange + 'م';
-      btnGps.addEventListener('click', (function(d){ return function(){ openGpsModal(d.id, d.gps&&d.gps.range!==undefined?d.gps.range:100, d.gps&&d.gps.lat||null, d.gps&&d.gps.lng||null); }; })(door));
-      adminRow.appendChild(btnGps);
-
-      card.appendChild(adminRow);
-
-      // GPS toggle للمستخدمين (الأدمن يرى زر واحد فقط)
+      // GPS toggle للمستخدمين
+      var userReq = door.gps && door.gps.user_required;
       var gpsToggle = document.createElement('div');
       gpsToggle.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px';
       gpsToggle.innerHTML =
@@ -1942,39 +1927,58 @@ async function loadAdminDoors() {
           '<span class="toggle-knob"></span>' +
         '</label>';
       card.appendChild(gpsToggle);
-      // إضافة event listener للـ toggle
-      (function(did, ureq) {
+      (function(did) {
         setTimeout(function() {
           var chk = document.getElementById('gps-toggle-' + did);
           if (chk) chk.addEventListener('change', function() { toggleDoorGps(did, 'user_required', this.checked); });
         }, 50);
-      })(door.id, userReq);
+      })(door.id);
 
-      // أزرار السجل + الجدول
+      // toggle RC notify
+      var rcNotify = door.rc_notify === true;
+      var rcToggle = document.createElement('div');
+      rcToggle.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px';
+      rcToggle.innerHTML =
+        '<div>' +
+          '<div style="font-size:0.78rem;font-weight:700">📻 تلقي إشعار عند استخدام RC</div>' +
+          '<div style="font-size:0.7rem;color:' + (rcNotify?'var(--success)':'var(--danger)') + ';margin-top:2px;font-weight:700">' + (rcNotify?'مفعّل ✅':'معطّل ❌') + '</div>' +
+        '</div>' +
+        '<label class="toggle-switch">' +
+          '<input type="checkbox" ' + (rcNotify?'checked':'') + ' id="rc-toggle-' + door.id + '">' +
+          '<span class="toggle-knob"></span>' +
+        '</label>';
+      card.appendChild(rcToggle);
+      (function(did) {
+        setTimeout(function() {
+          var chk = document.getElementById('rc-toggle-' + did);
+          if (chk) chk.addEventListener('change', function() { toggleDoorRcNotify(did, this.checked); });
+        }, 50);
+      })(door.id);
+
+      // سجل + جدول
       var logRow = document.createElement('div');
       logRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px';
-
       var btnLog = document.createElement('button');
       btnLog.style.cssText = 'padding:10px;border-radius:10px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
       btnLog.textContent = '📋 سجل الباب';
       btnLog.addEventListener('click', (function(id, name){ return function(){ openDoorLogs(id, name); }; })(door.id, door.name));
       logRow.appendChild(btnLog);
-
       var btnSched = document.createElement('button');
       btnSched.style.cssText = 'padding:10px;border-radius:10px;border:1px solid rgba(255,179,0,0.2);background:rgba(255,179,0,0.08);color:var(--warning);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
       btnSched.textContent = '🕐 جدول الأوقات';
       btnSched.addEventListener('click', (function(d){ return function(){ openDoorSchedule(d.id, d.name, d.schedule||{}); }; })(door));
       logRow.appendChild(btnSched);
-
       card.appendChild(logRow);
+
       container.appendChild(card);
-      checkDoorStatus(door.device_id, 'adm-status-' + door.id);
+      fetchAndUpdateDoorImage(door);
     });
 
   } catch(e) {
     container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
   }
 }
+
 
 // تبويبة المستخدمين للمدير
 async function loadAdminUsers() {
