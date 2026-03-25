@@ -179,11 +179,17 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
-            // idle + تايمر شغال → إيقاف حقيقي من RC
-            // التايمر ينتهي بعد n-0.5 ثانية، إذن idle بعدها = hasTimer false
-            // idle أثناء التايمر = إيقاف مبكر حقيقي
-            stopDoorTimer(doorId, imgEl, stateEl);
-            updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
+            var _t = doorTimers[doorId];
+            var _elapsed = _t ? (Date.now() - _t.startTime) : 0;
+            var _durEl = document.querySelector('[data-door-id="' + doorId + '"]');
+            var _n = _durEl ? parseInt(_durEl.getAttribute('data-duration') || '5') : 5;
+            // إذا مضى أقل من n-1 ثانية → إيقاف حقيقي من RC
+            // إذا مضى أكثر → idle طبيعي بعد انتهاء النبضة → تجاهل
+            if (_elapsed < (_n - 1) * 1000) {
+              stopDoorTimer(doorId, imgEl, stateEl);
+              updateDoorCardState(doorId, msg.deviceId, 'idle', msg.source);
+            }
+            // وإلا: idle طبيعي → التايمر يكمل لوحده
           } else {
             var completed = doorCompletedAt[doorId];
             if (!completed || (Date.now() - completed) >= 3000) {
