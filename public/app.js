@@ -177,6 +177,12 @@ function connectWS() {
         var curTimer    = doorTimers[doorId];  // موجود = شغال
         var timerAction = null; // لا نحتاجه بعد الآن
 
+        // إذا لا يوجد تايمر وجاء open/close → حدّث doorPos الفيزيائي
+        if (!hasTimer && rawState !== 'idle') {
+          if (rawState === 'open' || rawState === 'open40') doorPos[doorId] = 1.0;
+          else if (rawState === 'close') doorPos[doorId] = 0.0;
+        }
+
         if (rawState === 'idle') {
           if (hasTimer) {
             // idle: تجاهل تماماً — الجهاز يبعث idle بعد كل نبضة
@@ -202,7 +208,6 @@ function connectWS() {
             lastKnownState[doorId] = rawState;
             var curTimer  = doorTimers[doorId];
             var newIsOpen = (rawState === 'open' || rawState === 'open40');
-            console.log('[RC]', rawState, 'curTimer=', !!curTimer, 'timerIsOpen=', curTimer?curTimer.isOpen:'N/A', 'newIsOpen=', newIsOpen, 'doorPos=', doorPos[doorId]);
             if (curTimer) {
               if (curTimer.isOpen !== newIsOpen) {
                 stopDoorTimer(doorId, newImgEl, newStateEl);
@@ -212,6 +217,14 @@ function connectWS() {
               }
             }
             // لا تايمر شغال → ابدأ تايمر جديد
+            // إذا close بدون تايمر سابق → الباب كان مفتوحاً
+            if (!newIsOpen && (doorPos[doorId] === undefined || doorPos[doorId] > 0.9)) {
+              doorPos[doorId] = 1.0;
+            }
+            // إذا open بدون تايمر سابق → الباب كان مغلقاً
+            if (newIsOpen && (doorPos[doorId] === undefined || doorPos[doorId] < 0.1)) {
+              doorPos[doorId] = 0.0;
+            }
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
