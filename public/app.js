@@ -162,6 +162,7 @@ function connectWS() {
         loadRecentHistory();
       }
       // تحديث حالة الباب من Polling أو Webhook (RC أو App)
+      console.log('[WS RCV]', msg.type, msg.r1_on, msg.r2_on, msg.source, msg.doorId);
       if (msg.type === 'door_state') {
         var r1       = msg.r1_on, r2 = msg.r2_on;
         var rawState = r1 ? 'open' : r2 ? 'close' : 'idle';
