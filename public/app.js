@@ -337,6 +337,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
 
   doorTimers[doorId] = { _raf: null, startTime: startTime, isOpen: isOpen,
                          gen: ((doorTimers[doorId]||{gen:0}).gen + 1) };
+  console.log('[Timer START]', doorId, 'isOpen=', isOpen, 'from=', fromPos.toFixed(2), 'to=', toPos, 'n=', n);
 
   function tick() {
     var t = doorTimers[doorId];
@@ -361,6 +362,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
       delete doorTimers[doorId];
       doorCompletedAt[doorId] = Date.now();
       var finalState = isOpen ? 'open' : 'close';
+      console.log('[Timer END]', doorId, finalState);
       lastKnownState[doorId] = finalState;
       setTimeout(function() {
         _drawDoorStatic(imgEl, stateEl, finalState);
