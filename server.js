@@ -1185,12 +1185,15 @@ async function pollAllDoors() {
 
         doorStateCache.set(door.device_id, { r1, r2 });
 
+        // عند أي تغيير → burst فوري
+        if (changed) triggerBurst(20);
+
         const lastApp   = appLastAction.get(door.device_id);
         const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
         if (changed) console.log(`[Poll] ${door.name}: r1=${r1} r2=${r2} → ${doorAction} | isFromApp=${isFromApp}`);
 
         if (changed && !isFromApp && (r1 || r2)) {
-          triggerBurst(15); // RC detected → burst 15s
+          triggerBurst(20); // RC detected → burst 20s
           const { error: rcErr } = await supabase.from('door_logs').insert({
             door_id: door.id, inst_id: door.inst_id, user_id: null,
             value: doorAction, source: 'RC (جهاز تحكم)',
@@ -1223,7 +1226,7 @@ async function pollAllDoors() {
 // عادي: كل 3 ثوانٍ
 // burst: كل 500ms لمدة n ثانية بعد أي حدث (App أو RC)
 const POLL_NORMAL = 3000;   // 3 ثوانٍ عادي
-const POLL_BURST  = 200;    // 200ms burst عند الحدث
+const POLL_BURST  = 100;    // 100ms burst عند الحدث
 
 let _burstUntil = 0;        // timestamp انتهاء الـ burst
 let _pollTimer  = null;
