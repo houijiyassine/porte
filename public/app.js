@@ -211,13 +211,17 @@ function connectWS() {
 
             if (curTimer) {
               if (curTimer.isOpen === newIsOpen) {
-                // نفس الاتجاه → إيقاف (ضغط فتح أثناء فتح، أو غلق أثناء غلق)
+                // نفس الاتجاه → إيقاف
                 stopDoorTimer(doorId, newImgEl, newStateEl);
                 return;
               } else {
                 // اتجاه معاكس → أوقف ثم ابدأ الاتجاه الجديد
                 stopDoorTimer(doorId, newImgEl, newStateEl);
-                startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
+                // نجلب العناصر من جديد بعد stopDoorTimer
+                var freshImg = document.getElementById('door-img-' + doorId);
+                var freshSt  = document.getElementById('user-state-' + doorId)
+                            || document.getElementById('door-progress-' + doorId);
+                startDoorTimer(doorId, freshImg, freshSt, newSecs, rawState);
                 updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
                 return;
               }
@@ -1303,7 +1307,7 @@ function renderInstDetail(inst) {
               </div>
               <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-bottom:6px">ID: ${deviceId.substring(0,16)}...</div>
               <!-- progress bar الأدمن -->
-              <div id="door-progress-${doorId}" style="font-size:0.8rem;color:var(--muted)"></div>
+              <div id="door-progress-${doorId}" style="font-size:0.8rem;color:var(--muted);display:flex;align-items:center;min-height:28px"></div>
             </div>
           </div>
         </div>
@@ -2239,7 +2243,7 @@ async function loadAdminDoors() {
             '</div>' +
           '</div>' +
           '<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-bottom:5px">ID: ' + (door.device_id||'').substring(0,16) + '...</div>' +
-          '<div id="door-progress-' + door.id + '" style="font-size:0.8rem;color:var(--muted)"></div>' +
+          '<div id="door-progress-' + door.id + '" style="font-size:0.8rem;color:var(--muted);display:flex;align-items:center;min-height:28px"></div>' +
         '</div>';
       card.appendChild(hdr);
 
