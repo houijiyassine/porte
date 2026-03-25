@@ -179,8 +179,7 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
-            // idle أثناء التايمر = نبضة Tuya عابرة (switch يرجع false بعد pulse)
-            // لا نوقف التايمر — يكمل n ثانية بنفسه
+            // idle: تجاهل تماماً — الجهاز يبعث idle بعد كل نبضة
           } else {
             var completed = doorCompletedAt[doorId];
             if (!completed || (Date.now() - completed) >= 3000) {
@@ -201,14 +200,15 @@ function connectWS() {
           if (msg.source === 'rc') {
             doorIdleCount[doorId] = 0;
             lastKnownState[doorId] = rawState;
-            // إذا التايمر شغال باتجاه معاكس → إيقاف أولاً
-            var curTimer = doorTimers[doorId];
+            var curTimer  = doorTimers[doorId];
+            var newIsOpen = (rawState === 'open' || rawState === 'open40');
             if (curTimer) {
-              var timerIsOpen = curTimer.isOpen;
-              var newIsOpen   = (rawState === 'open' || rawState === 'open40');
-              if (timerIsOpen !== newIsOpen) {
-                // اتجاه معاكس → RC ضغط زر آخر = إيقاف ضمني
+              if (curTimer.isOpen !== newIsOpen) {
+                // اتجاه معاكس = RC ضغط إيقاف ثم اتجاه آخر → أوقف أولاً
                 stopDoorTimer(doorId, newImgEl, newStateEl);
+              } else {
+                // نفس الاتجاه = RC ضغط نفس الزر مرة أخرى → تجاهل (fin de course)
+                return;
               }
             }
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
