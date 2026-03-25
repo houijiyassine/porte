@@ -202,7 +202,6 @@ function connectWS() {
             lastKnownState[doorId] = rawState;
             var curTimer  = doorTimers[doorId];
             var newIsOpen = (rawState === 'open' || rawState === 'open40');
-            console.log('[RC]', rawState, 'hasTimer=', !!curTimer, 'timerIsOpen=', curTimer ? curTimer.isOpen : 'N/A', 'newIsOpen=', newIsOpen);
             if (curTimer) {
               if (curTimer.isOpen !== newIsOpen) {
                 // اتجاه معاكس → إيقاف
@@ -216,6 +215,10 @@ function connectWS() {
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
             if (rawState !== 'idle') lastKnownState[doorId] = rawState;
+            // إذا RC أرسل close بعد انتهاء التايمر → الباب مفتوح كاملاً
+            if (msg.source === 'rc' && rawState === 'close' && doorPos[doorId] === undefined) {
+              doorPos[doorId] = 1.0; // الباب كان مفتوحاً كاملاً
+            }
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           }
@@ -337,7 +340,6 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
 
   doorTimers[doorId] = { _raf: null, startTime: startTime, isOpen: isOpen,
                          gen: ((doorTimers[doorId]||{gen:0}).gen + 1) };
-  console.log('[Timer START]', doorId, 'isOpen=', isOpen, 'from=', fromPos.toFixed(2), 'to=', toPos, 'n=', n);
 
   function tick() {
     var t = doorTimers[doorId];
@@ -362,7 +364,6 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
       delete doorTimers[doorId];
       doorCompletedAt[doorId] = Date.now();
       var finalState = isOpen ? 'open' : 'close';
-      console.log('[Timer END]', doorId, finalState);
       lastKnownState[doorId] = finalState;
       setTimeout(function() {
         _drawDoorStatic(imgEl, stateEl, finalState);
