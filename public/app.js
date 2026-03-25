@@ -202,12 +202,13 @@ function connectWS() {
             lastKnownState[doorId] = rawState;
             var curTimer  = doorTimers[doorId];
             var newIsOpen = (rawState === 'open' || rawState === 'open40');
+            console.log('[RC]', rawState, 'hasTimer=', !!curTimer, 'timerIsOpen=', curTimer ? curTimer.isOpen : 'N/A', 'newIsOpen=', newIsOpen);
             if (curTimer) {
               if (curTimer.isOpen !== newIsOpen) {
-                // اتجاه معاكس = RC ضغط إيقاف ثم اتجاه آخر → أوقف أولاً
+                // اتجاه معاكس → إيقاف
                 stopDoorTimer(doorId, newImgEl, newStateEl);
               } else {
-                // نفس الاتجاه = RC ضغط نفس الزر مرة أخرى → تجاهل (fin de course)
+                // نفس الاتجاه → تجاهل
                 return;
               }
             }
