@@ -208,23 +208,22 @@ function connectWS() {
             lastKnownState[doorId] = rawState;
             var curTimer  = doorTimers[doorId];
             var newIsOpen = (rawState === 'open' || rawState === 'open40');
+
             if (curTimer) {
-              if (curTimer.isOpen !== newIsOpen) {
+              if (curTimer.isOpen === newIsOpen) {
+                // نفس الاتجاه → إيقاف (ضغط فتح أثناء فتح، أو غلق أثناء غلق)
                 stopDoorTimer(doorId, newImgEl, newStateEl);
                 return;
               } else {
+                // اتجاه معاكس → أوقف ثم ابدأ الاتجاه الجديد
+                stopDoorTimer(doorId, newImgEl, newStateEl);
+                startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
+                updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
                 return;
               }
             }
-            // لا تايمر شغال → ابدأ تايمر جديد
-            // إذا close بدون تايمر سابق → الباب كان مفتوحاً
-            if (!newIsOpen && (doorPos[doorId] === undefined || doorPos[doorId] > 0.9)) {
-              doorPos[doorId] = 1.0;
-            }
-            // إذا open بدون تايمر سابق → الباب كان مغلقاً
-            if (newIsOpen && (doorPos[doorId] === undefined || doorPos[doorId] < 0.1)) {
-              doorPos[doorId] = 0.0;
-            }
+
+            // لا تايمر → ابدأ من الموضع الحالي
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           } else if (!hasTimer) {
