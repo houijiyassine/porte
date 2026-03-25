@@ -183,11 +183,6 @@ function connectWS() {
         var nSecs   = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
         var newIsOpen = (rawState === 'open' || rawState === 'open40');
 
-        // مزامنة doorPos عند عدم وجود تايمر
-        if (!hasTimer) {
-          doorPos[doorId] = newIsOpen ? 1.0 : 0.0;
-        }
-
         if (msg.source === 'rc') {
           lastKnownState[doorId] = rawState;
 
