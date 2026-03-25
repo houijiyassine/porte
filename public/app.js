@@ -189,9 +189,13 @@ function bootApp() {
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('page-institutes').classList.add('active');
     loadAdminDoors();
-    // إخفاء زر إضافة مؤسسة للمدير
+    // إخفاء عنوان "المؤسسات" وزر الإضافة للأدمن
     var addInstBtn = document.getElementById('inst-add-btn');
     if (addInstBtn) addInstBtn.style.display = 'none';
+    var instTitle = document.getElementById('inst-page-title');
+    if (instTitle) instTitle.style.display = 'none';
+    var instBackBtn = document.getElementById('inst-back-btn');
+    if (instBackBtn) instBackBtn.style.display = 'none';
   } else {
     document.querySelectorAll('.nav-item').forEach(function(n){ n.style.display = 'none'; });
     document.getElementById('nav-institutes').style.display = 'flex';
@@ -204,6 +208,10 @@ function bootApp() {
     if (addBtn) addBtn.style.display = 'none';
     var pageTitle = document.querySelector('#page-institutes .page-title');
     if (pageTitle) pageTitle.style.display = 'none';
+    var instTitleU = document.getElementById('inst-page-title');
+    if (instTitleU) instTitleU.style.display = 'none';
+    var instBackBtnU = document.getElementById('inst-back-btn');
+    if (instBackBtnU) instBackBtnU.style.display = 'none';
     loadUserDoors();
   }
 }
@@ -234,6 +242,7 @@ function connectWS() {
 
         var imgEl   = document.getElementById('door-img-' + doorId);
         var stateEl = document.getElementById('user-state-' + doorId)
+                   || document.getElementById('door-progress-bar-' + doorId)
                    || document.getElementById('door-progress-' + doorId);
         var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
         var nSecs   = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
@@ -378,6 +387,7 @@ function stopDoorTimer(doorId, imgEl, stateEl) {
   var img = imgEl || document.getElementById('door-img-' + doorId);
   var ste = stateEl
          || document.getElementById('user-state-' + doorId)
+         || document.getElementById('door-progress-bar-' + doorId)
          || document.getElementById('door-progress-' + doorId);
 
   _drawDoorProgress(img, ste, displayPct, isOpen, true, pos);
@@ -1941,6 +1951,12 @@ async function loadAdminDoors() {
         '</div>';
       card.appendChild(hdr);
 
+      // شريط النسبة (فوق أزرار التحكم)
+      var progressBar = document.createElement('div');
+      progressBar.id = 'door-progress-bar-' + door.id;
+      progressBar.style.cssText = 'margin-bottom:10px;min-height:28px;display:flex;align-items:center';
+      card.appendChild(progressBar);
+
       // أزرار التحكم
       var grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px';
@@ -2334,6 +2350,14 @@ async function fetchAndUpdateDoorImage(door) {
     }
 
     if (imgEl) _drawDoorStatic(imgEl, null, state);
+    // تحديث door-progress-bar بالحالة الثابتة
+    var progBar = document.getElementById('door-progress-bar-' + door.id);
+    if (progBar) {
+      var pColor = state === 'open' ? 'var(--success)' : 'var(--danger)';
+      var pIcon  = state === 'open' ? '🔓 مفتوح' : '🔒 مغلق';
+      progBar.style.cssText = 'margin-bottom:10px;min-height:28px;display:flex;align-items:center;color:' + pColor + ';font-weight:700;font-size:0.85rem';
+      progBar.textContent = pIcon;
+    }
     updateDoorCardState(door.id, door.device_id, state, 'poll');
   } catch(e) {
     // خطأ في الاتصال بـ Tuya → offline
