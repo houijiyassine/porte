@@ -1182,7 +1182,6 @@ async function pollAllDoors() {
         const prev      = doorStateCache.get(door.device_id);
         const changed   = !prev || prev.r1 !== r1 || prev.r2 !== r2;
         const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
-        if (changed) console.log(`[Poll] ${door.name}: r1=${r1} r2=${r2} → ${doorAction}`);
 
         doorStateCache.set(door.device_id, { r1, r2 });
 
