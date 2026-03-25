@@ -163,86 +163,63 @@ function connectWS() {
       }
       // تحديث حالة الباب من Polling أو Webhook (RC أو App)
       if (msg.type === 'door_state') {
-        var r1 = msg.r1_on, r2 = msg.r2_on;
+        var r1       = msg.r1_on, r2 = msg.r2_on;
         var rawState = r1 ? 'open' : r2 ? 'close' : 'idle';
         var doorId   = msg.doorId;
-        var imgEl    = document.getElementById('door-img-'      + doorId);
-        var stateEl  = document.getElementById('user-state-'    + doorId)
-                    || document.getElementById('door-progress-' + doorId);
         var hasTimer = !!doorTimers[doorId];
 
         updateDoorStatusUI(rawState);
 
-        // ─── منطق التايمر والحالات ───
-        var curTimer    = doorTimers[doorId];  // موجود = شغال
-        var timerAction = null; // لا نحتاجه بعد الآن
-
-        // إذا لا يوجد تايمر وجاء open/close → حدّث doorPos الفيزيائي
-        if (!hasTimer && rawState !== 'idle') {
-          if (rawState === 'open' || rawState === 'open40') doorPos[doorId] = 1.0;
-          else if (rawState === 'close') doorPos[doorId] = 0.0;
+        if (rawState === 'idle') {
+          // idle: تجاهل دائماً — Tuya يبعثه بعد كل نبضة
+          return;
         }
 
-        if (rawState === 'idle') {
+        // open أو close
+        var imgEl   = document.getElementById('door-img-' + doorId);
+        var stateEl = document.getElementById('user-state-' + doorId)
+                   || document.getElementById('door-progress-' + doorId);
+        var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
+        var nSecs   = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
+        var newIsOpen = (rawState === 'open' || rawState === 'open40');
+
+        // مزامنة doorPos عند عدم وجود تايمر
+        if (!hasTimer) {
+          doorPos[doorId] = newIsOpen ? 1.0 : 0.0;
+        }
+
+        if (msg.source === 'rc') {
+          lastKnownState[doorId] = rawState;
+
           if (hasTimer) {
-            // idle: تجاهل تماماً — الجهاز يبعث idle بعد كل نبضة
-          } else {
-            var completed = doorCompletedAt[doorId];
-            if (!completed || (Date.now() - completed) >= 3000) {
-              delete doorCompletedAt[doorId];
+            var t = doorTimers[doorId];
+            if (t.isOpen === newIsOpen) {
+              // نفس الاتجاه → إيقاف
+              stopDoorTimer(doorId, imgEl, stateEl);
+            } else {
+              // اتجاه معاكس → أوقف وابدأ الجديد
+              stopDoorTimer(doorId, imgEl, stateEl);
+              var img2 = document.getElementById('door-img-' + doorId);
+              var st2  = document.getElementById('user-state-' + doorId)
+                      || document.getElementById('door-progress-' + doorId);
+              startDoorTimer(doorId, img2, st2, nSecs, rawState);
+              updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
             }
+          } else {
+            // لا تايمر → ابدأ من الموضع الفيزيائي الصحيح
+            doorPos[doorId] = newIsOpen ? 0.0 : 1.0;
+            startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
+            updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           }
 
         } else {
-          // open أو close جديد
-
-
-          var newImgEl   = document.getElementById('door-img-'      + doorId);
-          var newStateEl = document.getElementById('user-state-'    + doorId)
-                        || document.getElementById('door-progress-' + doorId);
-          var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
-          var newSecs = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
-
-          if (msg.source === 'rc') {
-            doorIdleCount[doorId] = 0;
+          // مصدر App أو polling
+          if (!hasTimer) {
             lastKnownState[doorId] = rawState;
-            var curTimer  = doorTimers[doorId];
-            var newIsOpen = (rawState === 'open' || rawState === 'open40');
-
-            if (curTimer) {
-              if (curTimer.isOpen === newIsOpen) {
-                // نفس الاتجاه → إيقاف
-                stopDoorTimer(doorId, newImgEl, newStateEl);
-                return;
-              } else {
-                // اتجاه معاكس → أوقف ثم ابدأ الاتجاه الجديد
-                stopDoorTimer(doorId, newImgEl, newStateEl);
-                // نجلب العناصر من جديد بعد stopDoorTimer
-                var freshImg = document.getElementById('door-img-' + doorId);
-                var freshSt  = document.getElementById('user-state-' + doorId)
-                            || document.getElementById('door-progress-' + doorId);
-                startDoorTimer(doorId, freshImg, freshSt, newSecs, rawState);
-                updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
-                return;
-              }
-            }
-
-            // لا تايمر → ابدأ من الموضع الحالي
-            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
-            updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
-          } else if (!hasTimer) {
-            if (rawState !== 'idle') lastKnownState[doorId] = rawState;
-            // إذا RC close بدون تايمر → الباب في موضعه الحالي
-            // إذا doorPos غير معروف → نفترض الوضع المنطقي
-            if (rawState === 'close' && (doorPos[doorId] === undefined || doorPos[doorId] > 0.95)) {
-              doorPos[doorId] = 1.0; // مفتوح كاملاً
-            } else if (rawState === 'open' && (doorPos[doorId] === undefined || doorPos[doorId] < 0.05)) {
-              doorPos[doorId] = 0.0; // مغلق كاملاً
-            }
-            startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
+            startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           }
-          // source=app + تايمر شغال → App يتحكم، لا نتدخل
+          // تايمر شغال من App → لا نتدخل
         }
 
         // تحديث السجل إذا جاء من RC
@@ -337,38 +314,33 @@ const doorTimers      = {};  // doorTimers[doorId] = { _raf }
 const lastKnownState  = {};  // lastKnownState[doorId] = 'open'|'close' — آخر حالة حقيقية
 
 function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
-  // أوقف أي أنيميشن سابق
   if (doorTimers[doorId] && doorTimers[doorId]._raf) {
     cancelAnimationFrame(doorTimers[doorId]._raf);
   }
 
   var isOpen = (action === 'open' || action === 'open40');
-  var n      = Math.max(seconds, 1) + 2;
-  var nDisplay = Math.max(seconds, 1);
+  var n      = Math.max(seconds, 1) + 2; // +2 ثانية هامش للإيقاف
 
-  // الموضع الحالي الفيزيائي
-  // إذا doorPos غير معروف → نفترض البداية المنطقية
   if (doorPos[doorId] === undefined) {
     doorPos[doorId] = isOpen ? 0.0 : 1.0;
   }
-  var curPos = doorPos[doorId];
-  var toPos  = isOpen ? 1.0 : 0.0;
-  var dist   = Math.abs(toPos - curPos);
 
-  // إذا الباب وصل بالفعل للنهاية (fin de course) → لا أنيميشن
-  if (dist <= 0.01) return;
+  var fromPos = doorPos[doorId];
+  var toPos   = isOpen ? 1.0 : 0.0;
+  var dist    = Math.abs(toPos - fromPos);
 
-  var fromPos   = curPos;
+  if (dist <= 0.01) return; // وصل بالفعل
+
   var startTime = Date.now();
-  // المدة = n ثانية كاملة دائماً (الجهاز يشتغل n ثانية)
   var totalMs   = n * 1000;
+  var gen       = ((doorTimers[doorId] || {gen: 0}).gen || 0) + 1;
 
-  doorTimers[doorId] = { _raf: null, startTime: startTime, isOpen: isOpen,
-                         gen: ((doorTimers[doorId]||{gen:0}).gen + 1) };
+  doorTimers[doorId] = { _raf: null, startTime: startTime, isOpen: isOpen, gen: gen };
 
   function tick() {
     var t = doorTimers[doorId];
-    if (!t) return;
+    if (!t || t.gen !== gen) return;
+
     var elapsed  = Date.now() - startTime;
     var progress = Math.min(elapsed / totalMs, 1);
     var pos      = fromPos + (toPos - fromPos) * progress;
@@ -376,13 +348,11 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
 
     // النسبة: للفتح = pos، للغلق = (1-pos)
     var displayPct = isOpen ? pos : (1 - pos);
-
     _drawDoorProgress(imgEl, stateEl, displayPct, isOpen, false, pos);
 
     if (progress < 1) {
       t._raf = requestAnimationFrame(tick);
     } else {
-      // اكتمل
       doorPos[doorId] = toPos;
       delete doorTimers[doorId];
       doorCompletedAt[doorId] = Date.now();
@@ -400,55 +370,27 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
 
 function stopDoorTimer(doorId, imgEl, stateEl) {
   var t = doorTimers[doorId];
-  if (!t) return;
-  if (t._raf) cancelAnimationFrame(t._raf);
-  // نأخذ isOpen من التايمر قبل حذفه
-  var isOpenDir = t ? t.isOpen : null;
+  if (t && t._raf) cancelAnimationFrame(t._raf);
+  var isOpen = t ? t.isOpen : (doorPos[doorId] >= 0.5);
   delete doorTimers[doorId];
-  var pos    = doorPos[doorId] !== undefined ? doorPos[doorId] : 0;
-  var isOpen = (isOpenDir !== null && isOpenDir !== undefined) ? isOpenDir : (pos >= 0.5);
-  // النسبة المعروضة: للفتح = pos، للغلق = (1-pos)
-  var displayPct = isOpen ? pos : (1 - pos);
-  var pctInt = Math.round(displayPct * 100);
-  var stopText = '⏹ متوقف — ' + pctInt + '%';
-  var stopCss  = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(255,179,0,0.15);color:var(--warning);border:1px solid rgba(255,179,0,0.3)';
 
-  // رسم الحالة المجمّدة في صورة الباب
+  var pos        = doorPos[doorId] !== undefined ? doorPos[doorId] : 0;
+  var displayPct = isOpen ? pos : (1 - pos);
+  var pctInt     = Math.round(displayPct * 100);
+
   var img = imgEl || document.getElementById('door-img-' + doorId);
   var ste = stateEl
-         || document.getElementById('user-state-'    + doorId)
+         || document.getElementById('user-state-' + doorId)
          || document.getElementById('door-progress-' + doorId);
+
   _drawDoorProgress(img, ste, displayPct, isOpen, true, pos);
 
-  // badge الحالة — كل الأنواع
-  ['adm-status-', 'door-status-'].forEach(function(prefix) {
-    var el = document.getElementById(prefix + doorId);
-    if (el) {
-      el.innerHTML = stopText;
-      el.style.cssText = stopCss;
-    }
+  var stopCss = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(255,179,0,0.15);color:var(--warning);border:1px solid rgba(255,179,0,0.3)';
+  var stopTxt = '⏹ متوقف — ' + pctInt + '%';
+  ['adm-status-', 'door-status-'].forEach(function(pfx) {
+    var el = document.getElementById(pfx + doorId);
+    if (el) { el.textContent = stopTxt; el.style.cssText = stopCss; }
   });
-
-  // user-state
-  var userSt = document.getElementById('user-state-' + doorId);
-  if (userSt) {
-    userSt.style.color = 'var(--warning)';
-    userSt.innerHTML =
-      '<span style="width:9px;height:9px;border-radius:50%;background:var(--warning);display:inline-block;box-shadow:0 0 6px var(--warning)"></span>' +
-      ' ' + stopText;
-  }
-
-  // progress bar
-  var prog = document.getElementById('door-progress-' + doorId);
-  if (prog && prog !== ste) {
-    prog.innerHTML =
-      '<div style="flex:1">' +
-        '<div style="font-size:0.85rem;font-weight:700;margin-bottom:5px;color:var(--warning)">' + stopText + '</div>' +
-        '<div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden">' +
-          '<div style="height:100%;width:' + pctInt + '%;background:var(--warning);border-radius:3px"></div>' +
-        '</div>' +
-      '</div>';
-  }
 }
 
 function _cancelDoorTimer(doorId) {
