@@ -1,3 +1,47 @@
+function updateDeviceOnlineBadge(deviceId, online) {
+  var color = online ? 'var(--success)' : 'var(--danger)';
+  var bg    = online ? 'rgba(0,230,118,0.12)' : 'rgba(255,61,113,0.12)';
+  var bdr   = online ? 'rgba(0,230,118,0.3)' : 'rgba(255,61,113,0.3)';
+  var text  = online ? '🟢 متصل' : '🔴 غير متصل';
+
+  doorStatusCache[deviceId] = online;
+
+  var foundIds = [];
+  document.querySelectorAll('[data-device-id="' + deviceId + '"]').forEach(function(el) {
+    var doorId = el.getAttribute('data-door-id') || el.id.replace('door-img-', '');
+    if (doorId && !foundIds.includes(doorId)) foundIds.push(doorId);
+  });
+  if (foundIds.length === 0 && typeof institutesCache !== 'undefined') {
+    institutesCache.forEach(function(inst) {
+      (inst.doors||[]).forEach(function(d) {
+        if (d.device_id === deviceId) foundIds.push(d.id);
+      });
+    });
+  }
+  foundIds.forEach(function(doorId) {
+    var admOnline = document.getElementById('adm-online-' + doorId);
+    if (admOnline) {
+      admOnline.textContent = text;
+      admOnline.style.cssText = 'font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:' + bg + ';color:' + color + ';border:1px solid ' + bdr;
+    }
+    var userOnline = document.getElementById('user-online-' + doorId);
+    if (userOnline) {
+      userOnline.textContent = text;
+      userOnline.style.cssText = 'font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:' + bg + ';color:' + color;
+    }
+  });
+  document.querySelectorAll('[id^="enligne-"]').forEach(function(span) {
+    var instId = span.id.replace('enligne-', '');
+    var inst = (typeof institutesCache !== 'undefined') && institutesCache.find(function(i) { return i.id === instId; });
+    if (!inst || !inst.doors) return;
+    var total   = inst.doors.length;
+    var onlineN = inst.doors.filter(function(d) { return doorStatusCache[d.device_id] === true; }).length;
+    span.textContent = onlineN + '/' + total;
+    span.parentElement.style.color = onlineN > 0 ? 'var(--success)' : 'var(--danger)';
+  });
+}
+
+
 // تحديث بطاقة الباب في صفحة المؤسسات/الأدمن
 function updateDoorCardState(doorId, deviceId, state, source) {
   var statusEl = document.getElementById('door-status-' + doorId);
