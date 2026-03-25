@@ -1181,9 +1181,8 @@ async function pollAllDoors() {
 
         if (changed) {
           anyChange = true;
-          // تغيير حدث → burst فوري لـ 0.2s
-          triggerBurst(_lastChangeDur || 10);
-          _lastChange = Date.now();
+          _lastChange = Date.now(); // سجّل وقت آخر تغيير
+          _pollInterval = POLL_FAST; // انتقل فوراً لـ 0.2s
 
           const lastApp   = appLastAction.get(door.device_id);
           const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
@@ -1221,15 +1220,12 @@ async function pollAllDoors() {
     const sinceChange = (now - _lastChange) / 1000; // ثوانٍ منذ آخر تغيير
     const n         = _lastChangeDur || 5;
 
-    if (sinceChange < n + 1) {
-      // ما زلنا في فترة الحدث → 200ms
-      _pollInterval = POLL_FAST;
-    } else if (anyOffline && !anyChange) {
-      // كل الأجهزة offline → 30s
-      _pollInterval = POLL_OFFLINE;
+    // إذا مرّت n ثانية بدون تغيير → رجوع 3s
+    const sinceLastChange = (Date.now() - _lastChange) / 1000;
+    if (sinceLastChange < n + 1) {
+      _pollInterval = POLL_FAST;   // نشاط → 0.2s
     } else {
-      // هدوء → 3s
-      _pollInterval = POLL_NORMAL;
+      _pollInterval = POLL_NORMAL; // هدوء → 3s
     }
 
   } catch(e) { console.error('[Polling Error]', e.message); }
