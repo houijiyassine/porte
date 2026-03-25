@@ -179,9 +179,19 @@ function connectWS() {
 
         if (rawState === 'idle') {
           if (hasTimer) {
-            // idle + تايمر شغال → نتجاهله تماماً
-            // التايمر يكمل n ثانية بنفسه
-            // الإيقاف الحقيقي يتم من زر إيقاف في التطبيق فقط
+            // idle + تايمر شغال
+            // نحسب عدد مرات idle المتتالية
+            doorIdleCount[doorId] = (doorIdleCount[doorId] || 0) + 1;
+            var _did = doorId, _img = imgEl, _st = stateEl, _dev = msg.deviceId, _src = msg.source;
+            var _cnt = doorIdleCount[doorId];
+            // إذا جاء idle مرتين خلال 700ms → إيقاف حقيقي من RC
+            setTimeout(function() {
+              if (doorIdleCount[_did] >= _cnt + 1 && doorTimers[_did]) {
+                doorIdleCount[_did] = 0;
+                stopDoorTimer(_did, _img, _st);
+                updateDoorCardState(_did, _dev, 'idle', _src);
+              }
+            }, 700);
           } else {
             var completed = doorCompletedAt[doorId];
             if (!completed || (Date.now() - completed) >= 3000) {
@@ -200,10 +210,7 @@ function connectWS() {
           var newSecs = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
 
           if (msg.source === 'rc') {
-            lastKnownState[doorId] = rawState;
-            // نحسب الـ delay بين لحظة حدوث الحدث ولحظة وصوله للتطبيق
-            // نبدأ التايمر فوراً من الموضع الحالي
-            // الأنيميشن يعتمد على الثواني الفعلية في التطبيق
+            doorIdleCount[doorId] = 0; // صفّر عداد idle
             lastKnownState[doorId] = rawState;
             startDoorTimer(doorId, newImgEl, newStateEl, newSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
@@ -302,6 +309,7 @@ let timerInterval = null;
 // ═══════════════════════════════════════════════════════
 const doorPos         = {};  // doorPos[doorId]    = موضع الباب (0→1)
 const doorCompletedAt = {};  // doorCompletedAt[doorId] = timestamp اكتمال الأنيميشن
+const doorIdleCount   = {};  // عدد مرات idle المتتالية أثناء التايمر
 const doorTimers      = {};  // doorTimers[doorId] = { _raf }
 const lastKnownState  = {};  // lastKnownState[doorId] = 'open'|'close' — آخر حالة حقيقية
 
