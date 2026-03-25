@@ -202,13 +202,12 @@ function connectWS() {
             lastKnownState[doorId] = rawState;
             var curTimer  = doorTimers[doorId];
             var newIsOpen = (rawState === 'open' || rawState === 'open40');
+            console.log('[RC]', rawState, 'curTimer=', !!curTimer, 'timerIsOpen=', curTimer?curTimer.isOpen:'N/A', 'newIsOpen=', newIsOpen, 'doorPos=', doorPos[doorId]);
             if (curTimer) {
               if (curTimer.isOpen !== newIsOpen) {
-                // اتجاه معاكس = RC ضغط إيقاف → أوقف التايمر فقط
                 stopDoorTimer(doorId, newImgEl, newStateEl);
-                return; // لا نبدأ تايمر جديد — الباب توقف
+                return;
               } else {
-                // نفس الاتجاه → تجاهل (fin de course)
                 return;
               }
             }
