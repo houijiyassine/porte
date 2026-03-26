@@ -226,7 +226,7 @@ function bootApp() {
     document.getElementById('nav-institutes').style.display = 'flex';
     // تغيير كلمة "المؤسسات" إلى "الأبواب" للمستخدم
     var navLabel = document.getElementById('nav-institutes-label');
-    if (navLabel) navLabel.textContent = 'الأبواب';
+    if (navLabel) navLabel.textContent = '';
     document.getElementById('nav-institutes').classList.add('active');
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('page-institutes').classList.add('active');
@@ -1863,13 +1863,13 @@ async function loadUserDoors() {
       // ─── Row 3: النسبة تحت الصورة ───
       var pctRow = document.createElement('div');
       pctRow.id = 'door-pct-' + door.id;
-      pctRow.style.cssText = 'text-align:center;font-size:0.8rem;color:var(--muted);margin-bottom:4px';
+      pctRow.style.cssText = 'text-align:center;font-size:0.85rem;font-weight:700;color:var(--muted);margin-bottom:6px';
       card.appendChild(pctRow);
 
-      // ─── Row 4: شريط حالة الباب ───
+      // ─── Row 4: شريط حالة الباب (بدون نسبة) ───
       var stateBar = document.createElement('div');
       stateBar.id = 'user-state-' + door.id;
-      stateBar.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;min-height:40px;font-weight:700;font-size:0.9rem';
+      stateBar.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:flex-end;min-height:40px;font-weight:700;font-size:0.9rem';
       stateBar.innerHTML = '<span style="color:var(--muted)">جاري التحقق...</span>';
       card.appendChild(stateBar);
 
