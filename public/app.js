@@ -567,13 +567,22 @@ function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped, curPos) {
     stateEl.style.background = 'var(--surface2)';
     stateEl.style.display    = 'flex';
     stateEl.style.alignItems = 'center';
-    stateEl.innerHTML =
-      '<div style="flex:1">' +
-        '<div style="font-size:0.85rem;font-weight:700;margin-bottom:5px">' + statusTxt + '</div>' +
-        '<div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden">' +
-          '<div style="height:100%;width:' + pctInt + '%;background:' + color + ';border-radius:3px;transition:width 0.1s"></div>' +
-        '</div>' +
-      '</div>';
+    stateEl.style.justifyContent = 'flex-end';
+    stateEl.style.padding    = '10px 14px';
+    stateEl.style.borderRadius = '10px';
+    stateEl.style.fontWeight = '700';
+    stateEl.style.fontSize   = '0.9rem';
+    stateEl.innerHTML = '<span style="font-size:1.1rem;margin-left:8px">' + (isStopped ? '⏹' : isOpen ? '🔓' : '🔒') + '</span>' +
+      (isStopped ? 'الباب متوقف' : isOpen ? 'الباب يفتح...' : 'الباب يغلق...');
+    // تحديث door-pct- بالنسبة
+    var doorIdFromEl = stateEl.id ? stateEl.id.replace('user-state-','').replace('door-progress-','') : null;
+    if (doorIdFromEl) {
+      var pctDisplay = document.getElementById('door-pct-' + doorIdFromEl);
+      if (pctDisplay) {
+        pctDisplay.style.color = color;
+        pctDisplay.textContent = pctInt + '%';
+      }
+    }
   }
 }
 
