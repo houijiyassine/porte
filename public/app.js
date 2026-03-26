@@ -129,9 +129,13 @@ function bootApp() {
 
   const roleBadge = document.getElementById('header-role-badge');
   const roleLabels = { user:'مستخدم', admin:'مدير', super_admin:'سوبر أدمن' };
-  roleBadge.textContent = roleLabels[user.role] || user.role;
-  roleBadge.className = 'role-badge ' +
-    (user.role==='super_admin' ? 'role-super' : user.role==='admin' ? 'role-admin' : 'role-user');
+  if (user.role !== 'admin') {
+    roleBadge.textContent = roleLabels[user.role] || user.role;
+    roleBadge.className = 'role-badge ' +
+      (user.role==='super_admin' ? 'role-super' : user.role==='admin' ? 'role-admin' : 'role-user');
+  } else {
+    roleBadge.style.display = 'none';
+  }
 
   const pname = document.getElementById('profile-name');
   const prole = document.getElementById('profile-role');
@@ -193,6 +197,22 @@ function bootApp() {
     document.getElementById('nav-institutes').classList.add('active');
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('page-institutes').classList.add('active');
+    // إضافة اسم المؤسسة في الـ header
+    apiFetch('/api/institutes').then(function(insts) {
+      var inst = Array.isArray(insts) ? insts[0] : null;
+      if (!inst) return;
+      var logo = document.querySelector('.header-logo');
+      if (logo) {
+        var instSpan = document.getElementById('header-inst-name');
+        if (!instSpan) {
+          instSpan = document.createElement('span');
+          instSpan.id = 'header-inst-name';
+          instSpan.style.cssText = 'font-size:0.78rem;font-weight:700;color:var(--muted);margin-right:8px;padding:3px 10px;background:var(--surface2);border-radius:20px;border:1px solid var(--border)';
+          logo.parentNode.insertBefore(instSpan, logo.nextSibling);
+        }
+        instSpan.textContent = inst.name;
+      }
+    }).catch(function(){});
     loadAdminDoors();
     // إخفاء عنوان "المؤسسات" وزر الإضافة للأدمن
     var addInstBtn = document.getElementById('inst-add-btn');
@@ -207,6 +227,9 @@ function bootApp() {
     document.getElementById('nav-institutes').classList.add('active');
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('page-institutes').classList.add('active');
+    // إظهار avatar للمستخدم
+    var av = document.getElementById('header-avatar');
+    if (av) av.style.display = 'flex';
     startUserLocationTracking();
     // إخفاء عناصر غير ضرورية للمستخدم
     var addBtn = document.getElementById('inst-add-btn');
@@ -2025,8 +2048,7 @@ async function loadAdminDoors() {
     var instHeader = document.createElement('div');
     instHeader.style.cssText = 'text-align:center;margin-bottom:20px;padding:14px 20px;background:var(--surface);border:1px solid var(--border);border-radius:16px';
     instHeader.innerHTML =
-      '<div style="font-size:1.1rem;font-weight:900;color:var(--text)">🏫 ' + inst.name + '</div>' +
-      '<div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:3px">🔑 ' + inst.code + '</div>';
+      '<div style="font-size:1.1rem;font-weight:900;color:var(--text)">🏫 ' + inst.name + '</div>';
     container.appendChild(instHeader);
 
     (inst.doors||[]).forEach(function(door) {
