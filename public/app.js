@@ -129,11 +129,11 @@ function bootApp() {
 
   const roleBadge = document.getElementById('header-role-badge');
   const roleLabels = { user:'مستخدم', admin:'مدير', super_admin:'سوبر أدمن' };
-  if (user.role !== 'admin') {
+  if (user.role === 'super_admin') {
     roleBadge.textContent = roleLabels[user.role] || user.role;
-    roleBadge.className = 'role-badge ' +
-      (user.role==='super_admin' ? 'role-super' : user.role==='admin' ? 'role-admin' : 'role-user');
+    roleBadge.className = 'role-badge role-super';
   } else {
+    // إخفاء role badge للأدمن والمستخدم
     roleBadge.style.display = 'none';
   }
 
@@ -224,6 +224,9 @@ function bootApp() {
   } else {
     document.querySelectorAll('.nav-item').forEach(function(n){ n.style.display = 'none'; });
     document.getElementById('nav-institutes').style.display = 'flex';
+    // تغيير كلمة "المؤسسات" إلى "الأبواب" للمستخدم
+    var navLabel = document.getElementById('nav-institutes-label');
+    if (navLabel) navLabel.textContent = 'الأبواب';
     document.getElementById('nav-institutes').classList.add('active');
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('page-institutes').classList.add('active');
