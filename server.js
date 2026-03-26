@@ -775,7 +775,7 @@ app.post('/api/doors', authMiddleware, adminOnly, async (req, res) => {
 app.put('/api/doors/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
     const updates = {};
-    ['name','location','device_id','duration_seconds','is_active','gps','schedule','rc_notify'].forEach(k => {
+    ['name','location','device_id','duration_seconds','is_active','gps','schedule','rc_notify','door_type'].forEach(k => {
       if (req.body[k] !== undefined) updates[k] = req.body[k];
     });
     const { data, error } = await supabase.from('doors').update(updates).eq('id', req.params.id).select().single();
