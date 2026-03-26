@@ -244,6 +244,8 @@ function connectWS() {
         var stateEl = document.getElementById('user-state-' + doorId)
                    || document.getElementById('door-progress-bar-' + doorId)
                    || document.getElementById('door-progress-' + doorId);
+        // نسبة منفصلة لصفحة الأدمن
+        var pctEl = document.getElementById('door-pct-' + doorId);
         var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
         var nSecs   = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
         var newIsOpen = (rawState === 'open' || rawState === 'open40');
@@ -355,6 +357,10 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
     // النسبة: للفتح = pos، للغلق = (1-pos)
     var displayPct = isOpen ? pos : (1 - pos);
     _drawDoorProgress(imgEl, stateEl, displayPct, isOpen, false, pos);
+    if (typeof pctEl !== 'undefined' && pctEl) {
+      pctEl.style.color = isOpen ? 'var(--success)' : 'var(--danger)';
+      pctEl.textContent = Math.round(displayPct * 100) + '%';
+    }
 
     if (progress < 1) {
       t._raf = requestAnimationFrame(tick);
@@ -391,6 +397,11 @@ function stopDoorTimer(doorId, imgEl, stateEl) {
          || document.getElementById('door-progress-' + doorId);
 
   _drawDoorProgress(img, ste, displayPct, isOpen, true, pos);
+  var pctElStop = document.getElementById('door-pct-' + doorId);
+  if (pctElStop) {
+    pctElStop.style.color = '#ffb300';
+    pctElStop.textContent = pctInt + '%';
+  }
 
   var stopCss = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(255,179,0,0.15);color:var(--warning);border:1px solid rgba(255,179,0,0.3)';
   var stopTxt = '⏹ متوقف — ' + pctInt + '%';
@@ -1991,87 +2002,81 @@ async function loadAdminDoors() {
     }
     container.innerHTML = '';
 
-    // بطاقة المؤسسة
-    var instCard = document.createElement('div');
-    instCard.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:16px 20px;margin-bottom:16px';
-    instCard.innerHTML =
-      '<div style="font-size:1.1rem;font-weight:800">🏫 ' + inst.name + '</div>' +
-      '<div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:3px">🔑 ' + inst.code + '</div>';
-    container.appendChild(instCard);
-
-    // زر إضافة باب — للسوبر أدمن فقط
-    if (user && user.role === 'super_admin') {
-      var btnAddDoor = document.createElement('button');
-      btnAddDoor.style.cssText = 'width:100%;padding:12px;border-radius:12px;border:1px dashed rgba(0,230,118,0.3);background:rgba(0,230,118,0.05);color:var(--success);font-family:Cairo,sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;margin-bottom:16px';
-      btnAddDoor.textContent = '+ إضافة باب جديد';
-      btnAddDoor.addEventListener('click', function() { openAddDoor(inst.id); });
-      container.appendChild(btnAddDoor);
-    }
-
     (inst.doors||[]).forEach(function(door) {
       var card = document.createElement('div');
-      card.style.cssText = 'background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:16px;margin-bottom:12px';
+      card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;margin-bottom:16px;position:relative;overflow:hidden';
       card.setAttribute('data-door-id', door.id);
       card.setAttribute('data-duration', door.duration_seconds || 5);
       card.setAttribute('data-door-type', door.door_type || 'battante');
-      card.setAttribute('data-door-type', door.door_type || 'battante');
 
-      // Header: صورة + اسم + badges
-      var hdr = document.createElement('div');
-      hdr.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:12px';
-      hdr.innerHTML =
-        '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">' +
-          '<div id="door-img-' + door.id + '" data-device-id="' + door.device_id + '" data-door-id="' + door.id + '" data-door-type="' + (door.door_type||'battante') + '" style="width:64px;height:80px"></div>' +
-          '<span id="adm-online-' + door.id + '" style="font-size:0.62rem;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
-        '</div>' +
-        '<div style="flex:1">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-            '<div style="font-weight:800;font-size:0.95rem">🚪 ' + door.name + '</div>' +
-            '<span id="adm-status-' + door.id + '" style="font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
-          '</div>' +
-          '<div id="door-progress-' + door.id + '" style="font-size:0.8rem;color:var(--muted);display:flex;align-items:center;min-height:28px"></div>' +
+      // خط جانبي
+      var line = document.createElement('div');
+      line.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--accent),var(--accent2))';
+      card.appendChild(line);
+
+      // ─── Row 1: متصل (يسار) + اسم الباب (يمين) ───
+      var row1 = document.createElement('div');
+      row1.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:16px';
+      row1.innerHTML =
+        '<span id="adm-online-' + door.id + '" style="font-size:0.75rem;font-weight:700;padding:4px 12px;border-radius:20px;background:var(--surface2);color:var(--muted)">...</span>' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<div style="font-size:1rem;font-weight:800">' + door.name + '</div>' +
+          '<div id="door-img-icon-' + door.id + '" style="font-size:1.1rem">🚪</div>' +
         '</div>';
-      card.appendChild(hdr);
+      card.appendChild(row1);
 
-      // شريط النسبة (فوق أزرار التحكم)
-      var progressBar = document.createElement('div');
-      progressBar.id = 'door-progress-bar-' + door.id;
-      progressBar.style.cssText = 'margin-bottom:10px;min-height:28px;display:flex;align-items:center';
-      card.appendChild(progressBar);
+      // ─── Row 2: صورة الباب الكبيرة ───
+      var imgWrap = document.createElement('div');
+      imgWrap.style.cssText = 'width:100%;aspect-ratio:4/3;margin-bottom:8px;position:relative';
+      imgWrap.innerHTML = '<div id="door-img-' + door.id + '" data-device-id="' + door.device_id + '" data-door-id="' + door.id + '" data-door-type="' + (door.door_type||'battante') + '" style="width:100%;height:100%"></div>';
+      card.appendChild(imgWrap);
 
-      // أزرار التحكم
+      // ─── Row 3: النسبة تحت الصورة ───
+      var pctRow = document.createElement('div');
+      pctRow.style.cssText = 'text-align:center;font-size:0.8rem;color:var(--muted);margin-bottom:4px';
+      pctRow.id = 'door-pct-' + door.id;
+      card.appendChild(pctRow);
+
+      // ─── Row 4: شريط حالة الباب ───
+      var stateBar = document.createElement('div');
+      stateBar.id = 'door-progress-' + door.id;
+      stateBar.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;min-height:40px';
+      card.appendChild(stateBar);
+
+      // ─── Row 5: أزرار التحكم 4 ───
       var grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px';
-      [['🟢','فتح','open','rgba(0,230,118,0.15)','rgba(0,230,118,0.3)','var(--success)'],
-       ['🔴','غلق','close','rgba(255,61,113,0.15)','rgba(255,61,113,0.3)','var(--danger)'],
-       ['🟡','إيقاف','stop','rgba(255,179,0,0.15)','rgba(255,179,0,0.3)','var(--warning)'],
-       ['⏱','40ث','open40','rgba(0,212,255,0.15)','rgba(0,212,255,0.3)','var(--accent)']
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px';
+      [
+        ['فتح',        'open',   'rgba(0,230,118,0.15)','rgba(0,230,118,0.3)','var(--success)','🟢'],
+        ['غلق',        'close',  'rgba(255,61,113,0.15)','rgba(255,61,113,0.3)','var(--danger)','🔴'],
+        ['إيقاف',      'stop',   'rgba(255,179,0,0.15)','rgba(255,179,0,0.3)','var(--warning)','🟡'],
+        ['فتح 40ث','open40','rgba(0,212,255,0.15)','rgba(0,212,255,0.3)','var(--accent)','⏱'],
       ].forEach(function(item) {
         var btn = document.createElement('button');
-        btn.style.cssText = 'padding:12px 4px;border-radius:12px;border:1px solid ' + item[4] + ';background:' + item[3] + ';color:' + item[5] + ';font-family:Cairo,sans-serif;font-weight:700;font-size:0.8rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px';
-        btn.innerHTML = item[0] + '<span>' + item[1] + '</span>';
-        btn.addEventListener('click', (function(did, act, dur){ return function(){ sendDoorAction(did, act, dur); }; })(door.device_id, item[2], door.duration_seconds||5));
+        btn.style.cssText = 'padding:14px 4px;border-radius:14px;border:1px solid ' + item[3] + ';background:' + item[2] + ';color:' + item[4] + ';font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;line-height:1.3';
+        btn.innerHTML = '<span style="font-size:1rem">' + item[5] + '</span><span>' + item[0] + '</span>';
+        btn.addEventListener('click', (function(did, act, dur){ return function(){ sendDoorAction(did, act, dur); }; })(door.device_id, item[1], door.duration_seconds||5));
         grid.appendChild(btn);
       });
       card.appendChild(grid);
 
-      // GPS + RC notify بجانب بعض
+      // ─── Row 6: GPS + RC notify بجانب بعض ───
       var userReq  = door.gps && door.gps.user_required;
       var rcNotify = door.rc_notify === true;
       var toggleRow = document.createElement('div');
-      toggleRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px';
+      toggleRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px';
       toggleRow.innerHTML =
         '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">' +
           '<div>' +
-            '<div style="font-size:0.72rem;font-weight:700">📍 GPS</div>' +
-            '<div style="font-size:0.68rem;color:' + (userReq?'var(--success)':'var(--danger)') + ';font-weight:700">' + (userReq?'مفعّل':'معطّل') + '</div>' +
+            '<div style="font-size:0.75rem;font-weight:700">📍 GPS</div>' +
+            '<div style="font-size:0.7rem;color:' + (userReq?'var(--success)':'var(--danger)') + ';font-weight:700">' + (userReq?'مفعّل':'معطّل') + '</div>' +
           '</div>' +
           '<label class="toggle-switch"><input type="checkbox" ' + (userReq?'checked':'') + ' id="gps-toggle-' + door.id + '"><span class="toggle-knob"></span></label>' +
         '</div>' +
         '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">' +
           '<div>' +
-            '<div style="font-size:0.72rem;font-weight:700">📻 RC</div>' +
-            '<div style="font-size:0.68rem;color:' + (rcNotify?'var(--success)':'var(--danger)') + ';font-weight:700">' + (rcNotify?'مفعّل':'معطّل') + '</div>' +
+            '<div style="font-size:0.75rem;font-weight:700">📻 اشعار عند استعمال RC</div>' +
+            '<div style="font-size:0.7rem;color:' + (rcNotify?'var(--success)':'var(--danger)') + ';font-weight:700">' + (rcNotify?'مفعّل':'معطّل') + '</div>' +
           '</div>' +
           '<label class="toggle-switch"><input type="checkbox" ' + (rcNotify?'checked':'') + ' id="rc-toggle-' + door.id + '"><span class="toggle-knob"></span></label>' +
         '</div>';
@@ -2085,16 +2090,16 @@ async function loadAdminDoors() {
         }, 50);
       })(door.id);
 
-      // سجل + جدول
+      // ─── Row 7: سجل + جدول ───
       var logRow = document.createElement('div');
       logRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px';
       var btnLog = document.createElement('button');
-      btnLog.style.cssText = 'padding:10px;border-radius:10px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
+      btnLog.style.cssText = 'padding:11px;border-radius:12px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.08);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.8rem;font-weight:700;cursor:pointer';
       btnLog.textContent = '📋 سجل الباب';
       btnLog.addEventListener('click', (function(id, name){ return function(){ openDoorLogs(id, name); }; })(door.id, door.name));
       logRow.appendChild(btnLog);
       var btnSched = document.createElement('button');
-      btnSched.style.cssText = 'padding:10px;border-radius:10px;border:1px solid rgba(255,179,0,0.2);background:rgba(255,179,0,0.08);color:var(--warning);font-family:Cairo,sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer';
+      btnSched.style.cssText = 'padding:11px;border-radius:12px;border:1px solid rgba(255,179,0,0.2);background:rgba(255,179,0,0.08);color:var(--warning);font-family:Cairo,sans-serif;font-size:0.8rem;font-weight:700;cursor:pointer';
       btnSched.textContent = '🕐 جدول الأوقات';
       btnSched.addEventListener('click', (function(d){ return function(){ openDoorSchedule(d.id, d.name, d.schedule||{}); }; })(door));
       logRow.appendChild(btnSched);
@@ -2108,7 +2113,6 @@ async function loadAdminDoors() {
     container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:40px 0">❌ ' + e.message + '</p>';
   }
 }
-
 
 // تبويبة المستخدمين للمدير
 async function loadAdminUsers() {
