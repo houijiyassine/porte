@@ -176,6 +176,11 @@ function bootApp() {
     var navStats  = document.getElementById('nav-stats');
     if (navAlerts) navAlerts.style.display = 'flex';
     if (navStats)  navStats.style.display  = 'flex';
+    // إظهار عنوان المؤسسات وزر الإضافة للسوبر أدمن فقط
+    var instTitle2 = document.getElementById('inst-page-title');
+    var instAddBtn2 = document.getElementById('inst-add-btn');
+    if (instTitle2)  instTitle2.style.display  = 'block';
+    if (instAddBtn2) instAddBtn2.style.display = 'flex';
     showPage('institutes', document.getElementById('nav-institutes'));
   } else if (user.role === 'admin') {
     document.querySelectorAll('.nav-item').forEach(function(n){ n.style.display = 'none'; });
@@ -502,9 +507,9 @@ function _drawDoorSVG(type, color, pos, pct, isStopped) {
 function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped, curPos) {
   var pctInt    = Math.round(pct * 100);
   var color     = isStopped ? '#ffb300' : isOpen ? '#00e676' : '#ff3d71';
-  var statusTxt = isStopped ? ('⏹ متوقف — ' + pctInt + '%')
-                : isOpen    ? ('🔓 يفتح... — ' + pctInt + '%')
-                :             ('🔒 يغلق... — ' + pctInt + '%');
+  var statusTxt = isStopped ? ('⏹ الباب متوقف — ' + pctInt + '%')
+                : isOpen    ? ('🔓 الباب يفتح... — ' + pctInt + '%')
+                :             ('🔒 الباب يغلق... — ' + pctInt + '%');
   var pos  = curPos !== undefined ? curPos : (isOpen ? pct : 1 - pct);
   var type = _getDoorType(imgEl);
 
@@ -530,7 +535,7 @@ function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped, curPos) {
 // رسم الباب في حالة ثابتة
 function _drawDoorStatic(imgEl, stateEl, state) {
   var color  = state === 'open' ? '#00e676' : state === 'close' ? '#ff3d71' : '#ffb300';
-  var label  = state === 'open' ? 'مفتوح' : state === 'close' ? 'مغلق' : 'متوقف';
+  var label  = state === 'open' ? 'الباب مفتوح' : state === 'close' ? 'الباب مغلق' : 'الباب متوقف';
   var icon   = state === 'open' ? '🔓' : state === 'close' ? '🔒' : '⏹';
   var pos    = state === 'open' ? 1.0 : 0.0;
   var pct    = state === 'open' ? 1.0 : 0.0;
