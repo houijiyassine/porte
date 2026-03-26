@@ -377,6 +377,20 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
       lastKnownState[doorId] = finalState;
       setTimeout(function() {
         _drawDoorStatic(imgEl, stateEl, finalState);
+        // تحديث door-progress- بالحالة النهائية
+        var progFinal = document.getElementById('door-progress-' + doorId);
+        if (progFinal) {
+          var pfColor = finalState === 'open' ? 'var(--success)' : 'var(--danger)';
+          var pfIcon  = finalState === 'open' ? '🔓' : '🔒';
+          var pfLabel = finalState === 'open' ? 'الباب مفتوح' : 'الباب مغلق';
+          progFinal.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px;color:' + pfColor + ';font-weight:700;font-size:0.9rem';
+          progFinal.innerHTML = '<span style="font-size:1.1rem">' + pfIcon + '</span>' + pfLabel;
+        }
+        var pctFinal = document.getElementById('door-pct-' + doorId);
+        if (pctFinal) {
+          pctFinal.style.color = finalState === 'open' ? 'var(--success)' : 'var(--danger)';
+          pctFinal.textContent = finalState === 'open' ? '100%' : '0%';
+        }
         updateDoorCardState(doorId, null, finalState, 'auto');
       }, 400);
     }
@@ -2007,6 +2021,14 @@ async function loadAdminDoors() {
     }
     container.innerHTML = '';
 
+    // ─── اسم المؤسسة في الأعلى ───
+    var instHeader = document.createElement('div');
+    instHeader.style.cssText = 'text-align:center;margin-bottom:20px;padding:14px 20px;background:var(--surface);border:1px solid var(--border);border-radius:16px';
+    instHeader.innerHTML =
+      '<div style="font-size:1.1rem;font-weight:900;color:var(--text)">🏫 ' + inst.name + '</div>' +
+      '<div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:3px">🔑 ' + inst.code + '</div>';
+    container.appendChild(instHeader);
+
     (inst.doors||[]).forEach(function(door) {
       var card = document.createElement('div');
       card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;margin-bottom:16px;position:relative;overflow:hidden';
@@ -2428,14 +2450,24 @@ async function fetchAndUpdateDoorImage(door) {
       lastKnownState[door.id] = state; // حدّث الحالة المعروفة
     }
 
+    // رسم الصورة الثابتة
     if (imgEl) _drawDoorStatic(imgEl, null, state);
-    // تحديث door-progress-bar بالحالة الثابتة
-    var progBar = document.getElementById('door-progress-bar-' + door.id);
-    if (progBar) {
-      var pColor = state === 'open' ? 'var(--success)' : 'var(--danger)';
-      var pIcon  = state === 'open' ? '🔓 مفتوح' : '🔒 مغلق';
-      progBar.style.cssText = 'margin-bottom:10px;min-height:28px;display:flex;align-items:center;color:' + pColor + ';font-weight:700;font-size:0.85rem';
-      progBar.textContent = pIcon;
+
+    // كتابة الحالة في door-progress- (يبقى بعد refresh لأنه يُعاد جلبه)
+    var progEl = document.getElementById('door-progress-' + door.id);
+    if (progEl) {
+      var pColor = state === 'open' ? 'var(--success)' : state === 'close' ? 'var(--danger)' : 'var(--warning)';
+      var pIcon  = state === 'open' ? '🔓' : state === 'close' ? '🔒' : '⏹';
+      var pLabel = state === 'open' ? 'الباب مفتوح' : state === 'close' ? 'الباب مغلق' : 'الباب متوقف';
+      progEl.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px;color:' + pColor + ';font-weight:700;font-size:0.9rem';
+      progEl.innerHTML = '<span style="font-size:1.1rem">' + pIcon + '</span>' + pLabel;
+    }
+    // كتابة النسبة (100%)
+    var pctEl2 = document.getElementById('door-pct-' + door.id);
+    if (pctEl2) {
+      var p2Color = state === 'open' ? 'var(--success)' : 'var(--danger)';
+      pctEl2.style.color = p2Color;
+      pctEl2.textContent = state === 'open' ? '100%' : '0%';
     }
     updateDoorCardState(door.id, door.device_id, state, 'poll');
   } catch(e) {
