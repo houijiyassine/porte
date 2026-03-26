@@ -463,6 +463,7 @@
     <div class="header-user">
       <span class="role-badge" id="header-role-badge"></span>
       <div class="header-avatar" id="header-avatar">؟</div>
+      <div style="width:8px"></div>
       <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()" title="Mode Sombre/Clair">🌙</button>
       <button onclick="logout()" title="تسجيل الخروج" style="width:36px;height:36px;border-radius:50%;background:rgba(255,61,113,0.1);border:1px solid rgba(255,61,113,0.2);cursor:pointer;display:flex;align-items:center;justify-content:center">
         <svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" width="16" height="16"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
@@ -699,6 +700,40 @@
       <input type="hidden" id="edit-door-inst-id">
       <div class="form-group"><label>اسم الباب</label><input type="text" id="door-name" placeholder="الباب الرئيسي"></div>
       <div class="form-group"><label>الموقع</label><input type="text" id="door-location" placeholder="المدخل الأمامي"></div>
+      <div class="form-group">
+        <label>نوع الباب</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px" id="door-type-grid">
+          <label style="cursor:pointer">
+            <input type="radio" name="door-type" value="battante" checked style="display:none">
+            <div class="door-type-btn" data-type="battante" onclick="selectDoorType('battante')" style="background:rgba(0,212,255,0.15);border:2px solid var(--accent);border-radius:12px;padding:10px;text-align:center">
+              <div style="font-size:1.4rem">🚪</div>
+              <div style="font-size:0.75rem;font-weight:700;margin-top:4px">Porte Battante</div>
+            </div>
+          </label>
+          <label style="cursor:pointer">
+            <input type="radio" name="door-type" value="coulissante" style="display:none">
+            <div class="door-type-btn" data-type="coulissante" onclick="selectDoorType('coulissante')" style="background:var(--surface2);border:2px solid var(--border);border-radius:12px;padding:10px;text-align:center">
+              <div style="font-size:1.4rem">↔️</div>
+              <div style="font-size:0.75rem;font-weight:700;margin-top:4px">Porte Coulissante</div>
+            </div>
+          </label>
+          <label style="cursor:pointer">
+            <input type="radio" name="door-type" value="garage" style="display:none">
+            <div class="door-type-btn" data-type="garage" onclick="selectDoorType('garage')" style="background:var(--surface2);border:2px solid var(--border);border-radius:12px;padding:10px;text-align:center">
+              <div style="font-size:1.4rem">🏠</div>
+              <div style="font-size:0.75rem;font-weight:700;margin-top:4px">Porte Garage</div>
+            </div>
+          </label>
+          <label style="cursor:pointer">
+            <input type="radio" name="door-type" value="portail" style="display:none">
+            <div class="door-type-btn" data-type="portail" onclick="selectDoorType('portail')" style="background:var(--surface2);border:2px solid var(--border);border-radius:12px;padding:10px;text-align:center">
+              <div style="font-size:1.4rem">🔲</div>
+              <div style="font-size:0.75rem;font-weight:700;margin-top:4px">Portail</div>
+            </div>
+          </label>
+        </div>
+        <input type="hidden" id="door-type" value="battante">
+      </div>
       <div class="form-group"><label>Device ID</label><input type="text" id="door-device-id" placeholder="bf7c670914391fc80cwayk" style="direction:ltr;font-family:'JetBrains Mono'"></div>
       <div class="form-group">
         <label>مدة الفتح (ثانية)</label>
