@@ -227,10 +227,24 @@ function bootApp() {
     document.getElementById('nav-institutes').classList.add('active');
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('page-institutes').classList.add('active');
-    // إظهار avatar للمستخدم
-    var av = document.getElementById('header-avatar');
-    if (av) av.style.display = 'flex';
     startUserLocationTracking();
+    // إضافة اسم المستخدم في الهيدر
+    apiFetch('/api/institutes').then(function(insts) {
+      var inst = Array.isArray(insts) ? insts[0] : null;
+      var logo = document.querySelector('.header-logo');
+      if (logo && inst) {
+        var existing = document.getElementById('header-inst-name');
+        if (!existing) {
+          var instSpan = document.createElement('div');
+          instSpan.id = 'header-inst-name';
+          instSpan.style.cssText = 'display:flex;flex-direction:column;align-items:center;margin-right:8px';
+          instSpan.innerHTML =
+            '<span style="font-size:0.82rem;font-weight:800;color:var(--text)">' + inst.name + '</span>' +
+            '<span style="font-size:0.72rem;color:var(--accent)">مرحبا ' + (user.name||'') + '</span>';
+          logo.parentNode.insertBefore(instSpan, logo.nextSibling);
+        }
+      }
+    }).catch(function(){});
     // إخفاء عناصر غير ضرورية للمستخدم
     var addBtn = document.getElementById('inst-add-btn');
     if (addBtn) addBtn.style.display = 'none';
@@ -1410,8 +1424,30 @@ async function saveDoor() {
     if (id) { await apiFetch(`/api/doors/${id}`, 'PUT', body); }
     else    { await apiFetch('/api/doors', 'POST', body); }
     closeModal('modal-door');
-    loadInstitutes();
+    // تحديث نوع الباب في DOM فوراً بدون reload
+    if (id && body.door_type) {
+      var newType = body.door_type;
+      // تحديث كل العناصر التي تحمل data-door-id
+      document.querySelectorAll('[data-door-id="' + id + '"]').forEach(function(el) {
+        el.setAttribute('data-door-type', newType);
+        if (el.id && el.id.startsWith('door-img-')) {
+          // إعادة رسم الصورة بالنوع الجديد
+          el.setAttribute('data-door-type', newType);
+          var state = lastKnownState[id] || 'close';
+          _drawDoorStatic(el, null, state);
+        }
+      });
+      // تحديث cards
+      document.querySelectorAll('[data-door-id]').forEach(function(card) {
+        if (card.getAttribute('data-door-id') === id) {
+          card.setAttribute('data-door-type', newType);
+        }
+      });
+    }
     toast('تم الحفظ', 'success');
+    // إعادة تحميل لضمان التزامن
+    if (user && user.role === 'super_admin') loadInstitutes();
+    else if (user && user.role === 'admin') loadAdminDoors();
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -1781,15 +1817,6 @@ async function loadUserDoors() {
     }
     container.innerHTML = '';
 
-    // ─── بطاقة الترحيب ───
-    var welcome = document.createElement('div');
-    welcome.style.cssText = 'background:linear-gradient(135deg,rgba(0,212,255,0.1),rgba(124,92,252,0.1));border:1px solid rgba(0,212,255,0.2);border-radius:16px;padding:16px 20px;margin-bottom:20px;text-align:center';
-    welcome.innerHTML =
-      '<div style="font-size:1rem;color:var(--muted);margin-bottom:4px">أهلاً بك</div>' +
-      '<div style="font-size:1.3rem;font-weight:900;color:var(--text)">' + (user.name||'') + '</div>' +
-      '<div style="font-size:0.78rem;color:var(--accent);margin-top:4px">🏫 ' + inst.name + '</div>';
-    container.appendChild(welcome);
-
     inst.doors.forEach(function(door) {
       var gpsRange = (door.gps && door.gps.range !== undefined) ? door.gps.range : 100;
       var gpsLat   = door.gps && door.gps.lat;
@@ -1817,8 +1844,11 @@ async function loadUserDoors() {
       var row1 = document.createElement('div');
       row1.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:16px';
       row1.innerHTML =
-        '<span id="user-online-' + door.id + '" style="font-size:0.75rem;font-weight:700;padding:4px 12px;border-radius:20px;background:var(--surface2);color:var(--muted)">...</span>' +
-        '<div style="font-size:1rem;font-weight:800">' + door.name + ' 🚪</div>';
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<div id="door-img-icon-' + door.id + '" style="font-size:1.1rem">🚪</div>' +
+          '<div style="font-size:1rem;font-weight:800">' + door.name + '</div>' +
+        '</div>' +
+        '<span id="user-online-' + door.id + '" style="font-size:0.75rem;font-weight:700;padding:4px 12px;border-radius:20px;background:var(--surface2);color:var(--muted)">...</span>';
       card.appendChild(row1);
 
       // ─── Row 2: صورة الباب الكبيرة ───
@@ -1836,7 +1866,8 @@ async function loadUserDoors() {
       // ─── Row 4: شريط حالة الباب ───
       var stateBar = document.createElement('div');
       stateBar.id = 'user-state-' + door.id;
-      stateBar.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;min-height:40px';
+      stateBar.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;min-height:40px;font-weight:700;font-size:0.9rem';
+      stateBar.innerHTML = '<span style="color:var(--muted)">جاري التحقق...</span>';
       card.appendChild(stateBar);
 
       // ─── Row 5: أزرار التحكم 4 ───
