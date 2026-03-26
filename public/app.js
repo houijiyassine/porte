@@ -408,28 +408,97 @@ function _cancelDoorTimer(doorId) {
 }
 
 // رسم الباب أثناء الحركة
+function _getDoorType(imgEl) {
+  if (!imgEl) return 'battante';
+  var doorId = imgEl.getAttribute('data-door-id') || imgEl.id.replace('door-img-','');
+  var doorEl = doorId ? document.querySelector('[data-door-id="' + doorId + '"]') : null;
+  return (doorEl && doorEl.getAttribute('data-door-type')) || 'battante';
+}
+
+function _drawDoorSVG(type, color, pos, pct, isStopped) {
+  var pctInt = Math.round(pct * 100);
+
+  if (type === 'coulissante') {
+    // باب منزلق — يتحرك من اليمين لليسار
+    var slideX = pos * 56; // 0=مغلق, 56=مفتوح كاملاً
+    return '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">' +
+      // إطار
+      '<rect x="4" y="8" width="72" height="70" rx="3" fill="none" stroke="' + color + '" stroke-width="1.5" opacity="0.3"/>' +
+      // مسار الانزلاق
+      '<line x1="4" y1="12" x2="76" y2="12" stroke="' + color + '" stroke-width="1" opacity="0.3"/>' +
+      // الباب المنزلق
+      '<rect x="' + (4 + slideX).toFixed(1) + '" y="14" width="40" height="62" rx="2" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="1.6"/>' +
+      // مقبض
+      '<rect x="' + (36 + slideX).toFixed(1) + '" y="42" width="4" height="16" rx="2" fill="' + color + '" opacity="0.9"/>' +
+      // نسبة
+      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + pctInt + '%</text>' +
+      '</svg>';
+
+  } else if (type === 'garage') {
+    // باب مرآب — يرفع من الأسفل
+    var liftY = pos * 64; // 0=مغلق, 64=مفتوح
+    var doorY = 78 - liftY;
+    return '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">' +
+      // إطار
+      '<rect x="4" y="8" width="72" height="72" rx="3" fill="none" stroke="' + color + '" stroke-width="1.5" opacity="0.3"/>' +
+      // الباب (يرتفع)
+      '<rect x="6" y="' + (doorY - 62).toFixed(1) + '" width="68" height="62" rx="2" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="1.5" clip-path="url(#garage-clip)"/>' +
+      '<defs><clipPath id="garage-clip"><rect x="4" y="8" width="72" height="72"/></clipPath></defs>' +
+      // خطوط أفقية (لوحات)
+      '<line x1="6" y1="' + (doorY - 42).toFixed(1) + '" x2="74" y2="' + (doorY - 42).toFixed(1) + '" stroke="' + color + '" stroke-width="0.8" opacity="0.4" clip-path="url(#garage-clip)"/>' +
+      '<line x1="6" y1="' + (doorY - 22).toFixed(1) + '" x2="74" y2="' + (doorY - 22).toFixed(1) + '" stroke="' + color + '" stroke-width="0.8" opacity="0.4" clip-path="url(#garage-clip)"/>' +
+      // نسبة
+      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + pctInt + '%</text>' +
+      '</svg>';
+
+  } else if (type === 'portail') {
+    // بوابة — بابان ينفتحان من المنتصف
+    var halfAngle = pos * 75; // كل باب يفتح 75 درجة
+    return '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">' +
+      // إطار
+      '<rect x="4" y="8" width="72" height="70" rx="3" fill="none" stroke="' + color + '" stroke-width="1.5" opacity="0.3"/>' +
+      // الباب الأيسر
+      '<g style="transform:rotate(-' + halfAngle.toFixed(1) + 'deg);transform-origin:8px 43px">' +
+        '<rect x="8" y="12" width="32" height="62" rx="2" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="1.5"/>' +
+        '<circle cx="36" cy="43" r="2.5" fill="' + color + '" opacity="0.9"/>' +
+      '</g>' +
+      // الباب الأيمن
+      '<g style="transform:rotate(' + halfAngle.toFixed(1) + 'deg);transform-origin:72px 43px">' +
+        '<rect x="40" y="12" width="32" height="62" rx="2" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="1.5"/>' +
+        '<circle cx="44" cy="43" r="2.5" fill="' + color + '" opacity="0.9"/>' +
+      '</g>' +
+      // نسبة
+      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + pctInt + '%</text>' +
+      '</svg>';
+
+  } else {
+    // battante — باب عادي يفتح بزاوية
+    var angleDeg = -(pos * 75);
+    var handleX  = 20 + (pos * 40);
+    var arcPath  = pct > 0.005 ? _describeArc(8, 43, 14, 0, pos * 80) : '';
+    return '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">' +
+      '<rect x="4" y="2" width="72" height="82" rx="5" fill="none" stroke="' + color + '" stroke-width="1.8" opacity="0.3"/>' +
+      '<g style="transform:rotate(' + angleDeg.toFixed(2) + 'deg);transform-origin:8px 43px">' +
+        '<rect x="8" y="4" width="64" height="78" rx="3" fill="' + color + '" fill-opacity="0.15" stroke="' + color + '" stroke-width="1.6"/>' +
+        '<circle cx="' + handleX.toFixed(1) + '" cy="43" r="3.5" fill="' + color + '" opacity="0.95"/>' +
+      '</g>' +
+      (arcPath ? '<path d="' + arcPath + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" opacity="0.4"/>' : '') +
+      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + pctInt + '%</text>' +
+      '</svg>';
+  }
+}
+
 function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped, curPos) {
   var pctInt    = Math.round(pct * 100);
   var color     = isStopped ? '#ffb300' : isOpen ? '#00e676' : '#ff3d71';
   var statusTxt = isStopped ? ('⏹ متوقف — ' + pctInt + '%')
                 : isOpen    ? ('🔓 يفتح... — ' + pctInt + '%')
                 :             ('🔒 يغلق... — ' + pctInt + '%');
-  var pos      = curPos !== undefined ? curPos : (isOpen ? pct : 1 - pct);
-  var angleDeg = -(pos * 55);
-  var handleX  = 22 + (pos * 36);
-  var arcPath  = pct > 0.005 ? _describeArc(40, 86, 10, 0, pct * 359.99) : '';
+  var pos  = curPos !== undefined ? curPos : (isOpen ? pct : 1 - pct);
+  var type = _getDoorType(imgEl);
 
   if (imgEl) {
-    imgEl.innerHTML =
-      '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">' +
-      '<rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="' + color + '" stroke-width="1.8" opacity="0.3"/>' +
-      '<g style="transform:rotate(' + angleDeg.toFixed(2) + 'deg);transform-origin:8px 41px">' +
-        '<rect x="8" y="4" width="62" height="74" rx="3" fill="' + color + '" fill-opacity="0.15" stroke="' + color + '" stroke-width="1.6"/>' +
-        '<circle cx="' + handleX.toFixed(1) + '" cy="41" r="3.2" fill="' + color + '" opacity="0.95"/>' +
-      '</g>' +
-      (arcPath ? '<circle cx="40" cy="86" r="10" fill="none" stroke="' + color + '33" stroke-width="3"/><path d="' + arcPath + '" fill="none" stroke="' + color + '" stroke-width="3" stroke-linecap="round"/>' : '') +
-      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + pctInt + '%</text>' +
-      '</svg>';
+    imgEl.innerHTML = _drawDoorSVG(type, color, pos, pct, isStopped);
   }
 
   if (stateEl) {
@@ -440,7 +509,7 @@ function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped, curPos) {
     stateEl.innerHTML =
       '<div style="flex:1">' +
         '<div style="font-size:0.85rem;font-weight:700;margin-bottom:5px">' + statusTxt + '</div>' +
-        '<div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden">' +
+        '<div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden">' +
           '<div style="height:100%;width:' + pctInt + '%;background:' + color + ';border-radius:3px;transition:width 0.1s"></div>' +
         '</div>' +
       '</div>';
@@ -449,22 +518,15 @@ function _drawDoorProgress(imgEl, stateEl, pct, isOpen, isStopped, curPos) {
 
 // رسم الباب في حالة ثابتة
 function _drawDoorStatic(imgEl, stateEl, state) {
-  var color    = state === 'open' ? '#00e676' : state === 'close' ? '#ff3d71' : '#ffb300';
-  var angleDeg = state === 'open' ? -55 : 0;
-  var handleX  = state === 'open' ? 58 : 22;
-  var label    = state === 'open' ? 'مفتوح' : state === 'close' ? 'مغلق' : 'متوقف';
-  var icon     = state === 'open' ? '🔓' : state === 'close' ? '🔒' : '⏹';
+  var color  = state === 'open' ? '#00e676' : state === 'close' ? '#ff3d71' : '#ffb300';
+  var label  = state === 'open' ? 'مفتوح' : state === 'close' ? 'مغلق' : 'متوقف';
+  var icon   = state === 'open' ? '🔓' : state === 'close' ? '🔒' : '⏹';
+  var pos    = state === 'open' ? 1.0 : 0.0;
+  var pct    = state === 'open' ? 1.0 : 0.0;
+  var type   = _getDoorType(imgEl);
 
   if (imgEl) {
-    imgEl.innerHTML =
-      '<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">' +
-      '<rect x="4" y="2" width="72" height="78" rx="5" fill="none" stroke="' + color + '" stroke-width="1.8" opacity="0.3"/>' +
-      '<g style="transform:rotate(' + angleDeg + 'deg);transform-origin:8px 41px">' +
-        '<rect x="8" y="4" width="62" height="74" rx="3" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="1.6"/>' +
-        '<circle cx="' + handleX + '" cy="41" r="3.2" fill="' + color + '" opacity="0.95"/>' +
-      '</g>' +
-      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + label + '</text>' +
-      '</svg>';
+    imgEl.innerHTML = _drawDoorSVG(type, color, pos, pct, false);
   }
   if (stateEl) {
     stateEl.style.color      = color;
@@ -1249,6 +1311,20 @@ function changeDuration(delta) {
   val.textContent = v;
 }
 
+
+function selectDoorType(type) {
+  document.getElementById('door-type').value = type;
+  document.querySelectorAll('.door-type-btn').forEach(function(btn) {
+    if (btn.getAttribute('data-type') === type) {
+      btn.style.background = 'rgba(0,212,255,0.15)';
+      btn.style.border = '2px solid var(--accent)';
+    } else {
+      btn.style.background = 'var(--surface2)';
+      btn.style.border = '2px solid var(--border)';
+    }
+  });
+}
+
 function openAddDoor(instId) {
   document.getElementById('edit-door-id').value = '';
   document.getElementById('edit-door-inst-id').value = instId;
@@ -1258,10 +1334,11 @@ function openAddDoor(instId) {
   document.getElementById('door-duration').value = '5';
   document.getElementById('door-duration-val').textContent = '5';
   document.getElementById('door-modal-title').textContent = 'إضافة باب';
+  selectDoorType('battante');
   openModal('modal-door');
 }
 
-function openEditDoor(instId, doorId, name, location, deviceId, duration) {
+function openEditDoor(instId, doorId, name, location, deviceId, duration, doorType) {
   document.getElementById('edit-door-id').value = doorId;
   document.getElementById('edit-door-inst-id').value = instId;
   document.getElementById('door-name').value = name;
@@ -1270,6 +1347,7 @@ function openEditDoor(instId, doorId, name, location, deviceId, duration) {
   document.getElementById('door-duration').value = duration;
   document.getElementById('door-duration-val').textContent = duration;
   document.getElementById('door-modal-title').textContent = 'تعديل باب';
+  selectDoorType(doorType || 'battante');
   openModal('modal-door');
 }
 
@@ -1282,6 +1360,7 @@ async function saveDoor() {
     location:         document.getElementById('door-location').value,
     device_id:        document.getElementById('door-device-id').value,
     duration_seconds: parseInt(document.getElementById('door-duration').value),
+    door_type:        document.getElementById('door-type').value || 'battante',
   };
   try {
     if (id) { await apiFetch(`/api/doors/${id}`, 'PUT', body); }
@@ -1920,33 +1999,36 @@ async function loadAdminDoors() {
       '<div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--warning);margin-top:3px">🔑 ' + inst.code + '</div>';
     container.appendChild(instCard);
 
-    // زر إضافة باب
-    var btnAddDoor = document.createElement('button');
-    btnAddDoor.style.cssText = 'width:100%;padding:12px;border-radius:12px;border:1px dashed rgba(0,230,118,0.3);background:rgba(0,230,118,0.05);color:var(--success);font-family:Cairo,sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;margin-bottom:16px';
-    btnAddDoor.textContent = '+ إضافة باب جديد';
-    btnAddDoor.addEventListener('click', function() { openAddDoor(inst.id); });
-    container.appendChild(btnAddDoor);
+    // زر إضافة باب — للسوبر أدمن فقط
+    if (user && user.role === 'super_admin') {
+      var btnAddDoor = document.createElement('button');
+      btnAddDoor.style.cssText = 'width:100%;padding:12px;border-radius:12px;border:1px dashed rgba(0,230,118,0.3);background:rgba(0,230,118,0.05);color:var(--success);font-family:Cairo,sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;margin-bottom:16px';
+      btnAddDoor.textContent = '+ إضافة باب جديد';
+      btnAddDoor.addEventListener('click', function() { openAddDoor(inst.id); });
+      container.appendChild(btnAddDoor);
+    }
 
     (inst.doors||[]).forEach(function(door) {
       var card = document.createElement('div');
       card.style.cssText = 'background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:16px;padding:16px;margin-bottom:12px';
       card.setAttribute('data-door-id', door.id);
       card.setAttribute('data-duration', door.duration_seconds || 5);
+      card.setAttribute('data-door-type', door.door_type || 'battante');
+      card.setAttribute('data-door-type', door.door_type || 'battante');
 
       // Header: صورة + اسم + badges
       var hdr = document.createElement('div');
       hdr.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:12px';
       hdr.innerHTML =
-        '<div id="door-img-' + door.id + '" data-device-id="' + door.device_id + '" data-door-id="' + door.id + '" style="width:52px;height:64px;flex-shrink:0"></div>' +
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">' +
+          '<div id="door-img-' + door.id + '" data-device-id="' + door.device_id + '" data-door-id="' + door.id + '" data-door-type="' + (door.door_type||'battante') + '" style="width:64px;height:80px"></div>' +
+          '<span id="adm-online-' + door.id + '" style="font-size:0.62rem;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
+        '</div>' +
         '<div style="flex:1">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
-            '<div style="font-weight:800">🚪 ' + door.name + '</div>' +
-            '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">' +
-              '<span id="adm-online-' + door.id + '" style="font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
-              '<span id="adm-status-' + door.id + '" style="font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
-            '</div>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+            '<div style="font-weight:800;font-size:0.95rem">🚪 ' + door.name + '</div>' +
+            '<span id="adm-status-' + door.id + '" style="font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>' +
           '</div>' +
-          '<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:var(--muted);margin-bottom:5px">ID: ' + (door.device_id||'').substring(0,16) + '...</div>' +
           '<div id="door-progress-' + door.id + '" style="font-size:0.8rem;color:var(--muted);display:flex;align-items:center;min-height:28px"></div>' +
         '</div>';
       card.appendChild(hdr);
@@ -1973,45 +2055,33 @@ async function loadAdminDoors() {
       });
       card.appendChild(grid);
 
-      // GPS toggle للمستخدمين
-      var userReq = door.gps && door.gps.user_required;
-      var gpsToggle = document.createElement('div');
-      gpsToggle.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px';
-      gpsToggle.innerHTML =
-        '<div>' +
-          '<div style="font-size:0.78rem;font-weight:700">📍 GPS إلزامي للمستخدمين</div>' +
-          '<div style="font-size:0.7rem;color:' + (userReq?'var(--success)':'var(--danger)') + ';margin-top:2px;font-weight:700">' + (userReq?'مفعّل ✅':'معطّل ❌') + '</div>' +
-        '</div>' +
-        '<label class="toggle-switch">' +
-          '<input type="checkbox" ' + (userReq?'checked':'') + ' id="gps-toggle-' + door.id + '">' +
-          '<span class="toggle-knob"></span>' +
-        '</label>';
-      card.appendChild(gpsToggle);
-      (function(did) {
-        setTimeout(function() {
-          var chk = document.getElementById('gps-toggle-' + did);
-          if (chk) chk.addEventListener('change', function() { toggleDoorGps(did, 'user_required', this.checked); });
-        }, 50);
-      })(door.id);
-
-      // toggle RC notify
+      // GPS + RC notify بجانب بعض
+      var userReq  = door.gps && door.gps.user_required;
       var rcNotify = door.rc_notify === true;
-      var rcToggle = document.createElement('div');
-      rcToggle.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px';
-      rcToggle.innerHTML =
-        '<div>' +
-          '<div style="font-size:0.78rem;font-weight:700">📻 تلقي إشعار عند استخدام RC</div>' +
-          '<div style="font-size:0.7rem;color:' + (rcNotify?'var(--success)':'var(--danger)') + ';margin-top:2px;font-weight:700">' + (rcNotify?'مفعّل ✅':'معطّل ❌') + '</div>' +
+      var toggleRow = document.createElement('div');
+      toggleRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px';
+      toggleRow.innerHTML =
+        '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">' +
+          '<div>' +
+            '<div style="font-size:0.72rem;font-weight:700">📍 GPS</div>' +
+            '<div style="font-size:0.68rem;color:' + (userReq?'var(--success)':'var(--danger)') + ';font-weight:700">' + (userReq?'مفعّل':'معطّل') + '</div>' +
+          '</div>' +
+          '<label class="toggle-switch"><input type="checkbox" ' + (userReq?'checked':'') + ' id="gps-toggle-' + door.id + '"><span class="toggle-knob"></span></label>' +
         '</div>' +
-        '<label class="toggle-switch">' +
-          '<input type="checkbox" ' + (rcNotify?'checked':'') + ' id="rc-toggle-' + door.id + '">' +
-          '<span class="toggle-knob"></span>' +
-        '</label>';
-      card.appendChild(rcToggle);
+        '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">' +
+          '<div>' +
+            '<div style="font-size:0.72rem;font-weight:700">📻 RC</div>' +
+            '<div style="font-size:0.68rem;color:' + (rcNotify?'var(--success)':'var(--danger)') + ';font-weight:700">' + (rcNotify?'مفعّل':'معطّل') + '</div>' +
+          '</div>' +
+          '<label class="toggle-switch"><input type="checkbox" ' + (rcNotify?'checked':'') + ' id="rc-toggle-' + door.id + '"><span class="toggle-knob"></span></label>' +
+        '</div>';
+      card.appendChild(toggleRow);
       (function(did) {
         setTimeout(function() {
-          var chk = document.getElementById('rc-toggle-' + did);
-          if (chk) chk.addEventListener('change', function() { toggleDoorRcNotify(did, this.checked); });
+          var gps = document.getElementById('gps-toggle-' + did);
+          var rc  = document.getElementById('rc-toggle-' + did);
+          if (gps) gps.addEventListener('change', function() { toggleDoorGps(did, 'user_required', this.checked); });
+          if (rc)  rc.addEventListener('change',  function() { toggleDoorRcNotify(did, this.checked); });
         }, 50);
       })(door.id);
 
