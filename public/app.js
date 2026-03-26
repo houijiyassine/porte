@@ -492,7 +492,7 @@ function _drawDoorSVG(type, color, pos, pct, isStopped) {
       // مقبض
       '<rect x="' + (36 + slideX).toFixed(1) + '" y="42" width="4" height="16" rx="2" fill="' + color + '" opacity="0.9"/>' +
       // نسبة
-      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + pctInt + '%</text>' +
+''  +
       '</svg>';
 
   } else if (type === 'garage') {
@@ -509,7 +509,7 @@ function _drawDoorSVG(type, color, pos, pct, isStopped) {
       '<line x1="6" y1="' + (doorY - 42).toFixed(1) + '" x2="74" y2="' + (doorY - 42).toFixed(1) + '" stroke="' + color + '" stroke-width="0.8" opacity="0.4" clip-path="url(#garage-clip)"/>' +
       '<line x1="6" y1="' + (doorY - 22).toFixed(1) + '" x2="74" y2="' + (doorY - 22).toFixed(1) + '" stroke="' + color + '" stroke-width="0.8" opacity="0.4" clip-path="url(#garage-clip)"/>' +
       // نسبة
-      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + pctInt + '%</text>' +
+''  +
       '</svg>';
 
   } else if (type === 'portail') {
@@ -529,7 +529,7 @@ function _drawDoorSVG(type, color, pos, pct, isStopped) {
         '<circle cx="44" cy="43" r="2.5" fill="' + color + '" opacity="0.9"/>' +
       '</g>' +
       // نسبة
-      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + pctInt + '%</text>' +
+''  +
       '</svg>';
 
   } else {
@@ -544,7 +544,7 @@ function _drawDoorSVG(type, color, pos, pct, isStopped) {
         '<circle cx="' + handleX.toFixed(1) + '" cy="43" r="3.5" fill="' + color + '" opacity="0.95"/>' +
       '</g>' +
       (arcPath ? '<path d="' + arcPath + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" opacity="0.4"/>' : '') +
-      '<text x="40" y="97" text-anchor="middle" font-size="7.5" fill="' + color + '" font-family="Cairo,sans-serif" font-weight="700">' + pctInt + '%</text>' +
+''  +
       '</svg>';
   }
 }
