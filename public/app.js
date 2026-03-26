@@ -409,11 +409,6 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
           progFinal.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px;color:' + pfColor + ';font-weight:700;font-size:0.9rem';
           progFinal.innerHTML = '<span style="font-size:1.1rem">' + pfIcon + '</span>' + pfLabel;
         }
-        var pctFinal = document.getElementById('door-pct-' + doorId);
-        if (pctFinal) {
-          pctFinal.style.color = finalState === 'open' ? 'var(--success)' : 'var(--danger)';
-          pctFinal.textContent = finalState === 'open' ? '100%' : '0%';
-        }
         updateDoorCardState(doorId, null, finalState, 'auto');
       }, 400);
     }
@@ -439,11 +434,7 @@ function stopDoorTimer(doorId, imgEl, stateEl) {
          || document.getElementById('door-progress-' + doorId);
 
   _drawDoorProgress(img, ste, displayPct, isOpen, true, pos);
-  var pctElStop = document.getElementById('door-pct-' + doorId);
-  if (pctElStop) {
-    pctElStop.style.color = '#ffb300';
-    pctElStop.textContent = pctInt + '%';
-  }
+
 
   var stopCss = 'font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(255,179,0,0.15);color:var(--warning);border:1px solid rgba(255,179,0,0.3)';
   var stopTxt = '⏹ متوقف — ' + pctInt + '%';
@@ -1210,7 +1201,7 @@ function renderInstDetail(inst) {
           <button onclick="sendDoorAction('${deviceId}','open40',40)" style="background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--accent)">⏱<span>40ث</span></button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
-          <button onclick="openEditDoor('${inst.id}','${doorId}','${doorName}','${location}','${deviceId}',${duration})" style="background:rgba(124,92,252,0.15);border:1px solid rgba(124,92,252,0.3);border-radius:12px;padding:12px 6px;cursor:pointer;font-size:1.1rem" title="تعديل">✏️</button>
+          <button onclick="openEditDoor('${inst.id}','${doorId}','${doorName}','${location}','${deviceId}',${duration},'${door.door_type||'battante'}')" style="background:rgba(124,92,252,0.15);border:1px solid rgba(124,92,252,0.3);border-radius:12px;padding:12px 6px;cursor:pointer;font-size:1.1rem" title="تعديل">✏️</button>
           <button onclick="deleteDoor('${doorId}','${inst.id}')" style="background:rgba(255,61,113,0.1);border:1px solid rgba(255,61,113,0.2);border-radius:12px;padding:12px 6px;cursor:pointer;font-size:1.1rem" title="حذف">🗑</button>
           <button onclick="openGpsModal('${doorId}',${gpsRange},${gpsLat},${gpsLng})" data-gps-door="${doorId}" style="background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);border-radius:12px;padding:8px 4px;cursor:pointer;font-size:0.7rem;font-weight:700;color:var(--accent);font-family:Cairo,sans-serif">📡 ${gpsRange}م</button>
         </div>
@@ -2044,13 +2035,6 @@ async function loadAdminDoors() {
     }
     container.innerHTML = '';
 
-    // ─── اسم المؤسسة في الأعلى ───
-    var instHeader = document.createElement('div');
-    instHeader.style.cssText = 'text-align:center;margin-bottom:20px;padding:14px 20px;background:var(--surface);border:1px solid var(--border);border-radius:16px';
-    instHeader.innerHTML =
-      '<div style="font-size:1.1rem;font-weight:900;color:var(--text)">🏫 ' + inst.name + '</div>';
-    container.appendChild(instHeader);
-
     (inst.doors||[]).forEach(function(door) {
       var card = document.createElement('div');
       card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;margin-bottom:16px;position:relative;overflow:hidden';
@@ -2483,13 +2467,6 @@ async function fetchAndUpdateDoorImage(door) {
       var pLabel = state === 'open' ? 'الباب مفتوح' : state === 'close' ? 'الباب مغلق' : 'الباب متوقف';
       progEl.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px;color:' + pColor + ';font-weight:700;font-size:0.9rem';
       progEl.innerHTML = '<span style="font-size:1.1rem">' + pIcon + '</span>' + pLabel;
-    }
-    // كتابة النسبة (100%)
-    var pctEl2 = document.getElementById('door-pct-' + door.id);
-    if (pctEl2) {
-      var p2Color = state === 'open' ? 'var(--success)' : 'var(--danger)';
-      pctEl2.style.color = p2Color;
-      pctEl2.textContent = state === 'open' ? '100%' : '0%';
     }
     updateDoorCardState(door.id, door.device_id, state, 'poll');
   } catch(e) {
