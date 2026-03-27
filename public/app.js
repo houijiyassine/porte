@@ -2560,25 +2560,52 @@ async function loadAdminUsers() {
         '<span style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>';
       card.appendChild(infoRow);
 
-      // Buttons row
+      // Buttons row - مختلف حسب الحالة
       var bRow = document.createElement('div');
-      bRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
-      [['✅ موافقة','approved','rgba(0,230,118,0.15)','var(--success)','flex:1'],
-       ['⏳ انتظار','pending','rgba(255,179,0,0.15)','var(--warning)','flex:1'],
-       ['❌ رفض','rejected','rgba(255,61,113,0.15)','var(--danger)','flex:1'],
-       ['🗑','del','rgba(255,61,113,0.1)','var(--danger)','']
-      ].forEach(function(item) {
-        var b = document.createElement('button');
-        b.style.cssText = (item[4]?item[4]+';':'') + 'padding:7px 8px;border-radius:8px;border:none;background:' + item[2] + ';color:' + item[3] + ';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-        b.textContent = item[0];
-        b.addEventListener('click', (function(uid, act, iid, uname) {
-          return function() {
-            if (act === 'del') deleteUser(uid, iid, uname);
-            else changeUserStatus(uid, act, iid, uname);
-          };
-        })(u.id, item[1], inst.id, u.name));
-        bRow.appendChild(b);
-      });
+      bRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:8px';
+
+      if (status === 'pending') {
+        // طلب انتظار → فقط موافقة/رفض/حذف
+        [['✅ موافقة','approved','rgba(0,230,118,0.15)','var(--success)','flex:1'],
+         ['❌ رفض','rejected','rgba(255,61,113,0.15)','var(--danger)','flex:1'],
+         ['🗑','del','rgba(255,61,113,0.1)','var(--danger)','']
+        ].forEach(function(item) {
+          var b = document.createElement('button');
+          b.style.cssText = (item[4]?item[4]+';':'')+'padding:7px 8px;border-radius:8px;border:none;background:'+item[2]+';color:'+item[3]+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          b.textContent = item[0];
+          b.addEventListener('click', (function(uid, act, iid, uname){
+            return function(){
+              if (act==='del') deleteUser(uid,iid,uname);
+              else changeUserStatus(uid,act,iid,uname);
+            };
+          })(u.id,item[1],inst.id,u.name));
+          bRow.appendChild(b);
+        });
+      } else {
+        // مستخدم موافق أو مرفوض → فقط حظر/تفعيل + حذف
+        var isActive = u.status === 'active';
+        var btnBlock = document.createElement('button');
+        btnBlock.style.cssText = 'flex:1;padding:7px 8px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(0,230,118,0.15)')+';color:'+(isActive?'var(--warning)':'var(--success)')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+        btnBlock.textContent = isActive ? '🚫 حظر' : '✅ تفعيل';
+        btnBlock.addEventListener('click', (function(uid, st, iid, uname){
+          return function(){ changeUserStatus(uid, st==='active'?'blocked':'active', iid, uname); };
+        })(u.id, u.status, inst.id, u.name));
+        bRow.appendChild(btnBlock);
+
+        if (status === 'rejected') {
+          var btnApprove = document.createElement('button');
+          btnApprove.style.cssText = 'flex:1;padding:7px 8px;border-radius:8px;border:none;background:rgba(0,230,118,0.15);color:var(--success);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          btnApprove.textContent = '✅ موافقة';
+          btnApprove.addEventListener('click', (function(uid,iid,uname){ return function(){ changeUserStatus(uid,'approved',iid,uname); }; })(u.id,inst.id,u.name));
+          bRow.appendChild(btnApprove);
+        }
+
+        var btnDel = document.createElement('button');
+        btnDel.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+        btnDel.textContent = '🗑';
+        btnDel.addEventListener('click', (function(uid,iid,uname){ return function(){ deleteUser(uid,iid,uname); }; })(u.id,inst.id,u.name));
+        bRow.appendChild(btnDel);
+      }
       card.appendChild(bRow);
       container.appendChild(card);
     });
