@@ -383,15 +383,31 @@ setInterval(function() {
 
 
 function showPendingScreen() {
-  var container = document.getElementById('institutes-list');
-  if (!container) return;
-  container.innerHTML =
-    '<div style="text-align:center;padding:40px 20px">' +
-      '<div style="font-size:4rem;margin-bottom:16px">⏳</div>' +
-      '<div style="font-size:1.2rem;font-weight:900;margin-bottom:8px">طلبك قيد المراجعة</div>' +
-      '<div style="color:var(--muted);font-size:0.88rem;line-height:1.6">تم إرسال طلب انضمامك للمسؤول.<br>ستتلقى إشعاراً عند الموافقة.</div>' +
-      '<button onclick="logout()" style="margin-top:24px;padding:10px 24px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:Cairo,sans-serif;cursor:pointer">تسجيل الخروج</button>' +
-    '</div>';
+  // إخفاء nav bar
+  var nav = document.querySelector('.bottom-nav');
+  if (nav) nav.style.display = 'none';
+
+  // عرض الرسالة في كامل الشاشة
+  var app = document.getElementById('main-app');
+  var pending = document.getElementById('pending-screen');
+  if (!pending) {
+    pending = document.createElement('div');
+    pending.id = 'pending-screen';
+    pending.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;z-index:999';
+    pending.innerHTML =
+      '<div style="font-size:5rem;margin-bottom:20px">⏳</div>' +
+      '<div style="font-size:1.4rem;font-weight:900;margin-bottom:12px;color:var(--text)">طلبك قيد المراجعة</div>' +
+      '<div style="color:var(--muted);font-size:0.9rem;line-height:1.8;max-width:280px;margin-bottom:32px">' +
+        'تم إرسال طلب انضمامك للمسؤول.<br>' +
+        'ستتلقى إشعاراً فور الموافقة على طلبك.' +
+      '</div>' +
+      '<div style="background:rgba(255,179,0,0.1);border:1px solid rgba(255,179,0,0.3);border-radius:16px;padding:16px 24px;margin-bottom:32px;color:var(--warning);font-size:0.85rem">' +
+        '🔔 تأكد من تفعيل الإشعارات لاستلام رد المسؤول' +
+      '</div>' +
+      '<button onclick="logout()" style="padding:12px 32px;border-radius:14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:Cairo,sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer">تسجيل الخروج</button>';
+    document.body.appendChild(pending);
+  }
+  pending.style.display = 'flex';
 }
 
 // ─── Boot ─────────────────────────────────────
