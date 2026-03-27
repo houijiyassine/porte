@@ -2014,7 +2014,6 @@ async function openInstUsers(instId, instName) {
       btns.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
       [
         ['موافقة', 'approved', 'rgba(0,230,118,0.15)', 'var(--success)', 'flex:1'],
-        ['انتظار', 'pending', 'rgba(255,179,0,0.15)', 'var(--warning)', 'flex:1'],
         ['رفض', 'rejected', 'rgba(255,61,113,0.15)', 'var(--danger)', 'flex:1'],
       ].forEach(function(item) {
         var btn = document.createElement('button');
@@ -2025,12 +2024,7 @@ async function openInstUsers(instId, instName) {
         })(u.id, item[1], instId));
         btns.appendChild(btn);
       });
-      // Reset pw button
-      var btnPw = document.createElement('button');
-      btnPw.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(124,92,252,0.15);color:var(--accent2);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-      btnPw.textContent = '🔑';
-      btnPw.addEventListener('click', (function(uid, uname) { return function() { resetUserPw(uid, uname); }; })(u.id, u.name));
-      btns.appendChild(btnPw);
+
       // Delete button
       var btnDel = document.createElement('button');
       btnDel.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
