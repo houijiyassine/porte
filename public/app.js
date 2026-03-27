@@ -74,6 +74,7 @@ let usersCache = [];
 
 // ─── Init ─────────────────────────────────────
 window.addEventListener('load', async () => {
+  setupOtpInputs();
   await registerSW();
   setTimeout(() => {
     document.getElementById('loading').style.display = 'none';
@@ -95,9 +96,22 @@ async function registerSW() {
 document.getElementById('login-btn').onclick = doLogin;
 document.getElementById('login-pw').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 
+// ─── تذكر الحساب ───
+(function() {
+  var saved = localStorage.getItem('porte_saved_phone');
+  if (saved) {
+    document.getElementById('login-phone').value = saved;
+    var rem = document.getElementById('login-remember');
+    if (rem) rem.checked = true;
+  }
+})();
+
 async function doLogin() {
   const phone = document.getElementById('login-phone').value.trim();
   const pw    = document.getElementById('login-pw').value;
+  const remember = document.getElementById('login-remember')?.checked;
+  if (remember) localStorage.setItem('porte_saved_phone', phone);
+  else localStorage.removeItem('porte_saved_phone');
   const err   = document.getElementById('login-error');
   err.style.display = 'none';
 
@@ -120,6 +134,263 @@ async function doLogin() {
     btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>دخول`;
     btn.disabled = false;
   }
+}
+
+
+// ─── التسجيل ──────────────────────────────────────────────────────────────────
+function showRegisterPage() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('register-page').style.display = 'flex';
+}
+
+function showLoginPage() {
+  document.getElementById('register-page').style.display = 'none';
+  document.getElementById('otp-page').style.display = 'none';
+  document.getElementById('forgot-page').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+}
+
+var _registerData = {};
+var _otpType = 'register';
+var _otpPhone = '';
+
+async function doRegister() {
+  const name      = document.getElementById('reg-name').value.trim();
+  const last_name = document.getElementById('reg-lastname').value.trim();
+  const phone     = document.getElementById('reg-phone').value.trim();
+  const pw        = document.getElementById('reg-pw').value;
+  const pw2       = document.getElementById('reg-pw2').value;
+  const inst_code = document.getElementById('reg-instcode').value.trim();
+  const err       = document.getElementById('reg-error');
+
+  err.style.display = 'none';
+  if (!name || !phone || !pw || !inst_code) {
+    err.textContent = 'جميع الحقول مطلوبة';
+    err.style.display = 'block';
+    return;
+  }
+  if (pw !== pw2) {
+    err.textContent = 'كلمتا المرور غير متطابقتان';
+    err.style.display = 'block';
+    return;
+  }
+  if (pw.length < 4) {
+    err.textContent = 'كلمة المرور قصيرة جداً (4 أحرف على الأقل)';
+    err.style.display = 'block';
+    return;
+  }
+
+  _registerData = { name, last_name, phone, pw, inst_code };
+  _otpType  = 'register';
+  _otpPhone = phone;
+
+  const btn = document.getElementById('reg-btn');
+  btn.disabled = true;
+  btn.textContent = 'جاري الإرسال...';
+
+  try {
+    await apiFetch('/api/auth/send-otp', 'POST', { phone, type: 'register' }, false);
+    showOtpPage('register');
+  } catch(e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'التالي →';
+  }
+}
+
+function showOtpPage(type) {
+  _otpType = type;
+  document.getElementById('register-page').style.display = 'none';
+  document.getElementById('forgot-page').style.display = 'none';
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('otp-page').style.display = 'flex';
+  document.getElementById('otp-title').textContent = type === 'register' ? 'تأكيد التسجيل' : 'إعادة تعيين كلمة المرور';
+  document.getElementById('otp-desc').textContent = 'أدخل الرمز المرسل إلى ' + _otpPhone;
+  // في وضع التطوير: تعمير تلقائي بـ 0000
+  setTimeout(function() {
+    var inputs = document.querySelectorAll('.otp-input');
+    ['0','0','0','0'].forEach(function(d, i) { if(inputs[i]) inputs[i].value = d; });
+  }, 500);
+}
+
+async function verifyOtp() {
+  var inputs = document.querySelectorAll('.otp-input');
+  var code   = Array.from(inputs).map(function(i){ return i.value; }).join('');
+  var err    = document.getElementById('otp-error');
+  err.style.display = 'none';
+
+  if (code.length !== 4) {
+    err.textContent = 'أدخل الرمز كاملاً';
+    err.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('otp-btn');
+  btn.disabled = true;
+  btn.textContent = 'جاري التحقق...';
+
+  try {
+    await apiFetch('/api/auth/verify-otp', 'POST', { phone: _otpPhone, code, type: _otpType }, false);
+
+    if (_otpType === 'register') {
+      // إتمام التسجيل
+      const res = await apiFetch('/api/auth/register', 'POST', _registerData, false);
+      token = res.token;
+      user  = res.user;
+      localStorage.setItem('porte_token', token);
+      localStorage.setItem('porte_user', JSON.stringify(user));
+      document.getElementById('otp-page').style.display = 'none';
+      bootApp();
+    } else {
+      // إعادة تعيين كلمة المرور
+      showNewPasswordPage(code);
+    }
+  } catch(e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'تأكيد';
+  }
+}
+
+// OTP inputs navigation
+function setupOtpInputs() {
+  var inputs = document.querySelectorAll('.otp-input');
+  inputs.forEach(function(input, idx) {
+    input.addEventListener('input', function() {
+      if (this.value.length === 1 && idx < inputs.length - 1) {
+        inputs[idx+1].focus();
+      }
+      // تحقق تلقائي عند اكتمال الرمز
+      var code = Array.from(inputs).map(function(i){ return i.value; }).join('');
+      if (code.length === 4) verifyOtp();
+    });
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Backspace' && !this.value && idx > 0) inputs[idx-1].focus();
+    });
+  });
+}
+
+// ─── نسيت كلمة السر ───────────────────────────────────────────────────────────
+function showForgotPage() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('forgot-page').style.display = 'flex';
+}
+
+async function doForgot() {
+  const phone = document.getElementById('forgot-phone').value.trim();
+  const err   = document.getElementById('forgot-error');
+  err.style.display = 'none';
+
+  if (!phone) { err.textContent = 'أدخل رقم الهاتف'; err.style.display = 'block'; return; }
+
+  _otpPhone = phone;
+  _otpType  = 'reset_password';
+
+  const btn = document.getElementById('forgot-btn');
+  btn.disabled = true;
+  btn.textContent = 'جاري الإرسال...';
+
+  try {
+    await apiFetch('/api/auth/send-otp', 'POST', { phone, type: 'reset_password' }, false);
+    showOtpPage('reset_password');
+  } catch(e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'إرسال الرمز';
+  }
+}
+
+var _resetCode = '';
+function showNewPasswordPage(code) {
+  _resetCode = code;
+  document.getElementById('otp-page').style.display = 'none';
+  document.getElementById('new-password-page').style.display = 'flex';
+}
+
+async function doResetPassword() {
+  const new_pw  = document.getElementById('new-pw').value;
+  const new_pw2 = document.getElementById('new-pw2').value;
+  const err     = document.getElementById('new-pw-error');
+  err.style.display = 'none';
+
+  if (new_pw !== new_pw2) { err.textContent = 'كلمتا المرور غير متطابقتان'; err.style.display = 'block'; return; }
+  if (new_pw.length < 4)  { err.textContent = 'كلمة المرور قصيرة جداً'; err.style.display = 'block'; return; }
+
+  try {
+    await apiFetch('/api/auth/reset-password', 'POST', { phone: _otpPhone, code: _resetCode, new_pw }, false);
+    toast('✅ تم تغيير كلمة المرور', 'success');
+    document.getElementById('new-password-page').style.display = 'none';
+    showLoginPage();
+  } catch(e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  }
+}
+
+// ─── إعدادات المستخدم ──────────────────────────────────────────────────────────
+function showSettings() {
+  openModal('modal-settings');
+}
+
+async function doChangePassword() {
+  const old_pw  = document.getElementById('settings-old-pw').value;
+  const new_pw  = document.getElementById('settings-new-pw').value;
+  const new_pw2 = document.getElementById('settings-new-pw2').value;
+  const err     = document.getElementById('settings-pw-error');
+  err.style.display = 'none';
+
+  if (new_pw !== new_pw2) { err.textContent = 'كلمتا المرور غير متطابقتان'; err.style.display = 'block'; return; }
+  if (new_pw.length < 4)  { err.textContent = 'كلمة المرور قصيرة جداً'; err.style.display = 'block'; return; }
+
+  try {
+    await apiFetch('/api/auth/change-password', 'POST', { old_pw, new_pw });
+    toast('✅ تم تغيير كلمة المرور', 'success');
+    closeModal('modal-settings');
+    document.getElementById('settings-old-pw').value = '';
+    document.getElementById('settings-new-pw').value = '';
+    document.getElementById('settings-new-pw2').value = '';
+  } catch(e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  }
+}
+
+// ─── Heartbeat (تسجيل آخر ظهور) ──────────────────────────────────────────────
+setInterval(function() {
+  if (token) apiFetch('/api/auth/heartbeat', 'POST', {}).catch(function(){});
+}, 5 * 60 * 1000);
+
+// ─── تسجيل خروج تلقائي بعد عدم نشاط ────────────────────────────────────────
+var _lastActivity = Date.now();
+var _autoLogoutMs = 60 * 60 * 1000; // ساعة واحدة
+['click','keydown','touchstart'].forEach(function(ev) {
+  document.addEventListener(ev, function() { _lastActivity = Date.now(); });
+});
+setInterval(function() {
+  if (!token) return;
+  if (Date.now() - _lastActivity > _autoLogoutMs) {
+    toast('تم تسجيل خروجك تلقائياً لعدم النشاط', 'info');
+    setTimeout(logout, 2000);
+  }
+}, 60000);
+
+
+function showPendingScreen() {
+  var container = document.getElementById('institutes-list');
+  if (!container) return;
+  container.innerHTML =
+    '<div style="text-align:center;padding:40px 20px">' +
+      '<div style="font-size:4rem;margin-bottom:16px">⏳</div>' +
+      '<div style="font-size:1.2rem;font-weight:900;margin-bottom:8px">طلبك قيد المراجعة</div>' +
+      '<div style="color:var(--muted);font-size:0.88rem;line-height:1.6">تم إرسال طلب انضمامك للمسؤول.<br>ستتلقى إشعاراً عند الموافقة.</div>' +
+      '<button onclick="logout()" style="margin-top:24px;padding:10px 24px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:Cairo,sans-serif;cursor:pointer">تسجيل الخروج</button>' +
+    '</div>';
 }
 
 // ─── Boot ─────────────────────────────────────
@@ -227,6 +498,30 @@ function bootApp() {
     // تغيير كلمة "المؤسسات" إلى "الأبواب" للمستخدم
     var navLabel = document.getElementById('nav-institutes-label');
     if (navLabel) navLabel.textContent = '';
+
+    // ملء معلومات الإعدادات
+    var sName  = document.getElementById('settings-name');
+    var sPhone = document.getElementById('settings-phone');
+    if (sName)  sName.textContent  = user.name  || '';
+    if (sPhone) sPhone.textContent = user.phone || '';
+
+    // إضافة زر الإعدادات في الهيدر
+    var headerUser = document.querySelector('.header-user');
+    if (headerUser && !document.getElementById('settings-btn')) {
+      var settBtn = document.createElement('button');
+      settBtn.id = 'settings-btn';
+      settBtn.onclick = showSettings;
+      settBtn.title = 'الإعدادات';
+      settBtn.style.cssText = 'width:36px;height:36px;border-radius:50%;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem';
+      settBtn.textContent = '⚙️';
+      headerUser.insertBefore(settBtn, headerUser.firstChild);
+    }
+
+    // إذا المستخدم في انتظار الموافقة → عرض رسالة
+    if (user.request_status === 'pending') {
+      showPendingScreen();
+      return;
+    }
     document.getElementById('nav-institutes').classList.add('active');
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('page-institutes').classList.add('active');
@@ -322,6 +617,18 @@ function connectWS() {
           startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
           updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
         }
+      }
+      if (msg.type === 'request_approved') {
+        user.request_status = 'approved';
+        localStorage.setItem('porte_user', JSON.stringify(user));
+        toast('✅ تمت الموافقة على طلبك! مرحباً بك', 'success');
+        setTimeout(function() {
+          if (user && user.role === 'user') loadUserDoors();
+        }, 1500);
+      }
+      if (msg.type === 'request_rejected') {
+        toast('❌ تم رفض طلب انضمامك', 'error');
+        setTimeout(logout, 2000);
       }
       if (msg.type === 'device_online') {
         updateDeviceOnlineBadge(msg.deviceId, msg.online);
