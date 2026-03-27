@@ -1470,6 +1470,29 @@ function triggerBurst(durationSec) {
   _pollInterval  = POLL_FAST;
 }
 
+
+async function sendPushToAdmins(instId, notification) {
+  if (!VAPID_PRIVATE) return;
+  try {
+    const { data: admins } = await supabase.from('users').select('id')
+      .eq('inst_id', instId).in('role', ['admin']).eq('status','active');
+    if (!admins?.length) return;
+    const { data: subs } = await supabase.from('push_subscriptions').select('*')
+      .in('user_id', admins.map(a => a.id));
+    if (!subs?.length) return;
+    const payload = JSON.stringify(notification);
+    await Promise.allSettled(subs.map(sub =>
+      webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        payload
+      ).catch(err => {
+        if (err.statusCode === 410)
+          supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+      })
+    ));
+  } catch(e) { console.error('[Push Error]', e.message); }
+}
+
 function startPolling() {
   async function run() {
     await pollAllDoors();
