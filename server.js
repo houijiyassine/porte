@@ -1,6 +1,28 @@
 import express from 'express';
 import crypto from 'crypto';
 
+// ─── Rate Limiting ────────────────────────────────────────────────────────────
+const rateLimitMap = new Map(); // key → { count, resetAt }
+
+function rateLimit(key, maxRequests, windowMs) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key) || { count: 0, resetAt: now + windowMs };
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + windowMs; }
+  entry.count++;
+  rateLimitMap.set(key, entry);
+  return entry.count <= maxRequests;
+}
+
+function rateLimitMiddleware(maxRequests, windowMs) {
+  return (req, res, next) => {
+    const key = req.ip + req.path;
+    if (!rateLimit(key, maxRequests, windowMs)) {
+      return res.status(429).json({ error: 'محاولات كثيرة، حاول لاحقاً' });
+    }
+    next();
+  };
+}
+
 // ─── AES-256 Encryption ───────────────────────────────────────────────────────
 const PW_SECRET = process.env.PW_SECRET || 'porte-default-secret-change-me-32ch';
 
@@ -290,7 +312,175 @@ async function sendPushToAll(notification) {
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
-app.post('/api/auth/login', async (req, res) => {
+
+// ─── OTP (ثابت 0000 للتطوير) ──────────────────────────────────────────────────
+app.post('/api/auth/send-otp', rateLimitMiddleware(3, 600000), async (req, res) => {
+  try {
+    const { phone, type } = req.body;
+    if (!phone) return res.status(400).json({ error: 'رقم الهاتف مطلوب' });
+    // حذف OTP قديم
+    await supabase.from('otp_codes').delete().eq('phone', phone).eq('type', type||'register');
+    // إنشاء OTP جديد (0000 للتطوير)
+    const code = '0000';
+    const { error } = await supabase.from('otp_codes').insert({
+      phone, code, type: type||'register',
+      expires_at: new Date(Date.now() + 10*60*1000).toISOString()
+    });
+    if (error) return res.status(500).json({ error: error.message });
+    // TODO: إرسال SMS حقيقي لاحقاً
+    console.log(`[OTP] ${phone} → ${code} (${type})`);
+    res.json({ success: true, message: 'تم إرسال الرمز' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/auth/verify-otp', rateLimitMiddleware(5, 600000), async (req, res) => {
+  try {
+    const { phone, code, type } = req.body;
+    const { data: otp } = await supabase.from('otp_codes')
+      .select('*').eq('phone', phone).eq('type', type||'register')
+      .eq('used', false).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (!otp) return res.status(400).json({ error: 'لم يتم إرسال رمز' });
+    if (new Date(otp.expires_at) < new Date()) return res.status(400).json({ error: 'انتهت صلاحية الرمز' });
+    if (otp.code !== code) return res.status(400).json({ error: 'الرمز غير صحيح' });
+    await supabase.from('otp_codes').update({ used: true }).eq('id', otp.id);
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── التسجيل ──────────────────────────────────────────────────────────────────
+app.post('/api/auth/register', rateLimitMiddleware(3, 3600000), async (req, res) => {
+  try {
+    const { name, last_name, phone, pw, inst_code } = req.body;
+    if (!name || !phone || !pw || !inst_code)
+      return res.status(400).json({ error: 'جميع الحقول مطلوبة' });
+
+    // البحث عن المؤسسة
+    const { data: inst } = await supabase.from('institutes')
+      .select('id,name').eq('code', inst_code).maybeSingle();
+    if (!inst) return res.status(400).json({ error: 'كود المؤسسة غير صحيح' });
+
+    // التحقق من عدم وجود الهاتف
+    const { data: existing } = await supabase.from('users')
+      .select('id').eq('phone', phone).maybeSingle();
+    if (existing) return res.status(400).json({ error: 'رقم الهاتف مسجل مسبقاً' });
+
+    // إنشاء الحساب
+    const pw_hash = crypto.createHash('sha256').update(pw).digest('hex');
+    const { data: newUser, error } = await supabase.from('users').insert({
+      name: name + (last_name ? ' ' + last_name : ''),
+      last_name, phone, pw_hash,
+      inst_id: inst.id, role: 'user',
+      status: 'active', request_status: 'pending',
+      created_at: new Date().toISOString()
+    }).select().single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // إشعار للأدمن فقط
+    const { data: admins } = await supabase.from('users')
+      .select('id').eq('inst_id', inst.id).eq('role', 'admin').eq('status', 'active');
+    if (admins?.length) {
+      await sendPushToAdmins(inst.id, {
+        title: '👤 طلب انضمام جديد',
+        body: name + ' يريد الانضمام إلى ' + inst.name,
+      });
+    }
+
+    const token = signToken({ id: newUser.id, role: newUser.role, inst_id: newUser.inst_id, name: newUser.name });
+    res.json({
+      token,
+      user: { id: newUser.id, name: newUser.name, phone: newUser.phone, role: newUser.role, inst_id: newUser.inst_id, request_status: 'pending' }
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── نسيت كلمة السر ──────────────────────────────────────────────────────────
+app.post('/api/auth/reset-password', rateLimitMiddleware(3, 3600000), async (req, res) => {
+  try {
+    const { phone, code, new_pw } = req.body;
+    // التحقق من OTP
+    const { data: otp } = await supabase.from('otp_codes')
+      .select('*').eq('phone', phone).eq('type', 'reset_password')
+      .eq('used', false).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (!otp || otp.code !== code) return res.status(400).json({ error: 'الرمز غير صحيح' });
+    if (new Date(otp.expires_at) < new Date()) return res.status(400).json({ error: 'انتهت صلاحية الرمز' });
+
+    const pw_hash = crypto.createHash('sha256').update(new_pw).digest('hex');
+    const { error } = await supabase.from('users').update({ pw_hash }).eq('phone', phone);
+    if (error) return res.status(500).json({ error: error.message });
+    await supabase.from('otp_codes').update({ used: true }).eq('id', otp.id);
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── تغيير كلمة السر (مسجل دخول) ────────────────────────────────────────────
+app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { old_pw, new_pw } = req.body;
+    const { data: u } = await supabase.from('users').select('pw_hash').eq('id', req.user.id).single();
+    const old_hash = crypto.createHash('sha256').update(old_pw).digest('hex');
+    if (u.pw_hash !== old_hash) return res.status(400).json({ error: 'كلمة المرور القديمة غير صحيحة' });
+    const new_hash = crypto.createHash('sha256').update(new_pw).digest('hex');
+    await supabase.from('users').update({ pw_hash: new_hash }).eq('id', req.user.id);
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── جدول أوقات تلقائي ────────────────────────────────────────────────────────
+app.post('/api/doors/:id/auto-schedule', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { schedule } = req.body;
+    await supabase.from('doors').update({ auto_schedule: schedule }).eq('id', req.params.id);
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── قائمة بيضاء/سوداء ───────────────────────────────────────────────────────
+app.get('/api/doors/:id/access-list', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { data } = await supabase.from('door_access_list')
+      .select('*,users(name,phone)').eq('door_id', req.params.id);
+    res.json(data || []);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/doors/:id/access-list', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { user_id, type } = req.body;
+    const { error } = await supabase.from('door_access_list')
+      .upsert({ door_id: req.params.id, user_id, type });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/doors/:id/access-list/:userId', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    await supabase.from('door_access_list')
+      .delete().eq('door_id', req.params.id).eq('user_id', req.params.userId);
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── سجل جلسات المستخدم ──────────────────────────────────────────────────────
+app.get('/api/users/:id/sessions', authMiddleware, async (req, res) => {
+  try {
+    const { data } = await supabase.from('user_sessions')
+      .select('*').eq('user_id', req.params.id)
+      .order('login_at', { ascending: false }).limit(20);
+    res.json(data || []);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── تحديث last_seen ──────────────────────────────────────────────────────────
+app.post('/api/auth/heartbeat', authMiddleware, async (req, res) => {
+  try {
+    await supabase.from('users').update({ last_seen: new Date().toISOString() }).eq('id', req.user.id);
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/auth/login', rateLimitMiddleware(5, 60000), async (req, res) => {
   try {
     const { phone, pw } = req.body;
     if (!phone || !pw) return res.status(400).json({ error: 'الهاتف وكلمة المرور مطلوبان' });
@@ -1131,10 +1321,45 @@ let _lastChangeDur   = 5;        // مدة n للباب الذي تغير
 let _pollTimer       = null;
 const deviceOffline  = new Map(); // deviceId → true إذا offline
 
+
+async function checkAutoSchedule() {
+  try {
+    const { data: doors } = await supabase.from('doors')
+      .select('id,device_id,auto_schedule,inst_id').not('auto_schedule', 'is', null);
+    if (!doors?.length) return;
+
+    const now   = new Date();
+    const dayMap = [6,0,1,2,3,4,5]; // الأحد=0 في JS → الأحد=6 في جدولنا
+    const todayIdx = dayMap[now.getDay()];
+    const timeStr  = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+
+    for (const door of doors) {
+      if (!door.auto_schedule) continue;
+      const sched = door.auto_schedule;
+      const day   = sched[todayIdx];
+      if (!day || !day.enabled) continue;
+
+      // فتح تلقائي
+      if (day.open_time && timeStr === day.open_time) {
+        const token   = await getTuyaToken();
+        await sendTuyaCommands(door.device_id, [{ code: 'switch_1', value: true }]);
+        console.log(`[AutoSchedule] فتح تلقائي: ${door.device_id}`);
+      }
+      // غلق تلقائي
+      if (day.close_time && timeStr === day.close_time) {
+        await sendTuyaCommands(door.device_id, [{ code: 'switch_2', value: true }]);
+        console.log(`[AutoSchedule] غلق تلقائي: ${door.device_id}`);
+      }
+    }
+  } catch(e) { console.error('[AutoSchedule Error]', e.message); }
+}
+
 async function pollAllDoors() {
+  // ─── تنفيذ الجدول التلقائي ───
+  await checkAutoSchedule();
   try {
     const { data: doors } = await supabase
-      .from('doors').select('id,inst_id,name,device_id,rc_notify')
+      .from('doors').select('id,inst_id,name,device_id,rc_notify,auto_schedule')
       .not('device_id', 'is', null);
     if (!doors?.length) return;
 
@@ -1165,6 +1390,14 @@ async function pollAllDoors() {
         if (wasOnline !== isOnline) {
           deviceOffline.set(door.device_id, !isOnline);
           broadcast({ type: 'device_online', deviceId: door.device_id, online: isOnline, timestamp: Date.now() });
+          // إشعار للأدمن عند فقدان الاتصال
+          if (!isOnline && wasOnline) {
+            sendPushToAdmins(door.inst_id, {
+              title: '⚠️ انقطع اتصال الجهاز',
+              body: 'الباب "' + door.name + '" غير متصل بالإنترنت',
+            });
+            console.log(`[Offline Alert] ${door.name}`);
+          }
         }
         if (!isOnline) { anyOffline = true; continue; }
 
