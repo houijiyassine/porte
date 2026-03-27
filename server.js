@@ -377,14 +377,28 @@ app.post('/api/auth/register', rateLimitMiddleware(3, 3600000), async (req, res)
 
     if (error) return res.status(500).json({ error: error.message });
 
-    // إشعار للأدمن فقط
+    // إشعار للأدمن: WS + Push
     const { data: admins } = await supabase.from('users')
       .select('id').eq('inst_id', inst.id).eq('role', 'admin').eq('status', 'active');
     if (admins?.length) {
+      // WS فوري للأدمن المتصل
+      admins.forEach(adm => {
+        broadcastToUser(adm.id, {
+          type: 'new_join_request',
+          userId: newUser.id,
+          userName: newUser.name,
+          instId: inst.id,
+          instName: inst.name,
+        });
+      });
+      // Push للأدمن غير المتصل
       await sendPushToAdmins(inst.id, {
         title: '👤 طلب انضمام جديد',
-        body: name + ' يريد الانضمام إلى ' + inst.name,
+        body: (name + (last_name?' '+last_name:'')) + ' يريد الانضمام إلى ' + inst.name,
       });
+      console.log(`[Register] إشعار أُرسل لـ ${admins.length} أدمن`);
+    } else {
+      console.log(`[Register] لا يوجد أدمن للمؤسسة ${inst.id}`);
     }
 
     const token = signToken({ id: newUser.id, role: newUser.role, inst_id: newUser.inst_id, name: newUser.name });
