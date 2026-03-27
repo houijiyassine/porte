@@ -635,6 +635,25 @@ function connectWS() {
           updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
         }
       }
+      if (msg.type === 'new_join_request') {
+        // إشعار للأدمن بطلب انضمام جديد
+        if (user && (user.role === 'admin' || user.role === 'super_admin')) {
+          toast('👤 طلب انضمام جديد: ' + msg.userName, 'info');
+          // تحديث قائمة المستخدمين إذا كانت مفتوحة
+          if (document.getElementById('page-users')?.classList.contains('active')) {
+            loadAdminUsers();
+          }
+          // badge على تبويب المستخدمين
+          var navUsers = document.getElementById('nav-users');
+          if (navUsers && !navUsers.querySelector('.notif-dot')) {
+            var dot = document.createElement('span');
+            dot.className = 'notif-dot';
+            dot.style.cssText = 'width:8px;height:8px;background:var(--danger);border-radius:50%;position:absolute;top:4px;right:4px';
+            navUsers.style.position = 'relative';
+            navUsers.appendChild(dot);
+          }
+        }
+      }
       if (msg.type === 'request_approved') {
         user.request_status = 'approved';
         localStorage.setItem('porte_user', JSON.stringify(user));
