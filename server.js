@@ -360,9 +360,10 @@ app.post('/api/auth/register', rateLimitMiddleware(3, 3600000), async (req, res)
     if (!inst) return res.status(400).json({ error: 'كود المؤسسة غير صحيح' });
 
     // التحقق من عدم وجود الهاتف
-    const { data: existing } = await supabase.from('users')
-      .select('id').eq('phone', phone).maybeSingle();
-    if (existing) return res.status(400).json({ error: 'رقم الهاتف مسجل مسبقاً' });
+    const { data: existingUsers } = await supabase.from('users')
+      .select('id').eq('phone', phone).limit(1);
+    if (existingUsers && existingUsers.length > 0)
+      return res.status(400).json({ error: 'رقم الهاتف مسجل مسبقاً' });
 
     // إنشاء الحساب
     const pw_hash = crypto.createHash('sha256').update(pw).digest('hex');
