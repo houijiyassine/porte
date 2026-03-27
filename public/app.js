@@ -502,6 +502,8 @@ function bootApp() {
       }
     }).catch(function(){});
     loadAdminDoors();
+    updatePendingBadge();
+    setInterval(updatePendingBadge, 30000); // تحديث كل 30 ثانية
     // إخفاء عنوان "المؤسسات" وزر الإضافة للأدمن
     var addInstBtn = document.getElementById('inst-add-btn');
     if (addInstBtn) addInstBtn.style.display = 'none';
@@ -571,6 +573,32 @@ function bootApp() {
     if (instBackBtnU) instBackBtnU.style.display = 'none';
     loadUserDoors();
   }
+}
+
+
+async function updatePendingBadge() {
+  try {
+    var insts = await apiFetch('/api/institutes');
+    var inst = Array.isArray(insts) ? insts[0] : null;
+    if (!inst) return;
+    var users = await apiFetch('/api/users?inst_id=' + inst.id);
+    var pending = (users||[]).filter(function(u){ return u.request_status === 'pending'; });
+    var navUsers = document.getElementById('nav-users');
+    if (!navUsers) return;
+    var existing = document.getElementById('pending-badge');
+    if (pending.length > 0) {
+      if (!existing) {
+        existing = document.createElement('span');
+        existing.id = 'pending-badge';
+        existing.style.cssText = 'position:absolute;top:2px;right:2px;min-width:18px;height:18px;background:var(--danger);color:#fff;border-radius:20px;font-size:0.65rem;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 4px';
+        navUsers.style.position = 'relative';
+        navUsers.appendChild(existing);
+      }
+      existing.textContent = pending.length;
+    } else if (existing) {
+      existing.remove();
+    }
+  } catch(e) {}
 }
 
 // ─── WebSocket ────────────────────────────────
@@ -2698,7 +2726,13 @@ function showPage(name, btn) {
     else if (user) loadUserDoors();
   }
   if (name === 'users') {
-    if (user && user.role === 'admin') { loadAdminUsers(); return; }
+    if (user && user.role === 'admin') {
+      loadAdminUsers();
+      // احذف badge عند فتح صفحة المستخدمين
+      var pb = document.getElementById('pending-badge');
+      if (pb) pb.remove();
+      return;
+    }
   }
   if (name === 'stats')  loadStats();
   if (name === 'alerts') loadAlerts();
