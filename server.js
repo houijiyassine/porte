@@ -785,6 +785,8 @@ app.get('/api/users', authMiddleware, adminOnly, async (req, res) => {
       .select('id,name,phone,role,status,request_status,expire_date,note,inst_id')
       .order('created_at', { ascending: false });
     // فلتر حسب المؤسسة
+    const instId = req.query.inst_id || req.user.inst_id;
+    console.log(`[GET users] role=${req.user.role} inst_id=${instId} query_inst=${req.query.inst_id}`);
     if (req.query.inst_id) {
       query = query.eq('inst_id', req.query.inst_id);
     } else if (req.user.role !== 'super_admin') {
@@ -792,6 +794,7 @@ app.get('/api/users', authMiddleware, adminOnly, async (req, res) => {
     }
     const { data, error } = await query;
     if (error) throw error;
+    console.log(`[GET users] found ${data?.length} users`);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -825,7 +828,7 @@ app.put('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = {};
-    const allowed = ['name', 'phone', 'role', 'status', 'expire_date', 'note'];
+    const allowed = ['name', 'phone', 'role', 'status', 'request_status', 'expire_date', 'note', 'pw_plain'];
     allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
     if (req.body.pw) updates.pw_hash = crypto.createHash('sha256').update(req.body.pw).digest('hex');
 
