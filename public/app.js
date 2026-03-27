@@ -157,7 +157,8 @@ var _otpPhone = '';
 async function doRegister() {
   const name      = document.getElementById('reg-name').value.trim();
   const last_name = document.getElementById('reg-lastname').value.trim();
-  const phone     = document.getElementById('reg-phone').value.trim();
+  const rawPhone  = document.getElementById('reg-phone').value.trim().replace(/[^0-9]/g,'');
+  const phone     = rawPhone ? '+216' + rawPhone : '';
   const pw        = document.getElementById('reg-pw').value;
   const pw2       = document.getElementById('reg-pw2').value;
   const inst_code = document.getElementById('reg-instcode').value.trim();
