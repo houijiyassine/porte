@@ -2519,7 +2519,11 @@ async function loadAdminDoors() {
 
 // تبويبة المستخدمين للمدير
 async function loadAdminUsers() {
-  var container = document.getElementById('institutes-list');
+  // اكتب في users-table-section إذا كانت صفحة المستخدمين مفتوحة، وإلا في institutes-list
+  var inUsersPage = document.getElementById('page-users')?.classList.contains('active');
+  var container = inUsersPage
+    ? document.getElementById('users-table-section')
+    : document.getElementById('institutes-list');
   if (!container) return;
   container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">⏳ جاري التحميل...</p>';
   try {
@@ -2527,13 +2531,7 @@ async function loadAdminUsers() {
     var inst = Array.isArray(insts) ? insts[0] : null;
     if (!inst) { container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px 0">لا توجد مؤسسة</p>'; return; }
 
-    // زر إضافة مستخدم
     container.innerHTML = '';
-    var btnAdd = document.createElement('button');
-    btnAdd.style.cssText = 'width:100%;padding:12px;border-radius:12px;border:1px dashed rgba(0,212,255,0.3);background:rgba(0,212,255,0.05);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;margin-bottom:16px';
-    btnAdd.textContent = '+ إضافة مستخدم جديد';
-    btnAdd.addEventListener('click', function() { openAddUser(); });
-    container.appendChild(btnAdd);
 
     // جلب المستخدمين
     var users = await apiFetch('/api/users?inst_id=' + inst.id);
@@ -2718,21 +2716,19 @@ function showPage(name, btn) {
   if (page) page.classList.add('active');
   if (btn) btn.classList.add('active');
 
-  if (name === 'dashboard')   { loadStats(); }
-  if (name === 'users')       loadUsers();
+  if (name === 'dashboard') { loadStats(); }
   if (name === 'institutes') {
     if (user && user.role === 'super_admin') loadInstitutes();
     else if (user && user.role === 'admin') loadAdminDoors();
     else if (user) loadUserDoors();
   }
   if (name === 'users') {
-    if (user && user.role === 'admin') {
-      loadAdminUsers();
-      // احذف badge عند فتح صفحة المستخدمين
-      var pb = document.getElementById('pending-badge');
-      if (pb) pb.remove();
-      return;
-    }
+    var pb = document.getElementById('pending-badge');
+    if (pb) pb.remove();
+    if (user && user.role === 'super_admin') loadUsersForSuperAdmin();
+    else if (user && user.role === 'admin') loadAdminUsers();
+    else loadUsers();
+    return;
   }
   if (name === 'stats')  loadStats();
   if (name === 'alerts') loadAlerts();
