@@ -2534,11 +2534,14 @@ async function loadAdminUsers() {
     // جلب المستخدمين
     var users = await apiFetch('/api/users?inst_id=' + inst.id);
     var filtered = (users||[]).filter(function(u){ return u.role !== 'super_admin'; });
-    // pending أولاً ثم بالترتيب
+    // pending أولاً ثم approved ثم rejected
     filtered.sort(function(a, b) {
-      var order = { pending: 0, approved: 1, rejected: 2 };
-      return (order[a.request_status||'approved']||1) - (order[b.request_status||'approved']||1);
+      var order = { pending: 0, approved: 1, rejected: 2, blocked: 3 };
+      var aOrder = order[a.request_status || 'approved'] !== undefined ? order[a.request_status || 'approved'] : 1;
+      var bOrder = order[b.request_status || 'approved'] !== undefined ? order[b.request_status || 'approved'] : 1;
+      return aOrder - bOrder;
     });
+
 
     if (!filtered.length) {
       var empty = document.createElement('p');
