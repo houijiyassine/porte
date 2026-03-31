@@ -2127,34 +2127,27 @@ async function changeUserStatus(userId, status, instId, instName) {
 }
 
 async function resetUserPw(userId, userName) {
-  // عرض كلمة المرور الحالية للسوبر أدمن
   if (user && user.role === 'super_admin') {
     try {
       var pwData = await apiFetch('/api/users/' + userId + '/pw');
-      if (pwData.pw) {
-        var action = confirm(
-          '👤 ' + (pwData.name || userName) + '\n' +
-          '🔑 كلمة المرور الحالية: ' + pwData.pw + '\n\n' +
-          'هل تريد تغييرها؟'
-        );
-        if (!action) return;
-      } else {
-        // pw_plain فارغ — المستخدم أُنشئ قبل التشفير
-        var cont = confirm(
-          '👤 ' + (pwData.name || userName) + '\n' +
-          '⚠️ كلمة المرور القديمة غير متوفرة\n(أُنشئ الحساب قبل رفع التجميد التشفير)\n\n' +
-          'هل تريد تعيين كلمة مرور جديدة؟'
-        );
-        if (!cont) return;
-      }
-    } catch(e) {}
+      var currentPw = pwData.pw || '(غير متوفرة)';
+      var newPw = prompt(
+        '👤 ' + (pwData.name || userName) + '\n' +
+        '🔑 كلمة المرور الحالية: ' + currentPw + '\n\n' +
+        'أدخل كلمة المرور الجديدة (أو اضغط إلغاء للإبقاء على الحالية):'
+      );
+      if (!newPw || newPw.trim() === '') return;
+      await apiFetch('/api/users/' + userId, 'PUT', { pw: newPw.trim() });
+      toast('✅ تم تغيير كلمة المرور', 'success');
+    } catch(e) { toast(e.message, 'error'); }
+  } else {
+    var pw = prompt('كلمة المرور الجديدة لـ ' + (userName||'المستخدم') + ':');
+    if (!pw || pw.trim() === '') return;
+    try {
+      await apiFetch('/api/users/' + userId, 'PUT', { pw: pw.trim() });
+      toast('✅ تم تغيير كلمة المرور', 'success');
+    } catch(e) { toast(e.message, 'error'); }
   }
-  var pw = prompt('كلمة المرور الجديدة لـ ' + (userName||'المستخدم') + ':');
-  if (!pw || pw.trim() === '') return;
-  try {
-    await apiFetch('/api/users/' + userId, 'PUT', { pw: pw.trim() });
-    toast('✅ تم تغيير كلمة المرور', 'success');
-  } catch(e) { toast(e.message, 'error'); }
 }
 
 async function deleteUser(userId, instId, instName) {
