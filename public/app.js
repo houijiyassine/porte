@@ -2570,7 +2570,7 @@ async function loadAdminUsers() {
       var status = u.request_status || 'approved';
       var card = document.createElement('div');
       var isBlocked = u.status === 'blocked';
-      card.style.cssText = 'background:' + (isBlocked ? 'rgba(100,100,100,0.08)' : 'var(--surface2)') + ';border-radius:14px;padding:14px;margin-bottom:10px;' + (isBlocked ? 'opacity:0.6;filter:grayscale(0.8)' : '');
+      card.style.cssText = 'background:' + (isBlocked ? 'rgba(100,100,100,0.08)' : 'var(--surface2)') + ';border-radius:14px;padding:14px;margin-bottom:10px;' + (isBlocked ? 'opacity:0.55' : '');
 
       // Info row
       var infoRow = document.createElement('div');
