@@ -1162,7 +1162,7 @@ function renderUsersTable(users) {
       <td><span class="badge ${u.status==='active'?'badge-active':'badge-blocked'}">${u.status==='active'?'نشط':'مجمّد'}</span></td>
       <td style="white-space:nowrap">
         <button onclick="editUser(${JSON.stringify(u).replace(/"/g,'&quot;')})" style="background:none;border:none;color:var(--accent2);cursor:pointer;font-size:0.78rem;margin-left:8px">تعديل</button>
-        <button onclick="toggleBlock('${u.id}','${u.status}')" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:0.78rem">${u.status==='active'?'تجميد العضوية':'رفع التجميد'}</button>
+        <button onclick="toggleBlock('${u.id}','${u.status}')" style="background:none;border:none;color:${u.status==='active'?'var(--warning)':'#7ec8ff'};cursor:pointer;font-size:0.78rem">${u.status==='active'?'🧊 تجميد العضوية':'🔓 رفع التجميد'}</button>
       </td>
     </tr>
   `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">لا يوجد مستخدمون</td></tr>';
