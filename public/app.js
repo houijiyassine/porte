@@ -2603,6 +2603,7 @@ async function loadAdminUsers() {
           });
         } else {
           // موافق/مرفوض/مجمّد: تجميد + سجل + حذف
+          console.log('USER:', u.name, '| status:', JSON.stringify(u.status), '| blocked?', u.status === 'blocked', '| isActive:', u.status !== 'blocked');
           var isActive = u.status !== 'blocked';
           var btnBlock = document.createElement('button');
           btnBlock.setAttribute('data-uid', u.id);
