@@ -2609,7 +2609,17 @@ async function loadAdminUsers() {
           btnBlock.setAttribute('data-uid', u.id);
           btnBlock.setAttribute('data-ustatus', u.status);
           btnBlock.setAttribute('data-uname', u.name);
-          btnBlock.style.cssText = 'padding:7px 12px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(100,180,255,0.2)')+';color:'+(isActive?'#ffb300':'#7ec8ff')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          var blockBg    = isActive ? 'rgba(255,179,0,0.15)' : 'rgba(100,180,255,0.2)';
+          var blockColor = isActive ? '#ffb300' : '#7ec8ff';
+          btnBlock.style.padding        = '7px 12px';
+          btnBlock.style.borderRadius   = '8px';
+          btnBlock.style.border         = 'none';
+          btnBlock.style.background     = blockBg;
+          btnBlock.style.color          = blockColor;
+          btnBlock.style.fontFamily     = 'Cairo,sans-serif';
+          btnBlock.style.fontSize       = '0.75rem';
+          btnBlock.style.fontWeight     = '700';
+          btnBlock.style.cursor         = 'pointer';
           btnBlock.textContent = isActive ? '🧊 تجميد العضوية' : '🔓 رفع التجميد';
           btnBlock.addEventListener('click', function(){
             var uid    = this.getAttribute('data-uid');
