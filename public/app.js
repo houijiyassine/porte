@@ -468,7 +468,9 @@ function bootApp() {
     var navStats  = document.getElementById('nav-stats');
     if (navAlerts) navAlerts.style.display = 'flex';
     if (navStats)  navStats.style.display  = 'flex';
-    // إظهار عنوان المؤسسات وزر الإضافة للسوبر أدمن فقط
+    // إظهار header bar كاملاً للسوبر أدمن فقط
+    var instHeaderBar = document.getElementById('inst-header-bar');
+    if (instHeaderBar) instHeaderBar.style.display = 'flex';
     var instTitle2 = document.getElementById('inst-page-title');
     var instAddBtn2 = document.getElementById('inst-add-btn');
     if (instTitle2)  instTitle2.style.display  = 'block';
@@ -2603,7 +2605,7 @@ async function loadAdminUsers() {
           // موافق/مرفوض: تجميد + سجل + حذف
           var isActive = u.status === 'active';
           var btnBlock = document.createElement('button');
-          btnBlock.style.cssText = 'padding:7px 12px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(0,212,255,0.15)')+';color:'+(isActive?'var(--warning)':'var(--accent)')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          btnBlock.style.cssText = 'padding:7px 12px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(100,180,255,0.2)')+';color:'+(isActive?'var(--warning)':'#7ec8ff')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
           btnBlock.textContent = isActive ? '🧊 تجميد العضوية' : '🔓 رفع التجميد';
           btnBlock.addEventListener('click', (function(uid,st,uname){
             return function(){
