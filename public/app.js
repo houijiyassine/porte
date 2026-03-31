@@ -2603,20 +2603,24 @@ async function loadAdminUsers() {
           });
         } else {
           // موافق/مرفوض/مجمّد: تجميد + سجل + حذف
-          console.log('[DEBUG] user:', u.name, 'status:', u.status, 'request_status:', u.request_status);
           var isActive = u.status !== 'blocked';
           var btnBlock = document.createElement('button');
+          btnBlock.setAttribute('data-uid', u.id);
+          btnBlock.setAttribute('data-ustatus', u.status);
+          btnBlock.setAttribute('data-uname', u.name);
           btnBlock.style.cssText = 'padding:7px 12px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(100,180,255,0.2)')+';color:'+(isActive?'var(--warning)':'#7ec8ff')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
           btnBlock.textContent = isActive ? '🧊 تجميد العضوية' : '🔓 رفع التجميد';
-          btnBlock.addEventListener('click', (function(uid,st,uname){
-            return function(){
-              var action = st === 'active' ? 'تجميد العضوية' : 'رفع التجميد';
-              if (!confirm('هل أنت متأكد من ' + action + ' لـ ' + uname + '؟')) return;
-              apiFetch('/api/users/'+uid,'PUT',{status:st==='active'?'blocked':'active'})
-                .then(function(){ toast('✅ تم ' + action, 'success'); loadAdminUsers(); })
-                .catch(function(e){ toast(e.message,'error'); });
-            };
-          })(u.id,u.status,u.name));
+          btnBlock.addEventListener('click', function(){
+            var uid    = this.getAttribute('data-uid');
+            var st     = this.getAttribute('data-ustatus');
+            var uname  = this.getAttribute('data-uname');
+            var newSt  = st === 'active' ? 'blocked' : 'active';
+            var action = st === 'active' ? 'تجميد العضوية' : 'رفع التجميد';
+            if (!confirm('هل أنت متأكد من ' + action + ' لـ ' + uname + '؟')) return;
+            apiFetch('/api/users/'+uid,'PUT',{status:newSt})
+              .then(function(){ toast('✅ تم ' + action, 'success'); loadAdminUsers(); })
+              .catch(function(e){ toast(e.message,'error'); });
+          });
           bRow.appendChild(btnBlock);
           var btnLogU = document.createElement('button');
           btnLogU.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(0,212,255,0.15);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
