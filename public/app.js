@@ -2602,8 +2602,8 @@ async function loadAdminUsers() {
             bRow.appendChild(b);
           });
         } else {
-          // موافق/مرفوض: تجميد + سجل + حذف
-          var isActive = u.status === 'active';
+          // موافق/مرفوض/مجمّد: تجميد + سجل + حذف
+          var isActive = u.status !== 'blocked';
           var btnBlock = document.createElement('button');
           btnBlock.style.cssText = 'padding:7px 12px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(100,180,255,0.2)')+';color:'+(isActive?'var(--warning)':'#7ec8ff')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
           btnBlock.textContent = isActive ? '🧊 تجميد العضوية' : '🔓 رفع التجميد';
