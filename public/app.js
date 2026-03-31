@@ -402,7 +402,7 @@ function showPendingScreen() {
         'ستتلقى إشعاراً فور الموافقة على طلبك.' +
       '</div>' +
       '<div style="background:rgba(255,179,0,0.1);border:1px solid rgba(255,179,0,0.3);border-radius:16px;padding:16px 24px;margin-bottom:32px;color:var(--warning);font-size:0.85rem">' +
-        '🔔 تأكد من تفعيل الإشعارات لاستلام رد المسؤول' +
+        '🔔 تأكد من رفع التجميد الإشعارات لاستلام رد المسؤول' +
       '</div>' +
       '<button onclick="logout()" style="padding:12px 32px;border-radius:14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:Cairo,sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer">تسجيل الخروج</button>';
     document.body.appendChild(pending);
@@ -1157,10 +1157,10 @@ function renderUsersTable(users) {
       <td style="font-weight:600">${u.name}</td>
       <td style="direction:ltr;font-family:'JetBrains Mono';font-size:0.82rem">${u.phone}</td>
       <td><span class="badge ${u.role==='admin'||u.role==='super_admin'?'role-admin':'role-user'}" style="font-size:0.72rem">${roleLabels[u.role]||u.role}</span></td>
-      <td><span class="badge ${u.status==='active'?'badge-active':'badge-blocked'}">${u.status==='active'?'نشط':'محظور'}</span></td>
+      <td><span class="badge ${u.status==='active'?'badge-active':'badge-blocked'}">${u.status==='active'?'نشط':'مجمّد'}</span></td>
       <td style="white-space:nowrap">
         <button onclick="editUser(${JSON.stringify(u).replace(/"/g,'&quot;')})" style="background:none;border:none;color:var(--accent2);cursor:pointer;font-size:0.78rem;margin-left:8px">تعديل</button>
-        <button onclick="toggleBlock('${u.id}','${u.status}')" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:0.78rem">${u.status==='active'?'حظر':'تفعيل'}</button>
+        <button onclick="toggleBlock('${u.id}','${u.status}')" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:0.78rem">${u.status==='active'?'تجميد العضوية':'رفع التجميد'}</button>
       </td>
     </tr>
   `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">لا يوجد مستخدمون</td></tr>';
@@ -2064,7 +2064,7 @@ async function resetUserPw(userId, userName) {
         // pw_plain فارغ — المستخدم أُنشئ قبل التشفير
         var cont = confirm(
           '👤 ' + (pwData.name || userName) + '\n' +
-          '⚠️ كلمة المرور القديمة غير متوفرة\n(أُنشئ الحساب قبل تفعيل التشفير)\n\n' +
+          '⚠️ كلمة المرور القديمة غير متوفرة\n(أُنشئ الحساب قبل رفع التجميد التشفير)\n\n' +
           'هل تريد تعيين كلمة مرور جديدة؟'
         );
         if (!cont) return;
@@ -2366,7 +2366,7 @@ async function userDoorAction(door, action) {
       });
     });
     if (!body.lat) {
-      toast('📍 تعذر تحديد موقعك، تأكد من تفعيل GPS', 'error');
+      toast('📍 تعذر تحديد موقعك، تأكد من رفع التجميد GPS', 'error');
       return;
     }
   }
@@ -2530,6 +2530,11 @@ async function loadAdminUsers() {
     // جلب المستخدمين
     var users = await apiFetch('/api/users?inst_id=' + inst.id);
     var filtered = (users||[]).filter(function(u){ return u.role !== 'super_admin'; });
+    // pending أولاً ثم بالترتيب
+    filtered.sort(function(a, b) {
+      var order = { pending: 0, approved: 1, rejected: 2 };
+      return (order[a.request_status||'approved']||1) - (order[b.request_status||'approved']||1);
+    });
 
     if (!filtered.length) {
       var empty = document.createElement('p');
@@ -2563,49 +2568,54 @@ async function loadAdminUsers() {
       // Buttons row - مختلف حسب الحالة
       var bRow = document.createElement('div');
       bRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:8px';
+      var isAdminRole = u.role === 'admin';
 
-      if (status === 'pending') {
-        // طلب انتظار → فقط موافقة/رفض/حذف
-        [['✅ موافقة','approved','rgba(0,230,118,0.15)','var(--success)','flex:1'],
-         ['❌ رفض','rejected','rgba(255,61,113,0.15)','var(--danger)','flex:1'],
-         ['🗑','del','rgba(255,61,113,0.1)','var(--danger)','']
-        ].forEach(function(item) {
-          var b = document.createElement('button');
-          b.style.cssText = (item[4]?item[4]+';':'')+'padding:7px 8px;border-radius:8px;border:none;background:'+item[2]+';color:'+item[3]+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-          b.textContent = item[0];
-          b.addEventListener('click', (function(uid, act, iid, uname){
-            return function(){
-              if (act==='del') deleteUser(uid,iid,uname);
-              else changeUserStatus(uid,act,iid,uname);
-            };
-          })(u.id,item[1],inst.id,u.name));
-          bRow.appendChild(b);
-        });
-      } else {
-        // مستخدم موافق أو مرفوض → فقط حظر/تفعيل + حذف
-        var isActive = u.status === 'active';
-        var btnBlock = document.createElement('button');
-        btnBlock.style.cssText = 'flex:1;padding:7px 8px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(0,230,118,0.15)')+';color:'+(isActive?'var(--warning)':'var(--success)')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-        btnBlock.textContent = isActive ? '🚫 حظر' : '✅ تفعيل';
-        btnBlock.addEventListener('click', (function(uid, st, iid, uname){
-          return function(){ changeUserStatus(uid, st==='active'?'blocked':'active', iid, uname); };
-        })(u.id, u.status, inst.id, u.name));
-        bRow.appendChild(btnBlock);
-
-        if (status === 'rejected') {
-          var btnApprove = document.createElement('button');
-          btnApprove.style.cssText = 'flex:1;padding:7px 8px;border-radius:8px;border:none;background:rgba(0,230,118,0.15);color:var(--success);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-          btnApprove.textContent = '✅ موافقة';
-          btnApprove.addEventListener('click', (function(uid,iid,uname){ return function(){ changeUserStatus(uid,'approved',iid,uname); }; })(u.id,inst.id,u.name));
-          bRow.appendChild(btnApprove);
+      if (!isAdminRole) {
+        // ─── مستخدم عادي ───
+        if (status === 'pending') {
+          // انتظار → موافقة + رفض + حذف
+          [['✅ موافقة','approved','rgba(0,230,118,0.15)','var(--success)','flex:1'],
+           ['❌ رفض','rejected','rgba(255,61,113,0.15)','var(--danger)','flex:1']
+          ].forEach(function(item) {
+            var b = document.createElement('button');
+            b.style.cssText = item[4]+';padding:7px 8px;border-radius:8px;border:none;background:'+item[2]+';color:'+item[3]+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+            b.textContent = item[0];
+            b.addEventListener('click', (function(uid,act,iid,uname){ return function(){ changeUserStatus(uid,act,iid,uname); }; })(u.id,item[1],inst.id,u.name));
+            bRow.appendChild(b);
+          });
+        } else {
+          // موافق/مرفوض → تجميد + رفع التجميد
+          var isActive = u.status === 'active';
+          var btnBlock = document.createElement('button');
+          btnBlock.style.cssText = 'flex:1;padding:7px 8px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(0,230,118,0.15)')+';color:'+(isActive?'var(--warning)':'var(--success)')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          btnBlock.textContent = isActive ? '🧊 تجميد العضوية' : '✅ رفع التجميد';
+          btnBlock.addEventListener('click', (function(uid,st,iid,uname){
+            return function(){ changeUserStatus(uid,st==='active'?'blocked':'active',iid,uname); };
+          })(u.id,u.status,inst.id,u.name));
+          bRow.appendChild(btnBlock);
+          if (status === 'rejected') {
+            var btnApprove = document.createElement('button');
+            btnApprove.style.cssText = 'flex:1;padding:7px 8px;border-radius:8px;border:none;background:rgba(0,230,118,0.15);color:var(--success);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+            btnApprove.textContent = '✅ موافقة';
+            btnApprove.addEventListener('click', (function(uid,iid,uname){ return function(){ changeUserStatus(uid,'approved',iid,uname); }; })(u.id,inst.id,u.name));
+            bRow.appendChild(btnApprove);
+          }
         }
-
+        // زر حذف للمستخدمين فقط
         var btnDel = document.createElement('button');
         btnDel.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
         btnDel.textContent = '🗑';
         btnDel.addEventListener('click', (function(uid,iid,uname){ return function(){ deleteUser(uid,iid,uname); }; })(u.id,inst.id,u.name));
         bRow.appendChild(btnDel);
       }
+
+      // زر السجل لجميع الأعضاء (مستخدم + مسؤول)
+      var btnLog = document.createElement('button');
+      btnLog.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(0,212,255,0.15);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+      btnLog.textContent = '📋 السجل';
+      btnLog.addEventListener('click', (function(uid,uname){ return function(){ openUserLog(uid,uname); }; })(u.id,u.name));
+      bRow.appendChild(btnLog);
+
       card.appendChild(bRow);
       container.appendChild(card);
     });
@@ -2615,6 +2625,36 @@ async function loadAdminUsers() {
 }
 
 
+
+
+// ─── سجل المستخدم ──────────────────────────────────────────────────────────────
+async function openUserLog(userId, userName) {
+  // نستخدم modal-door-logs الموجود
+  document.getElementById('door-logs-title').textContent = '📋 سجل ' + userName;
+  document.getElementById('door-logs-body').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">جاري التحميل...</p>';
+  openModal('modal-door-logs');
+  try {
+    var data = await apiFetch('/api/users/' + userId + '/logs');
+    if (!data || !data.length) {
+      document.getElementById('door-logs-body').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">لا توجد عمليات بعد</p>';
+      return;
+    }
+    var iconMap  = { open:'🔓', close:'🔒', stop:'⏹', open40:'⏱' };
+    var labelMap = { open:'فتح', close:'غلق', stop:'إيقاف', open40:'فتح 40ث' };
+    document.getElementById('door-logs-body').innerHTML = data.map(function(log) {
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="width:38px;height:38px;border-radius:10px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">' + (iconMap[log.value]||'🚪') + '</div>' +
+        '<div style="flex:1">' +
+          '<div style="font-weight:700;font-size:0.88rem">' + (labelMap[log.value]||log.value) + '</div>' +
+          '<div style="font-size:0.75rem;color:var(--accent2);margin-top:2px">🚪 ' + (log.door_name||'—') + '</div>' +
+        '</div>' +
+        '<div style="font-size:0.72rem;color:var(--muted);font-family:JetBrains Mono,monospace">' + formatTime(log.created_at) + '</div>' +
+        '</div>';
+    }).join('');
+  } catch(e) {
+    document.getElementById('door-logs-body').innerHTML = '<p style="color:var(--danger);text-align:center;padding:20px">' + e.message + '</p>';
+  }
+}
 
 // ─── Stats Page ───────────────────────────────────────
 async function loadStats() {
