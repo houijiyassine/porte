@@ -1985,55 +1985,127 @@ async function openInstUsers(instId, instName) {
   document.getElementById('inst-users-body').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">جاري التحميل...</p>';
   openModal('modal-inst-users');
   try {
-    const data = await apiFetch('/api/users?inst_id=' + instId);
-    const filtered = (data||[]).filter(function(u) { return u.role !== 'super_admin'; });
-    const body = document.getElementById('inst-users-body');
+    var data = await apiFetch('/api/users?inst_id=' + instId);
+    var filtered = (data||[]).filter(function(u) { return u.role !== 'super_admin'; });
+    // pending أولاً
+    filtered.sort(function(a,b){
+      var o={pending:0,approved:1,rejected:2};
+      return (o[a.request_status||'approved']||1)-(o[b.request_status||'approved']||1);
+    });
+    var body = document.getElementById('inst-users-body');
     if (!filtered.length) {
       body.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">لا يوجد مستخدمون</p>';
       return;
     }
     body.innerHTML = '';
-    filtered.forEach(function(u) {
-      var status = u.request_status || 'approved';
-      var statusLabel = { pending:'انتظار', approved:'موافق', rejected:'مرفوض' }[status] || status;
-      var statusColor = { pending:'var(--warning)', approved:'var(--success)', rejected:'var(--danger)' }[status] || 'var(--muted)';
-      var roleLabel = { user:'مستخدم', admin:'مدير' }[u.role] || u.role;
-      var card = document.createElement('div');
-      card.style.cssText = 'background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:10px';
-      // Header
-      var header = document.createElement('div');
-      header.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px';
-      header.innerHTML =
-        '<div>' +
-          '<div style="font-weight:700">' + u.name + '</div>' +
-          '<div style="font-family:JetBrains Mono,monospace;font-size:0.78rem;color:var(--muted)">' + formatPhone(u.phone) + '</div>' +
-          '<div style="font-size:0.72rem;color:var(--accent2)">' + roleLabel + '</div>' +
-        '</div>' +
-        '<span style="font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColor + '">' + statusLabel + '</span>';
-      card.appendChild(header);
-      // Buttons
-      var btns = document.createElement('div');
-      btns.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
-      [
-        ['موافقة', 'approved', 'rgba(0,230,118,0.15)', 'var(--success)', 'flex:1'],
-        ['رفض', 'rejected', 'rgba(255,61,113,0.15)', 'var(--danger)', 'flex:1'],
-      ].forEach(function(item) {
-        var btn = document.createElement('button');
-        btn.style.cssText = item[4] + ';padding:7px;border-radius:8px;border:none;background:' + item[2] + ';color:' + item[3] + ';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-        btn.textContent = item[0];
-        btn.addEventListener('click', (function(uid, st, iid) {
-          return function() { changeUserStatus(uid, st, iid, instName); };
-        })(u.id, item[1], instId));
-        btns.appendChild(btn);
-      });
+    var statusColors = { pending:'var(--warning)', approved:'transparent', rejected:'var(--danger)' };
+    var statusLabels = { pending:'انتظار', approved:'', rejected:'مرفوض' };
+    var roleLabels   = { user:'مستخدم', admin:'مدير' };
 
-      // Delete button
-      var btnDel = document.createElement('button');
-      btnDel.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-      btnDel.textContent = '🗑';
-      btnDel.addEventListener('click', (function(uid, iid) { return function() { deleteUser(uid, iid, instName); }; })(u.id, instId));
-      btns.appendChild(btnDel);
-      card.appendChild(btns);
+    filtered.forEach(function(u) {
+      var status    = u.request_status || 'approved';
+      var isBlocked = u.status === 'blocked';
+      var isAdminRole = u.role === 'admin';
+
+      var card = document.createElement('div');
+      card.style.cssText = 'background:' + (isBlocked?'rgba(80,80,100,0.15)':'var(--surface2)') + ';border-radius:14px;padding:14px;margin-bottom:10px;border:' + (isBlocked?'1px solid rgba(100,180,255,0.2)':'1px solid transparent') + ';';
+
+      // Info row
+      var blockedBadge = isBlocked ? '<span style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(100,180,255,0.15);color:#7ec8ff;margin-right:4px">🧊 مجمّد</span>' : '';
+      var infoRow = document.createElement('div');
+      infoRow.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px';
+      infoRow.innerHTML =
+        '<div>' +
+          '<div style="font-weight:700;font-size:0.92rem">' + u.name + '</div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem;color:var(--muted);margin-top:2px">📞 ' + formatPhone(u.phone) + '</div>' +
+          '<div style="font-size:0.7rem;color:var(--accent2);margin-top:2px">' + (roleLabels[u.role]||u.role) + '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
+          blockedBadge +
+          '<span style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>' +
+        '</div>';
+      card.appendChild(infoRow);
+
+      // Buttons
+      var bRow = document.createElement('div');
+      bRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:8px';
+
+      if (!isAdminRole) {
+        if (status === 'pending') {
+          [['✅ موافقة','approved','rgba(0,230,118,0.15)','var(--success)'],
+           ['❌ رفض','rejected','rgba(255,61,113,0.15)','var(--danger)']
+          ].forEach(function(item) {
+            var b = document.createElement('button');
+            b.style.cssText = 'flex:1;padding:7px 8px;border-radius:8px;border:none;background:'+item[2]+';color:'+item[3]+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+            b.textContent = item[0];
+            b.addEventListener('click', (function(uid,act,iid){ return function(){ changeUserStatus(uid,act,iid,instName); loadAdminUsers && setTimeout(loadAdminUsers,200); }; })(u.id,item[1],instId));
+            bRow.appendChild(b);
+          });
+        } else {
+          // تجميد/رفع التجميد
+          var btnBlock = document.createElement('button');
+          btnBlock.setAttribute('data-uid', u.id);
+          btnBlock.setAttribute('data-ustatus', u.status);
+          btnBlock.setAttribute('data-uname', u.name);
+          btnBlock.style.padding = '7px 12px';
+          btnBlock.style.borderRadius = '8px';
+          btnBlock.style.border = 'none';
+          btnBlock.style.background = isBlocked ? 'rgba(100,180,255,0.2)' : 'rgba(255,179,0,0.15)';
+          btnBlock.style.color = isBlocked ? '#7ec8ff' : '#ffb300';
+          btnBlock.style.fontFamily = 'Cairo,sans-serif';
+          btnBlock.style.fontSize = '0.75rem';
+          btnBlock.style.fontWeight = '700';
+          btnBlock.style.cursor = 'pointer';
+          btnBlock.textContent = isBlocked ? '🔓 رفع التجميد' : '🧊 تجميد العضوية';
+          btnBlock.addEventListener('click', function(){
+            var uid=this.getAttribute('data-uid'), st=this.getAttribute('data-ustatus'), uname=this.getAttribute('data-uname');
+            var action = st==='active'?'تجميد العضوية':'رفع التجميد';
+            if (!confirm('هل أنت متأكد من '+action+' لـ '+uname+'؟')) return;
+            apiFetch('/api/users/'+uid,'PUT',{status:st==='active'?'blocked':'active'})
+              .then(function(){ toast('✅ تم '+action,'success'); openInstUsers(instId,instName); })
+              .catch(function(e){ toast(e.message,'error'); });
+          });
+          bRow.appendChild(btnBlock);
+
+          // زر السجل
+          var btnLogI = document.createElement('button');
+          btnLogI.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(0,212,255,0.15);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          btnLogI.textContent = '📋 السجل';
+          btnLogI.addEventListener('click', (function(uid,uname){ return function(){ openUserLog(uid,uname); }; })(u.id,u.name));
+          bRow.appendChild(btnLogI);
+        }
+
+        // زر كلمة السر للسوبر أدمن
+        if (user && user.role === 'super_admin') {
+          var btnPw = document.createElement('button');
+          btnPw.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(124,92,252,0.15);color:var(--accent2);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          btnPw.textContent = '👁 كلمة السر';
+          btnPw.addEventListener('click', (function(uid,uname){ return function(){ resetUserPw(uid,uname); }; })(u.id,u.name));
+          bRow.appendChild(btnPw);
+        }
+
+        // زر حذف
+        var btnDel = document.createElement('button');
+        btnDel.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+        btnDel.textContent = '🗑';
+        btnDel.addEventListener('click', (function(uid,iid){ return function(){ deleteUser(uid,iid,instName); }; })(u.id,instId));
+        bRow.appendChild(btnDel);
+      } else {
+        // مسؤول: فقط السجل + كلمة السر
+        var btnLogA2 = document.createElement('button');
+        btnLogA2.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(0,212,255,0.15);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+        btnLogA2.textContent = '📋 السجل';
+        btnLogA2.addEventListener('click', (function(uid,uname){ return function(){ openUserLog(uid,uname); }; })(u.id,u.name));
+        bRow.appendChild(btnLogA2);
+        if (user && user.role === 'super_admin') {
+          var btnPwA = document.createElement('button');
+          btnPwA.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(124,92,252,0.15);color:var(--accent2);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          btnPwA.textContent = '👁 كلمة السر';
+          btnPwA.addEventListener('click', (function(uid,uname){ return function(){ resetUserPw(uid,uname); }; })(u.id,u.name));
+          bRow.appendChild(btnPwA);
+        }
+      }
+      card.appendChild(bRow);
       body.appendChild(card);
     });
   } catch(e) {
