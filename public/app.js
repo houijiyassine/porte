@@ -2575,13 +2575,17 @@ async function loadAdminUsers() {
       // Info row
       var infoRow = document.createElement('div');
       infoRow.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px';
+      var blockedBadge = isBlocked ? '<span style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(100,180,255,0.15);color:#7ec8ff;margin-right:4px">🧊 مجمّد</span>' : '';
       infoRow.innerHTML =
         '<div>' +
           '<div style="font-weight:700;font-size:0.92rem">' + u.name + '</div>' +
           '<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem;color:var(--muted);margin-top:2px">📞 ' + formatPhone(u.phone) + '</div>' +
           '<div style="font-size:0.7rem;color:var(--accent2);margin-top:2px">' + (roleLabels[u.role]||u.role) + '</div>' +
         '</div>' +
-        '<span style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>';
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
+          blockedBadge +
+          '<span style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>' +
+        '</div>';
       card.appendChild(infoRow);
 
       // Buttons row - مختلف حسب الحالة
