@@ -2392,13 +2392,10 @@ async function userDoorAction(door, action) {
 
 function formatPhone(phone) {
   if (!phone) return '';
-  // إزالة كل شيء ما عدا الأرقام
-  var digits = phone.replace(/[^0-9]/g, '');
-  // أخذ آخر 8 أرقام فقط
-  digits = digits.slice(-8);
+  var digits = phone.replace(/[^0-9]/g, '').slice(-8);
   if (digits.length !== 8) return phone;
-  // تنسيق XX XXX XXX
-  return digits.slice(0,2) + '  ' + digits.slice(2,5) + '  ' + digits.slice(5,8);
+  // تنسيق XXX XXX XX (عكس)
+  return digits.slice(5,8) + '  ' + digits.slice(2,5) + '  ' + digits.slice(0,2);
 }
 
 async function loadAdminDoors() {
@@ -2563,14 +2560,15 @@ async function loadAdminUsers() {
       return;
     }
 
-    var statusColors = { pending:'var(--warning)', approved:'var(--success)', rejected:'var(--danger)' };
-    var statusLabels = { pending:'انتظار', approved:'موافق', rejected:'مرفوض' };
+    var statusColors = { pending:'var(--warning)', approved:'transparent', rejected:'var(--danger)' };
+    var statusLabels = { pending:'انتظار', approved:'', rejected:'مرفوض' };
     var roleLabels   = { user:'مستخدم', admin:'مدير' };
 
     filtered.forEach(function(u) {
       var status = u.request_status || 'approved';
       var card = document.createElement('div');
-      card.style.cssText = 'background:var(--surface2);border-radius:14px;padding:14px;margin-bottom:10px';
+      var isBlocked = u.status === 'blocked';
+      card.style.cssText = 'background:' + (isBlocked ? 'rgba(100,100,100,0.08)' : 'var(--surface2)') + ';border-radius:14px;padding:14px;margin-bottom:10px;' + (isBlocked ? 'opacity:0.6;filter:grayscale(0.8)' : '');
 
       // Info row
       var infoRow = document.createElement('div');
@@ -2605,8 +2603,8 @@ async function loadAdminUsers() {
           // موافق/مرفوض: تجميد + سجل + حذف
           var isActive = u.status === 'active';
           var btnBlock = document.createElement('button');
-          btnBlock.style.cssText = 'padding:7px 12px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(0,230,118,0.15)')+';color:'+(isActive?'var(--warning)':'var(--success)')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-          btnBlock.textContent = isActive ? '🧊 تجميد العضوية' : '✅ رفع التجميد';
+          btnBlock.style.cssText = 'padding:7px 12px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(0,212,255,0.15)')+';color:'+(isActive?'var(--warning)':'var(--accent)')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          btnBlock.textContent = isActive ? '🧊 تجميد العضوية' : '🔓 رفع التجميد';
           btnBlock.addEventListener('click', (function(uid,st,uname){
             return function(){
               var action = st === 'active' ? 'تجميد العضوية' : 'رفع التجميد';
