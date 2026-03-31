@@ -2041,10 +2041,14 @@ async function openInstUsers(instId, instName) {
 
 async function changeUserStatus(userId, status, instId, instName) {
   try {
-    await apiFetch('/api/users/' + userId, 'PUT', { request_status: status });
-    var labels = { approved:'موافق', pending:'انتظار', rejected:'مرفوض' };
-    toast(labels[status] || status, 'success');
-    openInstUsers(instId, instName);
+    // blocked/active → حقل status | approved/rejected → حقل request_status
+    var body = (status === 'blocked' || status === 'active')
+      ? { status: status }
+      : { request_status: status };
+    await apiFetch('/api/users/' + userId, 'PUT', body);
+    var labels = { approved:'موافق', rejected:'مرفوض', blocked:'تجميد العضوية', active:'رفع التجميد' };
+    toast('✅ ' + (labels[status]||status), 'success');
+    loadAdminUsers();
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -2571,20 +2575,19 @@ async function loadAdminUsers() {
       var isAdminRole = u.role === 'admin';
 
       if (!isAdminRole) {
-        // ─── مستخدم عادي ───
         if (status === 'pending') {
-          // انتظار → موافقة + رفض + حذف
-          [['✅ موافقة','approved','rgba(0,230,118,0.15)','var(--success)','flex:1'],
-           ['❌ رفض','rejected','rgba(255,61,113,0.15)','var(--danger)','flex:1']
+          // انتظار: فقط موافقة + رفض
+          [['✅ موافقة','approved','rgba(0,230,118,0.15)','var(--success)'],
+           ['❌ رفض','rejected','rgba(255,61,113,0.15)','var(--danger)']
           ].forEach(function(item) {
             var b = document.createElement('button');
-            b.style.cssText = item[4]+';padding:7px 8px;border-radius:8px;border:none;background:'+item[2]+';color:'+item[3]+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+            b.style.cssText = 'flex:1;padding:7px 8px;border-radius:8px;border:none;background:'+item[2]+';color:'+item[3]+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
             b.textContent = item[0];
             b.addEventListener('click', (function(uid,act,iid,uname){ return function(){ changeUserStatus(uid,act,iid,uname); }; })(u.id,item[1],inst.id,u.name));
             bRow.appendChild(b);
           });
         } else {
-          // موافق/مرفوض → تجميد + رفع التجميد
+          // موافق/مرفوض: تجميد + سجل + حذف
           var isActive = u.status === 'active';
           var btnBlock = document.createElement('button');
           btnBlock.style.cssText = 'flex:1;padding:7px 8px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(0,230,118,0.15)')+';color:'+(isActive?'var(--warning)':'var(--success)')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
@@ -2593,29 +2596,25 @@ async function loadAdminUsers() {
             return function(){ changeUserStatus(uid,st==='active'?'blocked':'active',iid,uname); };
           })(u.id,u.status,inst.id,u.name));
           bRow.appendChild(btnBlock);
-          if (status === 'rejected') {
-            var btnApprove = document.createElement('button');
-            btnApprove.style.cssText = 'flex:1;padding:7px 8px;border-radius:8px;border:none;background:rgba(0,230,118,0.15);color:var(--success);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-            btnApprove.textContent = '✅ موافقة';
-            btnApprove.addEventListener('click', (function(uid,iid,uname){ return function(){ changeUserStatus(uid,'approved',iid,uname); }; })(u.id,inst.id,u.name));
-            bRow.appendChild(btnApprove);
-          }
+          var btnLogU = document.createElement('button');
+          btnLogU.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(0,212,255,0.15);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          btnLogU.textContent = '📋 السجل';
+          btnLogU.addEventListener('click', (function(uid,uname){ return function(){ openUserLog(uid,uname); }; })(u.id,u.name));
+          bRow.appendChild(btnLogU);
+          var btnDel = document.createElement('button');
+          btnDel.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          btnDel.textContent = '🗑';
+          btnDel.addEventListener('click', (function(uid,iid,uname){ return function(){ deleteUser(uid,iid,uname); }; })(u.id,inst.id,u.name));
+          bRow.appendChild(btnDel);
         }
-        // زر حذف للمستخدمين فقط
-        var btnDel = document.createElement('button');
-        btnDel.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(255,61,113,0.1);color:var(--danger);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-        btnDel.textContent = '🗑';
-        btnDel.addEventListener('click', (function(uid,iid,uname){ return function(){ deleteUser(uid,iid,uname); }; })(u.id,inst.id,u.name));
-        bRow.appendChild(btnDel);
+      } else {
+        // مسؤول: فقط زر السجل
+        var btnLogA = document.createElement('button');
+        btnLogA.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(0,212,255,0.15);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+        btnLogA.textContent = '📋 السجل';
+        btnLogA.addEventListener('click', (function(uid,uname){ return function(){ openUserLog(uid,uname); }; })(u.id,u.name));
+        bRow.appendChild(btnLogA);
       }
-
-      // زر السجل لجميع الأعضاء (مستخدم + مسؤول)
-      var btnLog = document.createElement('button');
-      btnLog.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(0,212,255,0.15);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
-      btnLog.textContent = '📋 السجل';
-      btnLog.addEventListener('click', (function(uid,uname){ return function(){ openUserLog(uid,uname); }; })(u.id,u.name));
-      bRow.appendChild(btnLog);
-
       card.appendChild(bRow);
       container.appendChild(card);
     });
@@ -2635,7 +2634,7 @@ async function openUserLog(userId, userName) {
   openModal('modal-door-logs');
   try {
     var data = await apiFetch('/api/users/' + userId + '/logs');
-    if (!data || !data.length) {
+    if (!Array.isArray(data) || !data.length) {
       document.getElementById('door-logs-body').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">لا توجد عمليات بعد</p>';
       return;
     }
@@ -2844,12 +2843,10 @@ async function apiFetch(url, method = 'GET', body = null, auth = true) {
   if (auth && token) headers['Authorization'] = `Bearer ${token}`;
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
-  const res  = await fetch(API + url, opts);
-  const data = await res.json();
-  if (!res.ok) {
-    if (res.status === 401) logout();
-    throw new Error(data.error || 'خطأ في الخادم');
-  }
+  const res  = await fetch(url, opts);
+  let data;
+  try { data = await res.json(); } catch(e) { data = {}; }
+  if (!res.ok) throw new Error(data.error || 'خطأ في الخادم');
   return data;
 }
 
