@@ -2004,7 +2004,7 @@ async function openInstUsers(instId, instName) {
       header.innerHTML =
         '<div>' +
           '<div style="font-weight:700">' + u.name + '</div>' +
-          '<div style="font-family:JetBrains Mono,monospace;font-size:0.78rem;color:var(--muted)">' + u.phone + '</div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:0.78rem;color:var(--muted)">' + formatPhone(u.phone) + '</div>' +
           '<div style="font-size:0.72rem;color:var(--accent2)">' + roleLabel + '</div>' +
         '</div>' +
         '<span style="font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColor + '">' + statusLabel + '</span>';
@@ -2389,6 +2389,18 @@ async function userDoorAction(door, action) {
 
 
 // ─── Admin Interface ───────────────────────────────────
+
+function formatPhone(phone) {
+  if (!phone) return '';
+  // إزالة كل شيء ما عدا الأرقام
+  var digits = phone.replace(/[^0-9]/g, '');
+  // أخذ آخر 8 أرقام فقط
+  digits = digits.slice(-8);
+  if (digits.length !== 8) return phone;
+  // تنسيق XX XXX XXX
+  return digits.slice(0,2) + '  ' + digits.slice(2,5) + '  ' + digits.slice(5,8);
+}
+
 async function loadAdminDoors() {
   selectedInstId = null;
   var container = document.getElementById('institutes-list');
@@ -2566,7 +2578,7 @@ async function loadAdminUsers() {
       infoRow.innerHTML =
         '<div>' +
           '<div style="font-weight:700;font-size:0.92rem">' + u.name + '</div>' +
-          '<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem;color:var(--muted);margin-top:2px">📞 ' + u.phone + '</div>' +
+          '<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem;color:var(--muted);margin-top:2px">📞 ' + formatPhone(u.phone) + '</div>' +
           '<div style="font-size:0.7rem;color:var(--accent2);margin-top:2px">' + (roleLabels[u.role]||u.role) + '</div>' +
         '</div>' +
         '<span style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.2);color:' + statusColors[status] + '">' + (statusLabels[status]||status) + '</span>';
@@ -2593,11 +2605,17 @@ async function loadAdminUsers() {
           // موافق/مرفوض: تجميد + سجل + حذف
           var isActive = u.status === 'active';
           var btnBlock = document.createElement('button');
-          btnBlock.style.cssText = 'flex:1;padding:7px 8px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(0,230,118,0.15)')+';color:'+(isActive?'var(--warning)':'var(--success)')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
+          btnBlock.style.cssText = 'padding:7px 12px;border-radius:8px;border:none;background:'+(isActive?'rgba(255,179,0,0.15)':'rgba(0,230,118,0.15)')+';color:'+(isActive?'var(--warning)':'var(--success)')+';font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
           btnBlock.textContent = isActive ? '🧊 تجميد العضوية' : '✅ رفع التجميد';
-          btnBlock.addEventListener('click', (function(uid,st,iid,uname){
-            return function(){ changeUserStatus(uid,st==='active'?'blocked':'active',iid,uname); };
-          })(u.id,u.status,inst.id,u.name));
+          btnBlock.addEventListener('click', (function(uid,st,uname){
+            return function(){
+              var action = st === 'active' ? 'تجميد العضوية' : 'رفع التجميد';
+              if (!confirm('هل أنت متأكد من ' + action + ' لـ ' + uname + '؟')) return;
+              apiFetch('/api/users/'+uid,'PUT',{status:st==='active'?'blocked':'active'})
+                .then(function(){ toast('✅ تم ' + action, 'success'); loadAdminUsers(); })
+                .catch(function(e){ toast(e.message,'error'); });
+            };
+          })(u.id,u.status,u.name));
           bRow.appendChild(btnBlock);
           var btnLogU = document.createElement('button');
           btnLogU.style.cssText = 'padding:7px 10px;border-radius:8px;border:none;background:rgba(0,212,255,0.15);color:var(--accent);font-family:Cairo,sans-serif;font-size:0.75rem;font-weight:700;cursor:pointer';
