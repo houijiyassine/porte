@@ -488,6 +488,48 @@ app.delete('/api/doors/:id/access-list/:userId', authMiddleware, adminOnly, asyn
 });
 
 // ─── سجل جلسات المستخدم ──────────────────────────────────────────────────────
+// ─── سجل المستخدم (الأبواب) ──────────────────────────────────────────────────
+app.get('/api/users/:id/door-logs', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('door_logs')
+      .select('id,value,created_at,door_id,doors(name)')
+      .eq('user_id', req.params.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    const result = (data||[]).map(function(log) {
+      return {
+        id:         log.id,
+        value:      log.value,
+        created_at: log.created_at,
+        door_id:    log.door_id,
+        door_name:  log.doors?.name || '—',
+      };
+    });
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// ─── سجل عمليات المستخدم ──────────────────────────────────────────────────────
+app.get('/api/users/:id/logs', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('door_logs')
+      .select('id,value,created_at,door_id,doors(name)')
+      .eq('user_id', req.params.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    const result = (data||[]).map(log => ({
+      ...log,
+      door_name: log.doors?.name || '—',
+    }));
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/users/:id/sessions', authMiddleware, async (req, res) => {
   try {
     const { data } = await supabase.from('user_sessions')
