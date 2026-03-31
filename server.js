@@ -515,17 +515,19 @@ app.get('/api/users/:id/door-logs', authMiddleware, adminOnly, async (req, res) 
 // ─── سجل عمليات المستخدم ──────────────────────────────────────────────────────
 app.get('/api/users/:id/logs', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('door_logs')
-      .select('id,value,created_at,door_id,doors(name)')
-      .eq('user_id', req.params.id)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (error) throw error;
-    const result = (data||[]).map(log => ({
-      ...log,
-      door_name: log.doors?.name || '—',
-    }));
+    // نحاول جدول door_logs أولاً، إن لم يوجد نرجع مصفوفة فارغة
+    let result = [];
+    try {
+      const { data, error } = await supabase
+        .from('door_logs')
+        .select('id,value,created_at,door_id,door_name')
+        .eq('user_id', req.params.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (!error && data) result = data;
+    } catch(e2) {
+      console.log('[UserLogs] door_logs table may not exist:', e2.message);
+    }
     res.json(result);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -871,8 +873,15 @@ app.put('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
     const { id } = req.params;
     const updates = {};
     const allowed = ['name', 'phone', 'role', 'status', 'request_status', 'expire_date', 'note', 'pw_plain'];
+    // request_status يقبل فقط: pending, approved, rejected
+    if (updates.request_status && !['pending','approved','rejected'].includes(updates.request_status)) {
+      delete updates.request_status;
+    }
     allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
-    if (req.body.pw) updates.pw_hash = crypto.createHash('sha256').update(req.body.pw).digest('hex');
+    if (req.body.pw) {
+      updates.pw_hash  = crypto.createHash('sha256').update(req.body.pw).digest('hex');
+      updates.pw_plain = encryptPw(req.body.pw);
+    }
 
     const { data, error } = await supabase.from('users').update(updates).eq('id', id).select().single();
     if (error) throw error;
