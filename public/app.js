@@ -383,31 +383,62 @@ setInterval(function() {
 
 
 function showPendingScreen() {
-  // إخفاء nav bar
   var nav = document.querySelector('.bottom-nav');
   if (nav) nav.style.display = 'none';
 
-  // عرض الرسالة في كامل الشاشة
-  var app = document.getElementById('main-app');
   var pending = document.getElementById('pending-screen');
   if (!pending) {
     pending = document.createElement('div');
     pending.id = 'pending-screen';
-    pending.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;z-index:999';
-    pending.innerHTML =
-      '<div style="font-size:5rem;margin-bottom:20px">⏳</div>' +
-      '<div style="font-size:1.4rem;font-weight:900;margin-bottom:12px;color:var(--text)">طلبك قيد المراجعة</div>' +
-      '<div style="color:var(--muted);font-size:0.9rem;line-height:1.8;max-width:280px;margin-bottom:32px">' +
-        'تم إرسال طلب انضمامك للمسؤول.<br>' +
-        'ستتلقى إشعاراً فور الموافقة على طلبك.' +
-      '</div>' +
-      '<div style="background:rgba(255,179,0,0.1);border:1px solid rgba(255,179,0,0.3);border-radius:16px;padding:16px 24px;margin-bottom:32px;color:var(--warning);font-size:0.85rem">' +
-        '🔔 تأكد من رفع التجميد الإشعارات لاستلام رد المسؤول' +
-      '</div>' +
-      '<button onclick="logout()" style="padding:12px 32px;border-radius:14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:Cairo,sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer">تسجيل الخروج</button>';
+    pending.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:999;overflow-y:auto;padding:20px;display:flex;flex-direction:column';
     document.body.appendChild(pending);
   }
+
+  // Header مثل المستخدم العادي
+  pending.innerHTML =
+    // شريط علوي
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding:12px 16px;background:var(--surface);border-radius:16px;border:1px solid var(--border)">' +
+      '<div style="font-size:1.1rem;font-weight:900;color:var(--accent)">PORTE</div>' +
+      '<button id="pending-logout-btn" style="padding:8px 18px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:Cairo,sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer">تسجيل الخروج</button>' +
+    '</div>' +
+
+    // رسالة الانتظار
+    '<div style="background:var(--surface);border:1px solid rgba(255,179,0,0.3);border-radius:20px;padding:24px;margin-bottom:16px;text-align:center">' +
+      '<div style="font-size:3rem;margin-bottom:12px">⏳</div>' +
+      '<div style="font-size:1.1rem;font-weight:900;color:var(--warning);margin-bottom:8px">طلبك قيد المراجعة</div>' +
+      '<div style="color:var(--muted);font-size:0.85rem;line-height:1.8">' +
+        'تم إرسال طلب انضمامك للمسؤول.<br>ستتلقى إشعاراً فور الموافقة.' +
+      '</div>' +
+    '</div>' +
+
+    // أبواب مجمدة (placeholder)
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;margin-bottom:12px;opacity:0.4;pointer-events:none">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+        '<div style="font-size:1rem;font-weight:800;color:var(--muted)">🚪 الباب الرئيسي</div>' +
+        '<span style="font-size:0.75rem;padding:3px 10px;border-radius:20px;background:var(--surface2);color:var(--muted)">—</span>' +
+      '</div>' +
+      '<div style="width:100%;aspect-ratio:4/3;background:var(--surface2);border-radius:12px;margin-bottom:12px;display:flex;align-items:center;justify-content:center">' +
+        '<span style="font-size:2rem;opacity:0.3">🔒</span>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">' +
+        '<div style="padding:14px 4px;border-radius:14px;background:var(--surface2);text-align:center;font-size:0.8rem;color:var(--muted)">فتح</div>' +
+        '<div style="padding:14px 4px;border-radius:14px;background:var(--surface2);text-align:center;font-size:0.8rem;color:var(--muted)">غلق</div>' +
+        '<div style="padding:14px 4px;border-radius:14px;background:var(--surface2);text-align:center;font-size:0.8rem;color:var(--muted)">إيقاف</div>' +
+        '<div style="padding:14px 4px;border-radius:14px;background:var(--surface2);text-align:center;font-size:0.8rem;color:var(--muted)">40ث</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div style="background:rgba(255,179,0,0.08);border:1px solid rgba(255,179,0,0.2);border-radius:14px;padding:14px;text-align:center;color:var(--warning);font-size:0.82rem">' +
+      '🔔 تأكد من تفعيل الإشعارات لاستلام رد المسؤول' +
+    '</div>';
+
   pending.style.display = 'flex';
+
+  // زر الخروج بعد الرندر
+  setTimeout(function() {
+    var btn = document.getElementById('pending-logout-btn');
+    if (btn) btn.addEventListener('click', function() { logout(); });
+  }, 100);
 }
 
 // ─── Boot ─────────────────────────────────────
