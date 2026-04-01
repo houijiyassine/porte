@@ -379,7 +379,7 @@ app.post('/api/auth/register', rateLimitMiddleware(3, 3600000), async (req, res)
     const pw_hash = crypto.createHash('sha256').update(pw).digest('hex');
     const { data: newUser, error } = await supabase.from('users').insert({
       name: name + (last_name ? ' ' + last_name : ''),
-      last_name, phone, pw_hash,
+      last_name, phone, pw_hash, pw_plain: encryptPw(pw),
       inst_id: inst.id, role: 'user',
       status: 'active', request_status: 'pending',
       created_at: new Date().toISOString()
@@ -1117,8 +1117,11 @@ app.get('/api/users/:id/pw', authMiddleware, async (req, res) => {
     return res.status(403).json({ error: 'غير مسموح' });
   try {
     const { data } = await supabase.from('users').select('pw_plain,pw_hash,name').eq('id', req.params.id).single();
-    const pw = data?.pw_plain ? decryptPw(data.pw_plain) : null;
-    res.json({ pw: pw, name: data?.name });
+    let pw = null;
+    if (data?.pw_plain) {
+      try { pw = decryptPw(data.pw_plain); } catch { pw = null; }
+    }
+    res.json({ pw: pw, name: data?.name, has_plain: !!data?.pw_plain });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
