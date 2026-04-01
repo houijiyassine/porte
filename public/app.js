@@ -719,6 +719,11 @@ function connectWS() {
         user.request_status = 'approved';
         localStorage.setItem('porte_user', JSON.stringify(user));
         toast('✅ تمت الموافقة على طلبك! مرحباً بك', 'success');
+        // إخفاء صفحة الانتظار
+        var ps = document.getElementById('pending-screen');
+        if (ps) ps.style.display = 'none';
+        var nav = document.querySelector('.bottom-nav');
+        if (nav) nav.style.display = '';
         setTimeout(function() {
           if (user && user.role === 'user') loadUserDoors();
         }, 1500);
