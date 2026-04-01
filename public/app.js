@@ -719,14 +719,10 @@ function connectWS() {
         user.request_status = 'approved';
         localStorage.setItem('porte_user', JSON.stringify(user));
         toast('✅ تمت الموافقة على طلبك! مرحباً بك', 'success');
-        // إخفاء صفحة الانتظار
+        // إعادة تهيئة الواجهة كاملاً بعد الموافقة
         var ps = document.getElementById('pending-screen');
-        if (ps) ps.style.display = 'none';
-        var nav = document.querySelector('.bottom-nav');
-        if (nav) nav.style.display = '';
-        setTimeout(function() {
-          if (user && user.role === 'user') loadUserDoors();
-        }, 1500);
+        if (ps) ps.remove();
+        setTimeout(function() { bootApp(); }, 1500);
       }
       if (msg.type === 'request_rejected') {
         toast('❌ تم رفض طلب انضمامك', 'error');
