@@ -558,10 +558,10 @@ app.post('/api/auth/login', rateLimitMiddleware(5, 60000), async (req, res) => {
       .from('users')
       .select('*')
       .eq('phone', phone)
-      .eq('status', 'active')
       .single();
 
-    if (error || !users) return res.status(401).json({ error: 'رقم الهاتف غير موجود أو الحساب محظور' });
+    if (error || !users) return res.status(401).json({ error: 'رقم الهاتف غير موجود' });
+    if (users.status === 'blocked') return res.status(401).json({ error: 'الحساب موقوف، تواصل مع المسؤول' });
 
     const pwHash = crypto.createHash('sha256').update(pw).digest('hex');
     if (users.pw_hash !== pwHash) return res.status(401).json({ error: 'كلمة المرور غير صحيحة' });
@@ -574,7 +574,7 @@ app.post('/api/auth/login', rateLimitMiddleware(5, 60000), async (req, res) => {
 
     res.json({
       token,
-      user: { id: users.id, name: users.name, phone: users.phone, role: users.role, inst_id: users.inst_id }
+      user: { id: users.id, name: users.name, phone: users.phone, role: users.role, inst_id: users.inst_id, request_status: users.request_status }
     });
   } catch (err) {
     console.error('[Login Error]', err);
@@ -885,6 +885,14 @@ app.put('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
 
     const { data, error } = await supabase.from('users').update(updates).eq('id', id).select().single();
     if (error) throw error;
+
+    // إشعار WS للمستخدم عند الموافقة أو الرفض
+    if (updates.request_status === 'approved') {
+      broadcastToUser(id, { type: 'request_approved' });
+    } else if (updates.request_status === 'rejected') {
+      broadcastToUser(id, { type: 'request_rejected' });
+    }
+
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
