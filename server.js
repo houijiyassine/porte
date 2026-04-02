@@ -775,7 +775,7 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
       return res.status(500).json({ error: result.msg });
 
     // تسجيل أن الأمر جاء من التطبيق (للـ Webhook)
-    markAppAction(deviceId, req.user.id, req.user.name, action);
+    markAppAction(MQTT_TOPIC, req.user.id, req.user.name, action);
     triggerBurst((duration || DEFAULT_DURATION) + 3);
     // سجّل العملية — سيُسجّل الآن عبر Webhook تلقائياً
     // لكن نحتفظ بسجل مباشر كـ fallback
