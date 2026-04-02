@@ -1697,17 +1697,19 @@ function startMQTT() {
       if (changed && val) {
         // جلب بيانات الباب من cache
         const door = mqttDoorCache.get(MQTT_TOPIC);
+        console.log(`[MQTT RC DEBUG] changed=${changed} val=${val} isFromApp=${isFromApp} door=${JSON.stringify(door)}`);
 
         if (door) {
           if (!isFromApp) {
             // RC — حفظ في سجل الباب
             try {
-              await supabase.from('door_logs').insert({
+              const { data: inserted, error: insertErr } = await supabase.from('door_logs').insert({
                 door_id: door.id, inst_id: door.inst_id, user_id: null,
                 value: doorAction, source: 'RC (جهاز تحكم)',
                 created_at: new Date().toISOString(),
-              });
-              console.log(`[MQTT] 📻 RC ${doorAction} — ${door.name}`);
+              }).select();
+              if (insertErr) console.error('[MQTT RC insert error]', insertErr.message);
+              else console.log(`[MQTT] 📻 RC ${doorAction} — ${door.name} inserted:`, inserted?.length);
             } catch(e) { console.error('[MQTT RC log]', e.message); }
 
             // إشعار Push للأدمن إذا rc_notify مفعّل
