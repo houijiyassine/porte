@@ -7,7 +7,8 @@ function updateDeviceOnlineBadge(deviceId, online) {
   doorStatusCache[deviceId] = online;
 
   var foundIds = [];
-  document.querySelectorAll('[data-device-id="' + deviceId + '"]').forEach(function(el) {
+  var safeId = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(deviceId) : deviceId.replace(/([\0-\x1f\x7f]|^-?\d)|^-$|[^\x80-\uFFFF\w-]/g, "\\$&");
+  document.querySelectorAll('[data-device-id="' + safeId + '"]').forEach(function(el) {
     var doorId = el.getAttribute('data-door-id') || el.id.replace('door-img-', '');
     if (doorId && !foundIds.includes(doorId)) foundIds.push(doorId);
   });
