@@ -1100,8 +1100,24 @@ async function sendAction(action) {
 // إرسال أمر لباب محدد من صفحة المؤسسات
 async function sendDoorAction(deviceId, action, duration) {
   try {
+    // إذا الباب يتحرك بنفس الاتجاه → إيقاف
+    var doorId = null;
+    if (typeof institutesCache !== 'undefined') {
+      institutesCache.forEach(function(inst) {
+        (inst.doors||[]).forEach(function(d) {
+          if (d.device_id === deviceId) doorId = d.id;
+        });
+      });
+    }
+    if (doorId && doorTimers[doorId]) {
+      var t = doorTimers[doorId];
+      var isOpenAction = (action === 'open' || action === 'open40');
+      if (t.isOpen === isOpenAction) {
+        // نفس الاتجاه → إيقاف
+        action = 'stop';
+      }
+    }
     var body = { action, deviceId, duration };
-    // أرسل الموقع دائماً إذا كان متوفراً
     if (userLocation) { body.lat = userLocation.lat; body.lng = userLocation.lng; body.accuracy = userLocation.accuracy || 999; }
     await apiFetch('/api/door/control', 'POST', body);
     toast(`تم: ${action}`, 'success');
