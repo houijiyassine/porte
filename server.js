@@ -52,6 +52,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
+import mqtt from 'mqtt';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -80,6 +81,11 @@ const VAPID_PUBLIC  = process.env.VAPID_PUBLIC  || 'BOfIw6laarxGfV8Ezc04YzfCzq4N
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE;
 const EMPTY_BODY_HASH  = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 const DEFAULT_DURATION = parseInt(process.env.DEFAULT_DURATION || '5');
+
+// ─── MQTT ────────────────────────────────────────────────────────────────────
+const MQTT_HOST  = process.env.MQTT_HOST  || 'eclipse-mosquitto';
+const MQTT_PORT  = parseInt(process.env.MQTT_PORT  || '1883');
+const MQTT_TOPIC = process.env.MQTT_TOPIC || 'sonoff4ch';
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY);
@@ -431,7 +437,7 @@ app.post('/api/auth/reset-password', rateLimitMiddleware(3, 3600000), async (req
     if (new Date(otp.expires_at) < new Date()) return res.status(400).json({ error: 'انتهت صلاحية الرمز' });
 
     const pw_hash = crypto.createHash('sha256').update(new_pw).digest('hex');
-    const { error } = await supabase.from('users').update({ pw_hash }).eq('phone', phone);
+    const { error } = await supabase.from('users').update({ pw_hash, pw_plain: encryptPw(new_pw) }).eq('phone', phone);
     if (error) return res.status(500).json({ error: error.message });
     await supabase.from('otp_codes').update({ used: true }).eq('id', otp.id);
     res.json({ success: true });
@@ -446,7 +452,7 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
     const old_hash = crypto.createHash('sha256').update(old_pw).digest('hex');
     if (u.pw_hash !== old_hash) return res.status(400).json({ error: 'كلمة المرور القديمة غير صحيحة' });
     const new_hash = crypto.createHash('sha256').update(new_pw).digest('hex');
-    await supabase.from('users').update({ pw_hash: new_hash }).eq('id', req.user.id);
+    await supabase.from('users').update({ pw_hash: new_hash, pw_plain: encryptPw(new_pw) }).eq('id', req.user.id);
     res.json({ success: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -603,6 +609,16 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
     const { action } = req.body;
     const deviceId   = req.body.deviceId || TUYA.DEVICE_ID;
     const duration   = req.body.duration || DEFAULT_DURATION;
+
+    // التحقق من أن المستخدم غير مجمّد
+    const { data: currentUser } = await supabase.from('users')
+      .select('status, request_status').eq('id', req.user.id).single();
+    if (!currentUser || currentUser.status === 'blocked') {
+      return res.status(403).json({ error: 'حسابك موقوف، تواصل مع المسؤول', code: 'ACCOUNT_BLOCKED' });
+    }
+    if (currentUser.request_status === 'pending') {
+      return res.status(403).json({ error: 'طلبك لم يتم قبوله بعد', code: 'PENDING_APPROVAL' });
+    }
 
     // التحقق من القيود حسب الدور
     const role = req.user.role;
@@ -1593,7 +1609,97 @@ function startPolling() {
 }
 startPolling();
 
-// مسار Webhook القديم كـ alias
+// ─── MQTT Client ──────────────────────────────────────────────────────────────
+function startMQTT() {
+  const client = mqtt.connect(`mqtt://${MQTT_HOST}:${MQTT_PORT}`, {
+    clientId: 'porte-server-' + Math.random().toString(16).slice(2),
+    reconnectPeriod: 5000,
+    connectTimeout: 10000,
+  });
+
+  client.on('connect', () => {
+    console.log('[MQTT] ✅ متصل بـ Mosquitto');
+    // الاشتراك في حالة الأبواب
+    client.subscribe(`stat/${MQTT_TOPIC}/POWER1`);
+    client.subscribe(`stat/${MQTT_TOPIC}/POWER2`);
+    client.subscribe(`stat/${MQTT_TOPIC}/POWER3`);
+    client.subscribe(`stat/${MQTT_TOPIC}/POWER4`);
+    client.subscribe(`tele/${MQTT_TOPIC}/STATE`);
+    client.subscribe(`tele/${MQTT_TOPIC}/LWT`); // Online/Offline
+    console.log(`[MQTT] 📡 مشترك في topic: ${MQTT_TOPIC}`);
+  });
+
+  client.on('message', async (topic, message) => {
+    const msg = message.toString();
+    console.log(`[MQTT] 📩 ${topic}: ${msg}`);
+
+    // كشف offline/online
+    if (topic === `tele/${MQTT_TOPIC}/LWT`) {
+      const isOnline = msg === 'Online';
+      broadcast({ type: 'device_online', deviceId: MQTT_TOPIC, online: isOnline, timestamp: Date.now() });
+      if (!isOnline) {
+        const { data: doors } = await supabase.from('doors').select('name,inst_id').eq('device_id', MQTT_TOPIC).maybeSingle();
+        if (doors) {
+          sendPushToAdmins(doors.inst_id, {
+            title: '⚠️ انقطع اتصال الجهاز',
+            body: `الباب "${doors.name}" غير متصل`,
+          });
+        }
+      }
+      return;
+    }
+
+    // حالة المفاتيح
+    if (topic.startsWith(`stat/${MQTT_TOPIC}/POWER`)) {
+      const ch  = topic.slice(-1); // 1,2,3,4
+      const val = msg === 'ON';
+      broadcast({ type: 'door_state', channel: ch, value: val, deviceId: MQTT_TOPIC, timestamp: Date.now() });
+
+      // حفظ في door_state
+      await supabase.from('door_state').insert({
+        value: val ? 'open' : 'close',
+        source: `mqtt_ch${ch}`,
+        created_at: new Date().toISOString(),
+      }).catch(() => {});
+    }
+
+    // حالة كاملة (tele/STATE)
+    if (topic === `tele/${MQTT_TOPIC}/STATE`) {
+      try {
+        const state = JSON.parse(msg);
+        const channels = ['POWER1','POWER2','POWER3','POWER4'];
+        channels.forEach((ch, i) => {
+          if (state[ch] !== undefined) {
+            broadcast({ type: 'door_state', channel: String(i+1), value: state[ch] === 'ON', deviceId: MQTT_TOPIC, timestamp: Date.now() });
+          }
+        });
+      } catch {}
+    }
+  });
+
+  client.on('error', (err) => {
+    console.error('[MQTT] ❌ خطأ:', err.message);
+  });
+
+  client.on('reconnect', () => {
+    console.log('[MQTT] 🔄 إعادة اتصال...');
+  });
+
+  // تصدير الـ client للاستخدام في التحكم بالأبواب
+  return client;
+}
+
+const mqttClient = startMQTT();
+
+// دالة إرسال أمر عبر MQTT
+function mqttControl(channel, value) {
+  const cmd = value ? 'ON' : 'OFF';
+  const topic = `cmnd/${MQTT_TOPIC}/POWER${channel}`;
+  mqttClient.publish(topic, cmd, { qos: 1 });
+  console.log(`[MQTT] ⬆️ ${topic}: ${cmd}`);
+}
+
+// ─── مسار Webhook القديم كـ alias
 app.post('/api/webhook/tuya', async (req, res) => {
   // redirect to new handler
   req.url = '/api/tuya/webhook';
