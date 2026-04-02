@@ -779,8 +779,8 @@ app.post('/api/door/control', authMiddleware, async (req, res) => {
     triggerBurst((duration || DEFAULT_DURATION) + 3);
     // سجّل العملية — سيُسجّل الآن عبر Webhook تلقائياً
     // لكن نحتفظ بسجل مباشر كـ fallback
-    const deviceId2 = req.body.deviceId || TUYA.DEVICE_ID;
-    const { data: doorData } = await supabase.from('doors').select('id').eq('device_id', deviceId2).single();
+    const deviceId2 = req.body.deviceId || MQTT_TOPIC;
+    const { data: doorData } = await supabase.from('doors').select('id').eq('device_id', deviceId2).maybeSingle();
     await supabase.from('door_logs').insert({
       user_id: req.user.id,
       inst_id: req.user.inst_id,
