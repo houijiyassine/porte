@@ -648,8 +648,14 @@ function connectWS() {
         loadRecentHistory();
         // عند التوقف — أوقف الانيميشن فوراً
         if (msg.action === 'stop' || msg.action === 'auto_stop') {
-          // ابحث عن كل الأبواب وأوقف timers
-          Object.keys(doorTimers).forEach(function(dId) {
+          // أوقف كل الـ timers فوراً
+          var timerIds = Object.keys(doorTimers);
+          timerIds.forEach(function(dId) {
+            var t = doorTimers[dId];
+            if (t && t._raf) {
+              cancelAnimationFrame(t._raf);
+              t._raf = null;
+            }
             var imgEl   = document.getElementById('door-img-' + dId);
             var stateEl = document.getElementById('user-state-' + dId)
                        || document.getElementById('door-progress-bar-' + dId)
@@ -667,10 +673,22 @@ function connectWS() {
 
         updateDoorStatusUI(rawState);
 
-        // idle: تجاهل — Tuya يبعثه بعد كل نبضة
+        // idle = الباب توقف — أوقف الانيميشن
         if (rawState === 'idle') {
-          // لكن حدّث السجل إذا كان RC
-          if (msg.source === 'rc') setTimeout(loadRecentHistory, 500);
+          if (msg.source === 'rc') {
+            // RC أوقف الباب — أوقف الانيميشن
+            var timerIds2 = Object.keys(doorTimers);
+            timerIds2.forEach(function(dId) {
+              var t2 = doorTimers[dId];
+              if (t2 && t2._raf) { cancelAnimationFrame(t2._raf); t2._raf = null; }
+              var i2 = document.getElementById('door-img-' + dId);
+              var s2 = document.getElementById('user-state-' + dId)
+                     || document.getElementById('door-progress-bar-' + dId)
+                     || document.getElementById('door-progress-' + dId);
+              stopDoorTimer(dId, i2, s2);
+            });
+            setTimeout(loadRecentHistory, 500);
+          }
           return;
         }
 
