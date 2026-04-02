@@ -648,10 +648,7 @@ function connectWS() {
         loadRecentHistory();
         // عند التوقف — أوقف الانيميشن فوراً
         if (msg.action === 'stop' || msg.action === 'auto_stop') {
-          // أوقف كل الـ timers فوراً وسجّل وقت الإيقاف
-          var timerIds = Object.keys(doorTimers);
-          timerIds.forEach(function(dId) {
-            doorStopTime[dId] = Date.now();
+          Object.keys(doorTimers).forEach(function(dId) {
             var t = doorTimers[dId];
             if (t && t._raf) { cancelAnimationFrame(t._raf); t._raf = null; }
             var imgEl   = document.getElementById('door-img-' + dId);
@@ -660,11 +657,9 @@ function connectWS() {
                        || document.getElementById('door-progress-' + dId);
             stopDoorTimer(dId, imgEl, stateEl);
           });
-          // سجّل لكل الأبواب المعروفة
-          if (msg.doorId) doorStopTime[msg.doorId] = Date.now();
         }
       }
-      // تحديث حالة الباب من Polling
+      // تحديث حالة الباب من MQTT
       if (msg.type === 'door_state') {
         var r1       = msg.r1_on, r2 = msg.r2_on;
         var rawState = r1 ? 'open' : r2 ? 'close' : 'idle';
@@ -673,15 +668,9 @@ function connectWS() {
 
         updateDoorStatusUI(rawState);
 
-        // إذا تم الإيقاف مؤخراً (أقل من 500ms فقط) — تجاهل door_state
-        if (doorId && doorStopTime[doorId] && (Date.now() - doorStopTime[doorId]) < 500) {
-          return;
-        }
-
-        // idle = الباب توقف فيزيائياً — أوقف الانيميشن دائماً
+        // idle = الـ relay توقف — أوقف الانيميشن
         if (rawState === 'idle') {
-          var timerIds2 = Object.keys(doorTimers);
-          timerIds2.forEach(function(dId) {
+          Object.keys(doorTimers).forEach(function(dId) {
             var t2 = doorTimers[dId];
             if (t2 && t2._raf) { cancelAnimationFrame(t2._raf); t2._raf = null; }
             var i2 = document.getElementById('door-img-' + dId);
@@ -690,7 +679,6 @@ function connectWS() {
                    || document.getElementById('door-progress-' + dId);
             stopDoorTimer(dId, i2, s2);
           });
-          if (doorId) doorStopTime[doorId] = Date.now();
           setTimeout(loadRecentHistory, 500);
           return;
         }
