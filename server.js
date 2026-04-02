@@ -82,6 +82,7 @@ const wsClients      = new Map(); // userId → ws
 const doorStateCache = new Map(); // deviceId → { r1, r2 }
 const appLastAction  = new Map(); // deviceId → { userId, userName, action, time }
 const doorTimers     = {};        // deviceId → timer
+const manualAction   = new Map(); // deviceId → timestamp (زر Sonoff)
 let   doorCache      = new Map(); // device_id → door object
 let   mqttClient     = null;
 
@@ -227,6 +228,7 @@ function startMQTT() {
     ['POWER1','POWER2','POWER3','POWER4'].forEach(p => client.subscribe(`stat/${MQTT_TOPIC}/${p}`));
     client.subscribe(`tele/${MQTT_TOPIC}/STATE`);
     client.subscribe(`tele/${MQTT_TOPIC}/LWT`);
+    client.subscribe(`stat/${MQTT_TOPIC}/SOURCE`);
     console.log(`[MQTT] 📡 topic: ${MQTT_TOPIC}`);
   });
 
@@ -245,6 +247,12 @@ function startMQTT() {
       return;
     }
 
+    // SOURCE — زر Sonoff يدوي
+    if (topic === `stat/${MQTT_TOPIC}/SOURCE` && msg === 'manual') {
+      manualAction.set(MQTT_TOPIC, Date.now());
+      return;
+    }
+
     // POWER state
     if (topic.startsWith(`stat/${MQTT_TOPIC}/POWER`)) {
       const ch  = topic.slice(-1);
@@ -260,6 +268,8 @@ function startMQTT() {
       const doorAction = cached.r1 ? 'open' : cached.r2 ? 'close' : 'idle';
       const lastApp    = appLastAction.get(MQTT_TOPIC);
       const isFromApp  = !!(lastApp && (Date.now() - lastApp.time) < 15000);
+      const lastManual = manualAction.get(MQTT_TOPIC);
+      const isManual   = !!(lastManual && (Date.now() - lastManual) < 3000);
       const door       = doorCache.get(MQTT_TOPIC);
       console.log(`[MQTT DEBUG] ch=${ch} val=${val} prev=${JSON.stringify(prev)} cached=${JSON.stringify({r1:cached.r1,r2:cached.r2})} changed=${changed} action=${doorAction} isFromApp=${isFromApp} door=${door?.name||'NOT FOUND'}`);
 
@@ -284,8 +294,8 @@ function startMQTT() {
           console.log(`[MQTT] 📱 App: ${doorAction} by ${lastApp.userName}`);
         } else {
           logEntry.user_id = null;
-          logEntry.source  = 'RC (جهاز تحكم)';
-          console.log(`[MQTT] 📻 RC: ${doorAction} — ${door.name}`);
+          logEntry.source  = isManual ? 'يدوي (أزرار الجهاز)' : 'RC (جهاز تحكم)';
+          console.log(`[MQTT] ${isManual ? '🖐️ Manual' : '📻 RC'}: ${doorAction} — ${door.name}`);
           if (door.rc_notify) {
             const label = doorAction === 'open' ? 'فتح الباب' : 'غلق الباب';
             sendPushToAdmins(door.inst_id, { title: 'إشعار RC 📻', body: `${label} بواسطة RC — ${door.name}` });
@@ -319,24 +329,10 @@ function startMQTT() {
 // ═══════════════════════════════════════════════════════════════════════════════
 async function openDoor(deviceId, dur) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  mqttControl(2, false);
-  await new Promise(r => setTimeout(r, 200));
-  mqttControl(1, true);
-  broadcast({ type: 'door_event', action: 'open', deviceId });
-  doorTimers[deviceId] = setTimeout(() => {
-    mqttControl(1, false);
-    broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
-    delete doorTimers[deviceId];
-  }, dur * 1000);
-  return { success: true };
-}
-
-async function closeDoor(deviceId, dur) {
-  if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  mqttControl(1, false);
+  mqttControl(3, false);
   await new Promise(r => setTimeout(r, 200));
   mqttControl(2, true);
-  broadcast({ type: 'door_event', action: 'close', deviceId });
+  broadcast({ type: 'door_event', action: 'open', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
     mqttControl(2, false);
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
@@ -345,10 +341,24 @@ async function closeDoor(deviceId, dur) {
   return { success: true };
 }
 
+async function closeDoor(deviceId, dur) {
+  if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
+  mqttControl(2, false);
+  await new Promise(r => setTimeout(r, 200));
+  mqttControl(3, true);
+  broadcast({ type: 'door_event', action: 'close', deviceId });
+  doorTimers[deviceId] = setTimeout(() => {
+    mqttControl(3, false);
+    broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
+    delete doorTimers[deviceId];
+  }, dur * 1000);
+  return { success: true };
+}
+
 async function stopDoor(deviceId) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  mqttControl(1, false);
   mqttControl(2, false);
+  mqttControl(3, false);
   broadcast({ type: 'door_event', action: 'stop', deviceId });
   return { success: true };
 }
