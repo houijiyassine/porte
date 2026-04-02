@@ -258,14 +258,15 @@ function startMQTT() {
       const ch  = topic.slice(-1);
       const val = msg === 'ON';
 
-      const cached = doorStateCache.get(MQTT_TOPIC) || { r1: false, r2: false };
-      const prev   = { r1: cached.r1, r2: cached.r2 };
+      const cached = doorStateCache.get(MQTT_TOPIC) || { r1: false, r2: false, r3: false };
+      const prev   = { r1: cached.r1, r2: cached.r2, r3: cached.r3 };
       if (ch === '1') cached.r1 = val;
       if (ch === '2') cached.r2 = val;
-      doorStateCache.set(MQTT_TOPIC, { r1: cached.r1, r2: cached.r2 });
+      if (ch === '3') cached.r3 = val;
+      doorStateCache.set(MQTT_TOPIC, { r1: cached.r1, r2: cached.r2, r3: cached.r3 });
 
-      const changed    = (prev.r1 !== cached.r1) || (prev.r2 !== cached.r2);
-      const doorAction = cached.r1 ? 'open' : cached.r2 ? 'close' : 'idle';
+      const changed    = (prev.r2 !== cached.r2) || (prev.r3 !== cached.r3);
+      const doorAction = cached.r2 ? 'open' : cached.r3 ? 'close' : 'idle';
       const lastApp    = appLastAction.get(MQTT_TOPIC);
       const isFromApp  = !!(lastApp && (Date.now() - lastApp.time) < 15000);
       const lastManual = manualAction.get(MQTT_TOPIC);
@@ -273,11 +274,11 @@ function startMQTT() {
       const door       = doorCache.get(MQTT_TOPIC);
       console.log(`[MQTT DEBUG] ch=${ch} val=${val} prev=${JSON.stringify(prev)} cached=${JSON.stringify({r1:cached.r1,r2:cached.r2})} changed=${changed} action=${doorAction} isFromApp=${isFromApp} door=${door?.name||'NOT FOUND'}`);
 
-      // بث للواجهة
+      // بث للواجهة — r1_on = relay2 (فتح), r2_on = relay3 (غلق)
       broadcast({
         type: 'door_state', deviceId: MQTT_TOPIC,
         doorId: door?.id, instId: door?.inst_id,
-        channel: ch, r1_on: cached.r1, r2_on: cached.r2,
+        channel: ch, r1_on: cached.r2, r2_on: cached.r3,
         state: doorAction, source: isFromApp ? 'app' : 'rc',
         timestamp: Date.now(),
       });
@@ -480,8 +481,8 @@ app.post('/api/auth/heartbeat', auth, async (req, res) => {
 // DOOR STATUS
 app.get('/api/door/status', auth, (req, res) => {
   const deviceId = req.query.deviceId || MQTT_TOPIC;
-  const s = doorStateCache.get(deviceId) || { r1: false, r2: false };
-  res.json({ value: s.r1 ? 'open' : s.r2 ? 'close' : 'stop', r1_on: s.r1, r2_on: s.r2, timer_active: !!doorTimers[deviceId] });
+  const s = doorStateCache.get(deviceId) || { r1: false, r2: false, r3: false };
+  res.json({ value: s.r2 ? 'open' : s.r3 ? 'close' : 'stop', r1_on: s.r2, r2_on: s.r3, timer_active: !!doorTimers[deviceId] });
 });
 
 // DOOR CONTROL
