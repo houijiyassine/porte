@@ -656,7 +656,11 @@ function connectWS() {
         updateDoorStatusUI(rawState);
 
         // idle: تجاهل — Tuya يبعثه بعد كل نبضة
-        if (rawState === 'idle') return;
+        if (rawState === 'idle') {
+          // لكن حدّث السجل إذا كان RC
+          if (msg.source === 'rc') setTimeout(loadRecentHistory, 500);
+          return;
+        }
 
         var imgEl   = document.getElementById('door-img-' + doorId);
         var stateEl = document.getElementById('user-state-' + doorId)
@@ -2162,12 +2166,16 @@ async function resetUserPw(userId, userName) {
   if (user && user.role === 'super_admin') {
     try {
       var pwData = await apiFetch('/api/users/' + userId + '/pw');
-      var currentPw = pwData.pw || '(غير متوفرة)';
-      var newPw = prompt(
-        '👤 ' + (pwData.name || userName) + '\n' +
-        '🔑 كلمة المرور الحالية: ' + currentPw + '\n\n' +
-        'أدخل كلمة المرور الجديدة (أو اضغط إلغاء للإبقاء على الحالية):'
-      );
+      var currentPw = pwData.pw || null;
+      var promptMsg = '👤 ' + (pwData.name || userName) + '\n';
+      if (currentPw) {
+        promptMsg += '🔑 كلمة المرور الحالية: ' + currentPw + '\n\n';
+      } else {
+        promptMsg += '⚠️ كلمة المرور غير محفوظة (مستخدم سجّل قبل تفعيل التشفير)\n';
+        promptMsg += 'يمكنك تعيين كلمة مرور جديدة الآن:\n\n';
+      }
+      promptMsg += 'أدخل كلمة المرور الجديدة (أو اضغط إلغاء):';
+      var newPw = prompt(promptMsg);
       if (!newPw || newPw.trim() === '') return;
       await apiFetch('/api/users/' + userId, 'PUT', { pw: newPw.trim() });
       toast('✅ تم تغيير كلمة المرور', 'success');
