@@ -673,8 +673,8 @@ function connectWS() {
 
         updateDoorStatusUI(rawState);
 
-        // إذا تم الإيقاف مؤخراً (أقل من ثانيتين) — تجاهل door_state
-        if (doorId && doorStopTime[doorId] && (Date.now() - doorStopTime[doorId]) < 2000) {
+        // إذا تم الإيقاف مؤخراً (أقل من 500ms فقط) — تجاهل door_state
+        if (doorId && doorStopTime[doorId] && (Date.now() - doorStopTime[doorId]) < 500) {
           return;
         }
 
