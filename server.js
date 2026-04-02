@@ -94,7 +94,12 @@ async function loadDoorCache() {
       .select('id,inst_id,name,device_id,rc_notify,duration_seconds,gps,schedule,door_type,auto_schedule');
     if (error) { console.error('[DoorCache] error:', error.message); return; }
     doorCache = new Map();
-    (data || []).forEach(d => { if (d.device_id) doorCache.set(d.device_id, d); });
+    (data || []).forEach(d => {
+      if (d.device_id) {
+        d.device_id = d.device_id.replace(/[\r\n\t]/g, '').trim();
+        doorCache.set(d.device_id, d);
+      }
+    });
     console.log(`[DoorCache] loaded ${doorCache.size} door(s): [${[...doorCache.keys()].join(', ')}]`);
   } catch(e) { console.error('[DoorCache]', e.message); }
 }
