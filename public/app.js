@@ -646,6 +646,17 @@ function connectWS() {
       if (msg.type === 'door_event') {
         updateDoorStatusUI(msg.action);
         loadRecentHistory();
+        // عند التوقف — أوقف الانيميشن فوراً
+        if (msg.action === 'stop' || msg.action === 'auto_stop') {
+          // ابحث عن كل الأبواب وأوقف timers
+          Object.keys(doorTimers).forEach(function(dId) {
+            var imgEl   = document.getElementById('door-img-' + dId);
+            var stateEl = document.getElementById('user-state-' + dId)
+                       || document.getElementById('door-progress-bar-' + dId)
+                       || document.getElementById('door-progress-' + dId);
+            stopDoorTimer(dId, imgEl, stateEl);
+          });
+        }
       }
       // تحديث حالة الباب من Polling
       if (msg.type === 'door_state') {
