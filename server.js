@@ -1427,6 +1427,17 @@ let _pollTimer       = null;
 const deviceOffline  = new Map(); // deviceId → true إذا offline
 const mqttDoorCache  = new Map(); // deviceId → { id, inst_id }
 
+// تحميل بيانات الأبواب عند البدء
+async function loadDoorCache() {
+  try {
+    const { data: doors } = await supabase.from('doors').select('id,inst_id,name,device_id,rc_notify');
+    if (doors) {
+      doors.forEach(d => { if (d.device_id) mqttDoorCache.set(d.device_id, d); });
+      console.log(`[Cache] ✅ تم تحميل ${doors.length} باب`);
+    }
+  } catch(e) { console.error('[Cache Error]', e.message); }
+}
+
 
 async function checkAutoSchedule() {
   try {
@@ -1608,6 +1619,7 @@ function startPolling() {
   _pollTimer = setTimeout(run, 5000);
 }
 startPolling();
+loadDoorCache();
 
 // ─── MQTT Client ──────────────────────────────────────────────────────────────
 function startMQTT() {
@@ -1683,9 +1695,8 @@ function startMQTT() {
         timestamp: Date.now() });
 
       if (changed && val) {
-        // جلب بيانات الباب الكاملة للسجل
-        const { data: door } = await supabase.from('doors')
-          .select('id,inst_id,name,rc_notify').eq('device_id', MQTT_TOPIC).maybeSingle();
+        // جلب بيانات الباب من cache
+        const door = mqttDoorCache.get(MQTT_TOPIC);
 
         if (door) {
           if (!isFromApp) {
