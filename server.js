@@ -1425,6 +1425,7 @@ let _lastChange      = 0;        // آخر تغيير في الحالة
 let _lastChangeDur   = 5;        // مدة n للباب الذي تغير
 let _pollTimer       = null;
 const deviceOffline  = new Map(); // deviceId → true إذا offline
+const mqttDoorCache  = new Map(); // deviceId → { id, inst_id }
 
 
 async function checkAutoSchedule() {
@@ -1664,16 +1665,24 @@ function startMQTT() {
       const changed = prev_r1 !== r1 || prev_r2 !== r2;
       const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
 
+      // جلب doorId من cache أو DB
+      if (!mqttDoorCache.has(MQTT_TOPIC)) {
+        const { data: di } = await supabase.from('doors')
+          .select('id,inst_id').eq('device_id', MQTT_TOPIC).maybeSingle();
+        if (di) mqttDoorCache.set(MQTT_TOPIC, di);
+      }
+      const doorInfo = mqttDoorCache.get(MQTT_TOPIC);
+      const isFromApp = (() => { const la = appLastAction.get(MQTT_TOPIC); return la && (Date.now()-la.time)<15000; })();
+
       // بث للواجهة
       broadcast({ type: 'door_state', channel: ch, value: val, deviceId: MQTT_TOPIC,
-        r1_on: r1, r2_on: r2, state: doorAction, timestamp: Date.now() });
+        doorId: doorInfo?.id, instId: doorInfo?.inst_id,
+        r1_on: r1, r2_on: r2, state: doorAction,
+        source: isFromApp ? 'app' : 'rc',
+        timestamp: Date.now() });
 
       if (changed && val) {
-        // هل الأمر جاء من التطبيق أم RC؟
-        const lastApp   = appLastAction.get(MQTT_TOPIC);
-        const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
-
-        // جلب بيانات الباب
+        // جلب بيانات الباب الكاملة للسجل
         const { data: door } = await supabase.from('doors')
           .select('id,inst_id,name,rc_notify').eq('device_id', MQTT_TOPIC).maybeSingle();
 
