@@ -1663,6 +1663,7 @@ function startMQTT() {
 
       const r1 = cached.r1, r2 = cached.r2;
       const changed = prev_r1 !== r1 || prev_r2 !== r2;
+      console.log(`[MQTT DEBUG] ch=${ch} val=${val} prev_r1=${prev_r1} prev_r2=${prev_r2} r1=${r1} r2=${r2} changed=${changed}`);
       const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
 
       // جلب doorId من cache أو DB
