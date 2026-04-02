@@ -270,41 +270,40 @@ const doorTimers = {};
 
 async function openDoor(deviceId, durationSeconds) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  const statusData = await getTuyaDeviceStatus(deviceId);
-  const status     = statusData.result || [];
-  const r2On       = status.find(s => s.code === 'switch_2')?.value;
-  const commands   = [];
-  if (r2On) commands.push({ code: 'switch_2', value: false });
-  commands.push({ code: 'switch_1', value: true });
-  const result = await sendTuyaCommands(deviceId, commands);
-  doorTimers[deviceId] = setTimeout(async () => {
-    await sendTuyaCommands(deviceId, [{ code: 'switch_1', value: false }]);
+  // أوقف relay2 أولاً إذا كان شغّالاً ثم شغّل relay1
+  mqttControl(2, false);
+  await new Promise(r => setTimeout(r, 200));
+  mqttControl(1, true);
+  broadcast({ type: 'door_event', action: 'open', deviceId });
+  doorTimers[deviceId] = setTimeout(() => {
+    mqttControl(1, false);
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
     delete doorTimers[deviceId];
   }, durationSeconds * 1000);
-  return result;
+  return { success: true };
 }
 
 async function closeDoor(deviceId, durationSeconds) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  const statusData = await getTuyaDeviceStatus(deviceId);
-  const status     = statusData.result || [];
-  const r1On       = status.find(s => s.code === 'switch_1')?.value;
-  const commands   = [];
-  if (r1On) commands.push({ code: 'switch_1', value: false });
-  commands.push({ code: 'switch_2', value: true });
-  const result = await sendTuyaCommands(deviceId, commands);
-  doorTimers[deviceId] = setTimeout(async () => {
-    await sendTuyaCommands(deviceId, [{ code: 'switch_2', value: false }]);
+  // أوقف relay1 أولاً إذا كان شغّالاً ثم شغّل relay2
+  mqttControl(1, false);
+  await new Promise(r => setTimeout(r, 200));
+  mqttControl(2, true);
+  broadcast({ type: 'door_event', action: 'close', deviceId });
+  doorTimers[deviceId] = setTimeout(() => {
+    mqttControl(2, false);
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
     delete doorTimers[deviceId];
   }, durationSeconds * 1000);
-  return result;
+  return { success: true };
 }
 
 async function stopDoor(deviceId) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  return await sendTuyaCommands(deviceId, [{ code: 'switch_1', value: false }, { code: 'switch_2', value: false }]);
+  mqttControl(1, false);
+  mqttControl(2, false);
+  broadcast({ type: 'door_event', action: 'stop', deviceId });
+  return { success: true };
 }
 
 // ─── Push ─────────────────────────────────────────────────────────────────────
@@ -589,13 +588,13 @@ app.post('/api/auth/login', rateLimitMiddleware(5, 60000), async (req, res) => {
 });
 
 // ─── DOOR STATUS ──────────────────────────────────────────────────────────────
+// حالة الأبواب تأتي من MQTT عبر doorStateCache
 app.get('/api/door/status', authMiddleware, async (req, res) => {
   try {
-    const deviceId = req.query.deviceId || TUYA.DEVICE_ID;
-    const data     = await getTuyaDeviceStatus(deviceId);
-    const status   = data.result || [];
-    const r1 = status.find(s => s.code === 'switch_1')?.value;
-    const r2 = status.find(s => s.code === 'switch_2')?.value;
+    const deviceId = req.query.deviceId || MQTT_TOPIC;
+    const cached   = doorStateCache.get(deviceId);
+    const r1 = cached?.r1 || false;
+    const r2 = cached?.r2 || false;
     const state = r1 ? 'open' : r2 ? 'close' : 'stop';
     res.json({ value: state, r1_on: r1, r2_on: r2, timer_active: !!doorTimers[deviceId] });
   } catch (err) {
@@ -1654,6 +1653,12 @@ function startMQTT() {
       const ch  = topic.slice(-1); // 1,2,3,4
       const val = msg === 'ON';
       broadcast({ type: 'door_state', channel: ch, value: val, deviceId: MQTT_TOPIC, timestamp: Date.now() });
+
+      // تحديث doorStateCache
+      const cached = doorStateCache.get(MQTT_TOPIC) || { r1: false, r2: false };
+      if (ch === '1') cached.r1 = val;
+      if (ch === '2') cached.r2 = val;
+      doorStateCache.set(MQTT_TOPIC, cached);
 
       // حفظ في door_state
       await supabase.from('door_state').insert({
