@@ -256,6 +256,7 @@ function startMQTT() {
       const lastApp    = appLastAction.get(MQTT_TOPIC);
       const isFromApp  = !!(lastApp && (Date.now() - lastApp.time) < 15000);
       const door       = doorCache.get(MQTT_TOPIC);
+      console.log(`[MQTT DEBUG] ch=${ch} val=${val} prev=${JSON.stringify(prev)} cached=${JSON.stringify({r1:cached.r1,r2:cached.r2})} changed=${changed} action=${doorAction} isFromApp=${isFromApp} door=${door?.name||'NOT FOUND'}`);
 
       // بث للواجهة
       broadcast({
