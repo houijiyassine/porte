@@ -227,6 +227,7 @@ function startMQTT() {
 
   client.on('message', async (topic, message) => {
     const msg = message.toString();
+    console.log(`[MQTT] 📩 ${topic}: ${msg}`);
 
     // LWT — online/offline
     if (topic === `tele/${MQTT_TOPIC}/LWT`) {
