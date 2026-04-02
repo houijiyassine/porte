@@ -681,8 +681,9 @@ function connectWS() {
               // نفس الاتجاه = ضغط نفس الزر → إيقاف
               stopDoorTimer(doorId, imgEl, stateEl);
             } else {
-              // اتجاه معاكس → أوقف وابدأ الجديد
+              // اتجاه معاكس → أوقف وابدأ من الموضع الحالي
               stopDoorTimer(doorId, imgEl, stateEl);
+              // doorPos يبقى على الموضع الحالي
               var img2 = document.getElementById('door-img-' + doorId);
               var st2  = document.getElementById('user-state-' + doorId)
                       || document.getElementById('door-progress-' + doorId);
@@ -704,9 +705,9 @@ function connectWS() {
               // نفس الاتجاه → إيقاف
               stopDoorTimer(doorId, imgEl, stateEl);
             } else {
-              // اتجاه معاكس → أوقف وابدأ الجديد
+              // اتجاه معاكس → أوقف وابدأ من الموضع الحالي
               stopDoorTimer(doorId, imgEl, stateEl);
-              doorPos[doorId] = newIsOpen ? 0.0 : 1.0;
+              // doorPos يبقى على الموضع الحالي — لا نعيد تعيينه
               startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
               updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
             }
@@ -797,7 +798,7 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
   }
 
   var isOpen = (action === 'open' || action === 'open40');
-  var n      = Math.max(seconds, 1) + 5; // +5 ثانية هامش
+  var n      = Math.max(seconds, 1); // بدون هامش — نفس مدة الـ relay
 
   if (doorPos[doorId] === undefined) {
     doorPos[doorId] = isOpen ? 0.0 : 1.0;
@@ -809,8 +810,9 @@ function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
 
   if (dist <= 0.01) return;
 
+  // المدة الفعلية = n * نسبة المسافة المتبقية
   var startTime = Date.now();
-  var totalMs   = n * 1000;
+  var totalMs   = n * 1000 * dist;
   var gen       = ((doorTimers[doorId] || {gen: 0}).gen || 0) + 1;
 
   doorTimers[doorId] = { _raf: null, startTime: startTime, isOpen: isOpen, gen: gen };
