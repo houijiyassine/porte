@@ -678,22 +678,20 @@ function connectWS() {
           return;
         }
 
-        // idle = الباب توقف — أوقف الانيميشن
+        // idle = الباب توقف فيزيائياً — أوقف الانيميشن دائماً
         if (rawState === 'idle') {
-          if (msg.source === 'rc') {
-            // RC أوقف الباب — أوقف الانيميشن
-            var timerIds2 = Object.keys(doorTimers);
-            timerIds2.forEach(function(dId) {
-              var t2 = doorTimers[dId];
-              if (t2 && t2._raf) { cancelAnimationFrame(t2._raf); t2._raf = null; }
-              var i2 = document.getElementById('door-img-' + dId);
-              var s2 = document.getElementById('user-state-' + dId)
-                     || document.getElementById('door-progress-bar-' + dId)
-                     || document.getElementById('door-progress-' + dId);
-              stopDoorTimer(dId, i2, s2);
-            });
-            setTimeout(loadRecentHistory, 500);
-          }
+          var timerIds2 = Object.keys(doorTimers);
+          timerIds2.forEach(function(dId) {
+            var t2 = doorTimers[dId];
+            if (t2 && t2._raf) { cancelAnimationFrame(t2._raf); t2._raf = null; }
+            var i2 = document.getElementById('door-img-' + dId);
+            var s2 = document.getElementById('user-state-' + dId)
+                   || document.getElementById('door-progress-bar-' + dId)
+                   || document.getElementById('door-progress-' + dId);
+            stopDoorTimer(dId, i2, s2);
+          });
+          if (doorId) doorStopTime[doorId] = Date.now();
+          setTimeout(loadRecentHistory, 500);
           return;
         }
 
