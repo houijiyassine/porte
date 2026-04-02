@@ -1652,22 +1652,54 @@ function startMQTT() {
     if (topic.startsWith(`stat/${MQTT_TOPIC}/POWER`)) {
       const ch  = topic.slice(-1); // 1,2,3,4
       const val = msg === 'ON';
-      broadcast({ type: 'door_state', channel: ch, value: val, deviceId: MQTT_TOPIC, timestamp: Date.now() });
 
       // تحديث doorStateCache
       const cached = doorStateCache.get(MQTT_TOPIC) || { r1: false, r2: false };
+      const prev_r1 = cached.r1, prev_r2 = cached.r2;
       if (ch === '1') cached.r1 = val;
       if (ch === '2') cached.r2 = val;
       doorStateCache.set(MQTT_TOPIC, cached);
 
-      // حفظ في door_state
-      try {
-        await supabase.from('door_state').insert({
-          value: val ? 'open' : 'close',
-          source: `mqtt_ch${ch}`,
-          created_at: new Date().toISOString(),
-        });
-      } catch {}
+      const r1 = cached.r1, r2 = cached.r2;
+      const changed = prev_r1 !== r1 || prev_r2 !== r2;
+      const doorAction = r1 ? 'open' : r2 ? 'close' : 'idle';
+
+      // بث للواجهة
+      broadcast({ type: 'door_state', channel: ch, value: val, deviceId: MQTT_TOPIC,
+        r1_on: r1, r2_on: r2, state: doorAction, timestamp: Date.now() });
+
+      if (changed && val) {
+        // هل الأمر جاء من التطبيق أم RC؟
+        const lastApp   = appLastAction.get(MQTT_TOPIC);
+        const isFromApp = lastApp && (Date.now() - lastApp.time) < 15000;
+
+        // جلب بيانات الباب
+        const { data: door } = await supabase.from('doors')
+          .select('id,inst_id,name,rc_notify').eq('device_id', MQTT_TOPIC).maybeSingle();
+
+        if (door) {
+          if (!isFromApp) {
+            // RC — حفظ في سجل الباب
+            try {
+              await supabase.from('door_logs').insert({
+                door_id: door.id, inst_id: door.inst_id, user_id: null,
+                value: doorAction, source: 'RC (جهاز تحكم)',
+                created_at: new Date().toISOString(),
+              });
+              console.log(`[MQTT] 📻 RC ${doorAction} — ${door.name}`);
+            } catch(e) { console.error('[MQTT RC log]', e.message); }
+
+            // إشعار Push للأدمن إذا rc_notify مفعّل
+            if (door.rc_notify) {
+              const rcLabel = doorAction === 'open' ? 'فتح الباب' : 'غلق الباب';
+              sendPushToAdmins(door.inst_id, {
+                title: 'إشعار RC 📻',
+                body: rcLabel + ' بواسطة RC — ' + door.name,
+              });
+            }
+          }
+        }
+      }
     }
 
     // حالة كاملة (tele/STATE)
