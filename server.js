@@ -1661,11 +1661,13 @@ function startMQTT() {
       doorStateCache.set(MQTT_TOPIC, cached);
 
       // حفظ في door_state
-      await supabase.from('door_state').insert({
-        value: val ? 'open' : 'close',
-        source: `mqtt_ch${ch}`,
-        created_at: new Date().toISOString(),
-      }).catch(() => {});
+      try {
+        await supabase.from('door_state').insert({
+          value: val ? 'open' : 'close',
+          source: `mqtt_ch${ch}`,
+          created_at: new Date().toISOString(),
+        });
+      } catch {}
     }
 
     // حالة كاملة (tele/STATE)
