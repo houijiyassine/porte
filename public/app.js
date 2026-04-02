@@ -648,20 +648,20 @@ function connectWS() {
         loadRecentHistory();
         // عند التوقف — أوقف الانيميشن فوراً
         if (msg.action === 'stop' || msg.action === 'auto_stop') {
-          // أوقف كل الـ timers فوراً
+          // أوقف كل الـ timers فوراً وسجّل وقت الإيقاف
           var timerIds = Object.keys(doorTimers);
           timerIds.forEach(function(dId) {
+            doorStopTime[dId] = Date.now();
             var t = doorTimers[dId];
-            if (t && t._raf) {
-              cancelAnimationFrame(t._raf);
-              t._raf = null;
-            }
+            if (t && t._raf) { cancelAnimationFrame(t._raf); t._raf = null; }
             var imgEl   = document.getElementById('door-img-' + dId);
             var stateEl = document.getElementById('user-state-' + dId)
                        || document.getElementById('door-progress-bar-' + dId)
                        || document.getElementById('door-progress-' + dId);
             stopDoorTimer(dId, imgEl, stateEl);
           });
+          // سجّل لكل الأبواب المعروفة
+          if (msg.doorId) doorStopTime[msg.doorId] = Date.now();
         }
       }
       // تحديث حالة الباب من Polling
@@ -672,6 +672,11 @@ function connectWS() {
         var hasTimer = !!doorTimers[doorId];
 
         updateDoorStatusUI(rawState);
+
+        // إذا تم الإيقاف مؤخراً (أقل من ثانيتين) — تجاهل door_state
+        if (doorId && doorStopTime[doorId] && (Date.now() - doorStopTime[doorId]) < 2000) {
+          return;
+        }
 
         // idle = الباب توقف — أوقف الانيميشن
         if (rawState === 'idle') {
@@ -820,6 +825,7 @@ const doorPos         = {};
 const doorTimers      = {};
 const doorCompletedAt = {};
 const lastKnownState  = {};
+const doorStopTime    = {}; // وقت آخر إيقاف — يمنع تشغيل انيميشن جديد لثانية
 
 function startDoorTimer(doorId, imgEl, stateEl, seconds, action) {
   if (doorTimers[doorId] && doorTimers[doorId]._raf) {
