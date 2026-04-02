@@ -695,10 +695,25 @@ function connectWS() {
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           }
           setTimeout(loadRecentHistory, 500);
-        } else if (!hasTimer) {
+        } else {
+          // أمر من التطبيق — أوقف الـ timer القديم وابدأ الجديد
           lastKnownState[doorId] = rawState;
-          startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
-          updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
+          if (hasTimer) {
+            var t = doorTimers[doorId];
+            if (t.isOpen === newIsOpen) {
+              // نفس الاتجاه → إيقاف
+              stopDoorTimer(doorId, imgEl, stateEl);
+            } else {
+              // اتجاه معاكس → أوقف وابدأ الجديد
+              stopDoorTimer(doorId, imgEl, stateEl);
+              doorPos[doorId] = newIsOpen ? 0.0 : 1.0;
+              startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
+              updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
+            }
+          } else {
+            startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
+            updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
+          }
         }
       }
       if (msg.type === 'new_join_request') {
