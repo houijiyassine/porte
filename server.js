@@ -443,14 +443,18 @@ async function closeDoor(deviceId, dur) {
   return { success: true };
 }
 
-async function stopDoor(deviceId) {
+async function stopDoor(deviceId, clientPos) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
   const stopDoor2 = doorCache.get(deviceId);
   const dp = doorProgress[deviceId];
-  let currentPos = dp?.pos ?? 0;
   const currentIsOpen = dp?.isOpen ?? false;
-  // احسب الموضع الحالي من الوقت المنقضي
-  if (dp && dp.startTime && dp.duration) {
+  let currentPos;
+
+  if (clientPos !== undefined && clientPos >= 0 && clientPos <= 1) {
+    // استخدم الموضع من التطبيق — أدق لأنه يعكس الانيميشن المحلية
+    currentPos = clientPos;
+  } else if (dp && dp.startTime && dp.duration) {
+    // احسب من الوقت إذا لم يُرسل التطبيق الموضع
     const elapsed = (Date.now() - dp.startTime) / 1000;
     const frac = Math.min(elapsed / dp.duration, 1);
     if (currentIsOpen) {
@@ -459,7 +463,10 @@ async function stopDoor(deviceId) {
       currentPos = (dp.startPos ?? 1) - (dp.startPos ?? 1) * frac;
     }
     currentPos = Math.max(0, Math.min(1, currentPos));
+  } else {
+    currentPos = dp?.pos ?? 0;
   }
+
   doorProgress[deviceId] = { pos: currentPos, isOpen: currentIsOpen };
   broadcast({ type: 'door_progress', deviceId, doorId: stopDoor2?.id, pos: currentPos, isOpen: currentIsOpen, stopped: true });
   mqttControl(deviceId, 1, false);
@@ -684,7 +691,7 @@ app.post('/api/door/control', auth, async (req, res) => {
     if      (action==='open')   result = await openDoor(deviceId, duration);
     else if (action==='open40') result = await openDoor(deviceId, 40);
     else if (action==='close')  result = await closeDoor(deviceId, duration);
-    else if (action==='stop')   result = await stopDoor(deviceId);
+    else if (action==='stop')   result = await stopDoor(deviceId, req.body.currentPos);
     else return res.status(400).json({ error: 'action غير معروف' });
 
     if (!result?.success) return res.status(500).json({ error: result?.msg });
