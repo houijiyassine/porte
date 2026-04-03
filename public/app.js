@@ -642,73 +642,95 @@ function connectWS() {
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
-      // door_progress — نسبة الانيميشن من السيرفر
+      // ═══════════════════════════════════════════════════════
+      // door_progress — السيرفر يُرسل النسبة كل 200ms
+      // ═══════════════════════════════════════════════════════
       if (msg.type === 'door_progress') {
-        var doorId2 = msg.doorId || (function() {
-          // ابحث عن doorId من deviceId
-          var found = null;
-          if (typeof institutesCache !== 'undefined') {
-            institutesCache.forEach(function(inst) {
-              (inst.doors||[]).forEach(function(d) {
-                if (d.device_id === msg.deviceId) found = d.id;
-              });
+        var dpId = msg.doorId;
+        if (!dpId && msg.deviceId && typeof institutesCache !== 'undefined') {
+          institutesCache.forEach(function(inst) {
+            (inst.doors||[]).forEach(function(d) {
+              if (d.device_id === msg.deviceId) dpId = d.id;
             });
-          }
-          return found;
-        })();
-        if (doorId2) {
-          // أوقف الانيميشن المحلية — السيرفر هو المصدر الوحيد
-          if (doorTimers[doorId2] && doorTimers[doorId2]._raf) {
-            cancelAnimationFrame(doorTimers[doorId2]._raf);
-            doorTimers[doorId2]._raf = null;
-          }
-          doorPos[doorId2] = msg.pos;
-          var imgEl3   = document.getElementById('door-img-' + doorId2);
-          var stateEl3 = document.getElementById('user-state-' + doorId2)
-                      || document.getElementById('door-progress-bar-' + doorId2)
-                      || document.getElementById('door-progress-' + doorId2);
-          var displayPct = msg.isOpen ? msg.pos : (1 - msg.pos);
-          if (imgEl3 && typeof _drawDoorProgress === 'function') {
-            _drawDoorProgress(imgEl3, stateEl3, displayPct, msg.isOpen, msg.stopped || false, msg.pos);
-          }
-          // تحديث النسبة المئوية
-          var pctEl3 = document.getElementById('door-pct-' + doorId2);
-          if (pctEl3) {
-            pctEl3.style.color = msg.isOpen ? 'var(--success)' : 'var(--danger)';
-            pctEl3.textContent = Math.round(displayPct * 100) + '%';
-          }
+          });
+        }
+        if (!dpId) return;
+
+        // أوقف أي انيميشن محلية
+        _cancelDoorTimer(dpId);
+
+        // حدّث موضع الباب
+        doorPos[dpId] = msg.pos;
+        var displayPct = msg.isOpen ? msg.pos : (1 - msg.pos);
+
+        // ارسم الباب
+        var dpImg = document.getElementById('door-img-' + dpId);
+        var dpSt  = document.getElementById('user-state-' + dpId)
+                 || document.getElementById('door-progress-bar-' + dpId)
+                 || document.getElementById('door-progress-' + dpId);
+        if (dpImg && typeof _drawDoorProgress === 'function') {
+          _drawDoorProgress(dpImg, dpSt, displayPct, msg.isOpen, msg.stopped || false, msg.pos);
+        }
+
+        // النسبة المئوية
+        var dpPct = document.getElementById('door-pct-' + dpId);
+        if (dpPct) {
+          dpPct.style.color = msg.isOpen ? 'var(--success)' : 'var(--danger)';
+          dpPct.textContent = Math.round(displayPct * 100) + '%';
+        }
+
+        // عند الإيقاف — أعد الأزرار وحدّث السجل
+        if (msg.stopped) {
+          updateDoorButtons(dpId, null);
+          updateUserDoorButtons(dpId, null);
+          setTimeout(loadRecentHistory, 500);
         }
         return;
       }
 
+      // ═══════════════════════════════════════════════════════
+      // door_event — أحداث التطبيق (open/close/stop/auto_stop)
+      // ═══════════════════════════════════════════════════════
       if (msg.type === 'door_event') {
         updateDoorStatusUI(msg.action);
         loadRecentHistory();
-        // عند التوقف — أوقف الانيميشن فوراً
+        // عند الإيقاف — أعد الأزرار وأوقف أي انيميشن محلية
         if (msg.action === 'stop' || msg.action === 'auto_stop') {
-          if (msg.doorId) { updateDoorButtons(msg.doorId, null); updateUserDoorButtons(msg.doorId, null); }
           Object.keys(doorTimers).forEach(function(dId) {
-            var t = doorTimers[dId];
-            if (t && t._raf) { cancelAnimationFrame(t._raf); t._raf = null; }
-            var imgEl   = document.getElementById('door-img-' + dId);
-            var stateEl = document.getElementById('user-state-' + dId)
-                       || document.getElementById('door-progress-bar-' + dId)
-                       || document.getElementById('door-progress-' + dId);
-            stopDoorTimer(dId, imgEl, stateEl);
+            _cancelDoorTimer(dId);
           });
+          if (msg.doorId) {
+            updateDoorButtons(msg.doorId, null);
+            updateUserDoorButtons(msg.doorId, null);
+          }
         }
       }
-      // تحديث حالة الباب من MQTT
+
+      // ═══════════════════════════════════════════════════════
+      // door_state — حالة الـ relay من MQTT
+      // ═══════════════════════════════════════════════════════
       if (msg.type === 'door_state') {
         var r1       = msg.r1_on, r2 = msg.r2_on;
         var rawState = r1 ? 'open' : r2 ? 'close' : 'idle';
         var doorId   = msg.doorId;
-        var hasTimer = !!doorTimers[doorId];
 
         updateDoorStatusUI(rawState);
 
-        // تحديث الأزرار حسب الحالة
-        if (rawState === 'open' || rawState === 'open40') {
+        // عند الاتصال الأولي — عرض الحالة الثابتة بدون انيميشن
+        if (msg.source === 'init') {
+          if (doorId) {
+            updateDoorButtons(doorId, null);
+            updateUserDoorButtons(doorId, null);
+            var initImg = document.getElementById('door-img-' + doorId);
+            if (initImg && typeof _drawDoorStatic === 'function') {
+              _drawDoorStatic(initImg, null, rawState === 'idle' ? 'closed' : rawState);
+            }
+          }
+          return;
+        }
+
+        // تحديث الأزرار
+        if (rawState === 'open') {
           updateDoorButtons(doorId, 'open');
           updateUserDoorButtons(doorId, 'open');
         } else if (rawState === 'close') {
@@ -716,53 +738,28 @@ function connectWS() {
           updateUserDoorButtons(doorId, 'close');
         }
 
-        // النقطة 2: عند الاتصال الأولي — عرض الحالة بدون انيميشن
-        if (msg.source === 'init') {
-          if (doorId) {
-            var imgEl0 = document.getElementById('door-img-' + doorId);
-            if (imgEl0 && typeof _drawDoorStatic === 'function') {
-              _drawDoorStatic(imgEl0, null, rawState === 'idle' ? 'closed' : rawState);
-            }
-          }
-          return;
-        }
-
-        // idle = الـ relay توقف — أوقف الانيميشن وأعد الأزرار
+        // idle — الـ relay توقف فيزيائياً
         if (rawState === 'idle') {
-          if (doorId) { updateDoorButtons(doorId, null); updateUserDoorButtons(doorId, null); }
-          Object.keys(doorTimers).forEach(function(dId) {
-            var t2 = doorTimers[dId];
-            if (t2 && t2._raf) { cancelAnimationFrame(t2._raf); t2._raf = null; }
-            var i2 = document.getElementById('door-img-' + dId);
-            var s2 = document.getElementById('user-state-' + dId)
-                   || document.getElementById('door-progress-bar-' + dId)
-                   || document.getElementById('door-progress-' + dId);
-            stopDoorTimer(dId, i2, s2);
-          });
+          if (doorId) {
+            updateDoorButtons(doorId, null);
+            updateUserDoorButtons(doorId, null);
+          }
+          // أوقف كل الانيميشن المحلية
+          Object.keys(doorTimers).forEach(function(dId) { _cancelDoorTimer(dId); });
           setTimeout(loadRecentHistory, 500);
           return;
         }
 
-        var imgEl   = document.getElementById('door-img-' + doorId);
-        var stateEl = document.getElementById('user-state-' + doorId)
-                   || document.getElementById('door-progress-bar-' + doorId)
-                   || document.getElementById('door-progress-' + doorId);
-        // نسبة منفصلة لصفحة الأدمن
-        var pctEl = document.getElementById('door-pct-' + doorId);
-        var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
-        var nSecs   = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
-        var newIsOpen = (rawState === 'open' || rawState === 'open40');
+        // أوقف الانيميشن المحلية دائماً — السيرفر يتحكم عبر door_progress
+        if (doorId) _cancelDoorTimer(doorId);
 
+        // RC أو يدوي
         if (msg.source === 'rc' || msg.source === 'manual') {
-          // RC أو يدوي — أوقف الانيميشن المحلية، السيرفر يتحكم
           lastKnownState[doorId] = rawState;
-          if (hasTimer) stopDoorTimer(doorId, imgEl, stateEl);
           updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           setTimeout(loadRecentHistory, 500);
         } else if (msg.source === 'app') {
-          // أمر من التطبيق — السيرفر يُرسل door_progress، نوقف الانيميشن المحلية
           lastKnownState[doorId] = rawState;
-          if (hasTimer) stopDoorTimer(doorId, imgEl, stateEl);
           updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
         }
       }
