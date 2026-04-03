@@ -739,14 +739,17 @@ function connectWS() {
           updateUserDoorButtons(doorId, 'close');
         }
 
-        // idle — الـ relay توقف فيزيائياً
+        // idle — الـ relay توقف
         if (rawState === 'idle') {
+          // تجاهل idle إذا كانت الانيميشن شغّالة (Interlock يُرسل POWER=OFF مؤقتاً)
+          if (doorId && doorTimers[doorId] && doorTimers[doorId]._raf) {
+            return; // الانيميشن شغّالة → تجاهل idle
+          }
           if (doorId) {
             doorCurrentState[doorId] = 'idle';
             updateDoorButtons(doorId, null);
             updateUserDoorButtons(doorId, null);
           }
-          // أوقف كل الانيميشن المحلية
           Object.keys(doorTimers).forEach(function(dId) { _cancelDoorTimer(dId); });
           setTimeout(loadRecentHistory, 500);
           return;
