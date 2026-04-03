@@ -741,9 +741,10 @@ function connectWS() {
 
         // idle — الـ relay توقف
         if (rawState === 'idle') {
-          // تجاهل idle إذا كانت الانيميشن شغّالة (Interlock يُرسل POWER=OFF مؤقتاً)
-          if (doorId && doorTimers[doorId] && doorTimers[doorId]._raf) {
-            return; // الانيميشن شغّالة → تجاهل idle
+          // تجاهل idle فقط إذا كانت الانيميشن شغّالة من التطبيق (app)
+          // لكن إذا كان RC أو يدوي → أوقف الانيميشن
+          if (doorId && doorTimers[doorId] && doorTimers[doorId]._raf && msg.source === 'app') {
+            return; // الانيميشن من التطبيق شغّالة → تجاهل idle
           }
           if (doorId) {
             doorCurrentState[doorId] = 'idle';
@@ -760,15 +761,24 @@ function connectWS() {
           return;
         }
 
-        // RC أو يدوي
+        // RC أو يدوي — ابدأ الانيميشن المحلية
         if (msg.source === 'rc' || msg.source === 'manual') {
           lastKnownState[doorId] = rawState;
-          if (doorId) _cancelDoorTimer(doorId);
           updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
+          // ابدأ الانيميشن إذا لم تكن شغّالة
+          if (!doorTimers[doorId] || !doorTimers[doorId]._raf) {
+            var imgElRC = document.getElementById('door-img-' + doorId);
+            var stElRC  = document.getElementById('user-state-' + doorId)
+                       || document.getElementById('door-progress-bar-' + doorId)
+                       || document.getElementById('door-progress-' + doorId);
+            var durElRC = document.querySelector('[data-door-id="' + doorId + '"]');
+            var nSecsRC = durElRC ? parseInt(durElRC.getAttribute('data-duration') || '10') : 10;
+            if (imgElRC) startDoorTimer(doorId, imgElRC, stElRC, nSecsRC, rawState);
+          }
           setTimeout(loadRecentHistory, 500);
         } else if (msg.source === 'app') {
           lastKnownState[doorId] = rawState;
-          // لا نوقف الانيميشن — door_progress يتحكم
+          // door_progress يتحكم بالانيميشن
           updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
         }
       }
