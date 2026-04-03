@@ -716,6 +716,9 @@ function connectWS() {
 
         updateDoorStatusUI(rawState);
 
+        // تحديث الحالة الحالية
+        if (doorId) doorCurrentState[doorId] = rawState;
+
         // عند الاتصال الأولي — عرض الحالة الثابتة بدون انيميشن
         if (msg.source === 'init') {
           if (doorId) {
@@ -1150,38 +1153,30 @@ function updateDoorButtons(doorId, activeAction) {
   }
 }
 
+// الحالة الحالية لكل باب من السيرفر
+const doorCurrentState = {}; // doorId → 'open' | 'close' | 'idle'
+
 async function toggleDoorAction(deviceId, action, duration, doorId) {
-  var t = doorTimers[doorId];
   var isOpenAction = (action === 'open' || action === 'open40');
-  if (t && t.isOpen === isOpenAction) {
+  var currentState = doorCurrentState[doorId] || lastKnownState[doorId] || 'idle';
+  var isMovingOpen  = (currentState === 'open');
+  var isMovingClose = (currentState === 'close');
+  var isMoving = isMovingOpen || isMovingClose;
+
+  if (isMoving && ((isOpenAction && isMovingOpen) || (!isOpenAction && isMovingClose))) {
     // نفس الاتجاه → إيقاف
     await sendDoorAction(deviceId, 'stop', 0);
     updateDoorButtons(doorId, null);
+    updateUserDoorButtons(doorId, null);
   } else {
     await sendDoorAction(deviceId, action, duration);
     updateDoorButtons(doorId, action);
+    updateUserDoorButtons(doorId, action);
   }
 }
 
 async function sendDoorAction(deviceId, action, duration) {
   try {
-    // إذا الباب يتحرك بنفس الاتجاه → إيقاف
-    var doorId = null;
-    if (typeof institutesCache !== 'undefined') {
-      institutesCache.forEach(function(inst) {
-        (inst.doors||[]).forEach(function(d) {
-          if (d.device_id === deviceId) doorId = d.id;
-        });
-      });
-    }
-    if (doorId && doorTimers[doorId]) {
-      var t = doorTimers[doorId];
-      var isOpenAction = (action === 'open' || action === 'open40');
-      if (t.isOpen === isOpenAction) {
-        // نفس الاتجاه → إيقاف
-        action = 'stop';
-      }
-    }
     var body = { action, deviceId, duration };
     if (userLocation) { body.lat = userLocation.lat; body.lng = userLocation.lng; body.accuracy = userLocation.accuracy || 999; }
     await apiFetch('/api/door/control', 'POST', body);
