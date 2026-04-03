@@ -790,14 +790,18 @@ function connectWS() {
               if (imgElRC3) startDoorTimer(doorId, imgElRC3, stElRC3, nSecsRC3, rawState);
             }
           } else {
-            // لا انيميشن — ابدأ جديد
-            var imgElRC = document.getElementById('door-img-' + doorId);
-            var stElRC  = document.getElementById('user-state-' + doorId)
-                       || document.getElementById('door-progress-bar-' + doorId)
-                       || document.getElementById('door-progress-' + doorId);
-            var durElRC = document.querySelector('[data-door-id="' + doorId + '"]');
-            var nSecsRC = durElRC ? parseInt(durElRC.getAttribute('data-duration') || '10') : 10;
-            if (imgElRC) startDoorTimer(doorId, imgElRC, stElRC, nSecsRC, rawState);
+            // لا انيميشن — ابدأ جديد بعد تأخير صغير للتأكد أن idle لن يوقفها
+            (function(dId, rState) {
+              setTimeout(function() {
+                var imgElRC = document.getElementById('door-img-' + dId);
+                var stElRC  = document.getElementById('user-state-' + dId)
+                           || document.getElementById('door-progress-bar-' + dId)
+                           || document.getElementById('door-progress-' + dId);
+                var durElRC = document.querySelector('[data-door-id="' + dId + '"]');
+                var nSecsRC = durElRC ? parseInt(durElRC.getAttribute('data-duration') || '10') : 10;
+                if (imgElRC) startDoorTimer(dId, imgElRC, stElRC, nSecsRC, rState);
+              }, 300);
+            })(doorId, rawState);
           }
           setTimeout(loadRecentHistory, 500);
         } else if (msg.source === 'app') {
