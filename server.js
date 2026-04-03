@@ -91,7 +91,7 @@ let   mqttClient     = null;
 async function loadDoorCache() {
   try {
     const { data, error } = await supabase.from('doors')
-      .select('id,inst_id,name,device_id,rc_notify,duration_seconds,gps,schedule,door_type,auto_schedule');
+      .select('id,inst_id,name,device_id,rc_notify,manual_notify,duration_seconds,gps,schedule,door_type,auto_schedule');
     if (error) { console.error('[DoorCache] error:', error.message); return; }
     doorCache = new Map();
     (data || []).forEach(d => {
@@ -359,6 +359,10 @@ function startMQTT() {
           logEntry.user_id = null;
           logEntry.source  = 'يدوي (أزرار الجهاز)';
           console.log(`[MQTT] 🖐️ يدوي: ${doorAction} — ${door.name}`);
+          if (door.manual_notify) {
+            const label = doorAction === 'open' ? 'فتح الباب' : 'غلق الباب';
+            sendPushToAdmins(door.inst_id, { title: 'إشعار يدوي 🖐️', body: `${label} بالأزرار — ${door.name}` });
+          }
         }
         const { error } = await supabase.from('door_logs').insert(logEntry);
         if (error) console.error('[Log insert]', error.message);
@@ -868,7 +872,7 @@ app.post('/api/doors', auth, adminOnly, async (req, res) => {
 app.put('/api/doors/:id', auth, adminOnly, async (req, res) => {
   try {
     const updates = {};
-    ['name','location','device_id','duration_seconds','is_active','gps','schedule','rc_notify','door_type','auto_schedule'].forEach(k => { if (req.body[k]!==undefined) updates[k]=req.body[k]; });
+    ['name','location','device_id','duration_seconds','is_active','gps','schedule','rc_notify','manual_notify','door_type','auto_schedule'].forEach(k => { if (req.body[k]!==undefined) updates[k]=req.body[k]; });
     if (updates.device_id) updates.device_id = updates.device_id.replace(/[\r\n\t]/g,'').trim();
     const { data, error } = await supabase.from('doors').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
