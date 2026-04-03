@@ -2744,9 +2744,10 @@ async function loadAdminDoors() {
       });
       card.appendChild(grid);
 
-      // ─── Row 6: GPS + RC notify بجانب بعض ───
-      var userReq  = door.gps && door.gps.user_required;
-      var rcNotify = door.rc_notify === true;
+      // ─── Row 6: GPS + RC notify + Manual notify ───
+      var userReq      = door.gps && door.gps.user_required;
+      var rcNotify     = door.rc_notify === true;
+      var manualNotify = door.manual_notify === true;
       var toggleRow = document.createElement('div');
       toggleRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px';
       toggleRow.innerHTML =
@@ -2759,18 +2760,34 @@ async function loadAdminDoors() {
         '</div>' +
         '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">' +
           '<div>' +
-            '<div style="font-size:0.75rem;font-weight:700">📻 اشعار عند استعمال RC</div>' +
+            '<div style="font-size:0.75rem;font-weight:700">📻 إشعار RC</div>' +
             '<div style="font-size:0.7rem;color:' + (rcNotify?'var(--success)':'var(--danger)') + ';font-weight:700">' + (rcNotify?'مفعّل':'معطّل') + '</div>' +
           '</div>' +
           '<label class="toggle-switch"><input type="checkbox" ' + (rcNotify?'checked':'') + ' id="rc-toggle-' + door.id + '"><span class="toggle-knob"></span></label>' +
         '</div>';
       card.appendChild(toggleRow);
+
+      // إشعار يدوي
+      var manualRow = document.createElement('div');
+      manualRow.style.cssText = 'margin-bottom:12px';
+      manualRow.innerHTML =
+        '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">' +
+          '<div>' +
+            '<div style="font-size:0.75rem;font-weight:700">🖐️ إشعار عند استعمال الأزرار</div>' +
+            '<div style="font-size:0.7rem;color:' + (manualNotify?'var(--success)':'var(--danger)') + ';font-weight:700">' + (manualNotify?'مفعّل':'معطّل') + '</div>' +
+          '</div>' +
+          '<label class="toggle-switch"><input type="checkbox" ' + (manualNotify?'checked':'') + ' id="manual-toggle-' + door.id + '"><span class="toggle-knob"></span></label>' +
+        '</div>';
+      card.appendChild(manualRow);
+
       (function(did) {
         setTimeout(function() {
-          var gps = document.getElementById('gps-toggle-' + did);
-          var rc  = document.getElementById('rc-toggle-' + did);
-          if (gps) gps.addEventListener('change', function() { toggleDoorGps(did, 'user_required', this.checked); });
-          if (rc)  rc.addEventListener('change',  function() { toggleDoorRcNotify(did, this.checked); });
+          var gps    = document.getElementById('gps-toggle-' + did);
+          var rc     = document.getElementById('rc-toggle-' + did);
+          var manual = document.getElementById('manual-toggle-' + did);
+          if (gps)    gps.addEventListener('change',    function() { toggleDoorGps(did, 'user_required', this.checked); });
+          if (rc)     rc.addEventListener('change',     function() { toggleDoorRcNotify(did, this.checked); });
+          if (manual) manual.addEventListener('change', function() { toggleDoorManualNotify(did, this.checked); });
         }, 50);
       })(door.id);
 
@@ -3312,5 +3329,22 @@ async function toggleDoorRcNotify(doorId, value) {
       lbl.textContent = value ? 'مفعّل ✅' : 'معطّل ❌';
     }
     toast(value ? '🔔 سيتم إشعارك عند استخدام RC' : '🔕 تم إيقاف الإشعار', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function toggleDoorManualNotify(doorId, value) {
+  try {
+    await apiFetch('/api/doors/' + doorId, 'PUT', { manual_notify: value });
+    institutesCache.forEach(function(inst) {
+      (inst.doors||[]).forEach(function(door) {
+        if (door.id === doorId) door.manual_notify = value;
+      });
+    });
+    var lbl = document.querySelector('#manual-toggle-' + doorId)?.closest('div[style]')?.querySelector('div > div:last-child');
+    if (lbl) {
+      lbl.style.color = value ? 'var(--success)' : 'var(--danger)';
+      lbl.textContent = value ? 'مفعّل ✅' : 'معطّل ❌';
+    }
+    toast(value ? '🔔 سيتم إشعارك عند استخدام الأزرار' : '🔕 تم إيقاف إشعار الأزرار', 'success');
   } catch(e) { toast(e.message, 'error'); }
 }
