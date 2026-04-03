@@ -398,10 +398,11 @@ async function openDoor(deviceId, dur) {
   await new Promise(r => setTimeout(r, 200));
   mqttControl(deviceId, 1, true);
   // تتبع النسبة
-  const startPos = doorProgress[deviceId]?.pos ?? 0.0;
+  // startPos: إذا كان الباب يغلق نأخذ موضعه الحالي، وإلا نبدأ من 0
+  const prevProgress = doorProgress[deviceId];
+  const startPos = (prevProgress && !prevProgress.isOpen && prevProgress.pos > 0) ? prevProgress.pos : 0.0;
   const door4open = doorCache.get(deviceId);
   doorProgress[deviceId] = { pos: startPos, isOpen: true, duration: dur };
-  // إرسال موضع البداية فقط — الانيميشن تعمل محلياً
   broadcast({ type: 'door_progress', deviceId, doorId: door4open?.id, pos: startPos, isOpen: true, duration: dur });
   broadcast({ type: 'door_event', action: 'open', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
@@ -422,10 +423,11 @@ async function closeDoor(deviceId, dur) {
   await new Promise(r => setTimeout(r, 200));
   mqttControl(deviceId, 3, true);
   // تتبع النسبة
-  const startPos = doorProgress[deviceId]?.pos ?? 1.0;
+  // startPos: إذا كان الباب يفتح نأخذ موضعه الحالي، وإلا نبدأ من 1
+  const prevProgress2 = doorProgress[deviceId];
+  const startPos = (prevProgress2 && prevProgress2.isOpen && prevProgress2.pos < 1) ? prevProgress2.pos : 1.0;
   const door4close = doorCache.get(deviceId);
   doorProgress[deviceId] = { pos: startPos, isOpen: false, duration: dur };
-  // إرسال موضع البداية فقط
   broadcast({ type: 'door_progress', deviceId, doorId: door4close?.id, pos: startPos, isOpen: false, duration: dur });
   broadcast({ type: 'door_event', action: 'close', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
