@@ -398,9 +398,9 @@ async function openDoor(deviceId, dur) {
   await new Promise(r => setTimeout(r, 200));
   mqttControl(deviceId, 1, true);
   // تتبع النسبة
-  // startPos: إذا كان الباب يغلق نأخذ موضعه الحالي، وإلا نبدأ من 0
+  // startPos: الموضع المحفوظ من آخر إيقاف (سواء كان يفتح أو يغلق)
   const prevProgress = doorProgress[deviceId];
-  const startPos = (prevProgress && !prevProgress.isOpen && prevProgress.pos > 0) ? prevProgress.pos : 0.0;
+  const startPos = (prevProgress && prevProgress.pos !== undefined && prevProgress.pos > 0 && prevProgress.pos < 1) ? prevProgress.pos : 0.0;
   const door4open = doorCache.get(deviceId);
   const openStartTime = Date.now();
   doorProgress[deviceId] = { pos: startPos, isOpen: true, duration: dur, startTime: openStartTime, startPos };
@@ -424,9 +424,9 @@ async function closeDoor(deviceId, dur) {
   await new Promise(r => setTimeout(r, 200));
   mqttControl(deviceId, 3, true);
   // تتبع النسبة
-  // startPos: إذا كان الباب يفتح نأخذ موضعه الحالي، وإلا نبدأ من 1
+  // startPos: الموضع المحفوظ من آخر إيقاف
   const prevProgress2 = doorProgress[deviceId];
-  const startPos = (prevProgress2 && prevProgress2.isOpen && prevProgress2.pos < 1) ? prevProgress2.pos : 1.0;
+  const startPos = (prevProgress2 && prevProgress2.pos !== undefined && prevProgress2.pos > 0 && prevProgress2.pos < 1) ? prevProgress2.pos : 1.0;
   const door4close = doorCache.get(deviceId);
   const closeStartTime = Date.now();
   doorProgress[deviceId] = { pos: startPos, isOpen: false, duration: dur, startTime: closeStartTime, startPos };
