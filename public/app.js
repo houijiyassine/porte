@@ -694,6 +694,15 @@ function connectWS() {
         var nSecs   = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
         var newIsOpen = (rawState === 'open' || rawState === 'open40');
 
+        // تحديث الأزرار حسب الحالة الجديدة
+        if (rawState === 'open' || rawState === 'open40') {
+          updateDoorButtons(doorId, 'open');
+          updateUserDoorButtons(doorId, 'open');
+        } else if (rawState === 'close') {
+          updateDoorButtons(doorId, 'close');
+          updateUserDoorButtons(doorId, 'close');
+        }
+
         if (msg.source === 'rc') {
           lastKnownState[doorId] = rawState;
           if (hasTimer) {
