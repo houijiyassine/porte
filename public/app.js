@@ -755,16 +755,20 @@ function connectWS() {
           return;
         }
 
-        // أوقف الانيميشن المحلية دائماً — السيرفر يتحكم عبر door_progress
-        if (doorId) _cancelDoorTimer(doorId);
+        // إذا الانيميشن شغّالة — تجاهل door_state (Interlock يُرسل رسائل مضللة)
+        if (doorId && doorTimers[doorId] && doorTimers[doorId]._raf) {
+          return;
+        }
 
         // RC أو يدوي
         if (msg.source === 'rc' || msg.source === 'manual') {
           lastKnownState[doorId] = rawState;
+          if (doorId) _cancelDoorTimer(doorId);
           updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           setTimeout(loadRecentHistory, 500);
         } else if (msg.source === 'app') {
           lastKnownState[doorId] = rawState;
+          // لا نوقف الانيميشن — door_progress يتحكم
           updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
         }
       }
