@@ -711,7 +711,7 @@ function connectWS() {
               updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
             }
           } else {
-            doorPos[doorId] = newIsOpen ? 0.0 : 1.0;
+            // doorPos يبقى على الموضع الحالي — RC يكمل من حيث توقف
             startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
             updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
           }
