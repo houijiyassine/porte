@@ -310,22 +310,7 @@ function startMQTT() {
       const val = msg === 'ON';
 
       // عند OFF — تحقق إذا كل الـ relays ستكون OFF → إيقاف interval
-      if (!val && doorProgress[deviceId]?._interval) {
-        const curCached = doorStateCache.get(deviceId) || { r1:false, r2:false, r3:false, r4:false };
-        const nextR = { ...curCached };
-        if (ch==='1') nextR.r1=false;
-        if (ch==='2') nextR.r2=false;
-        if (ch==='3') nextR.r3=false;
-        if (ch==='4') nextR.r4=false;
-        if (!nextR.r1 && !nextR.r2 && !nextR.r3 && !nextR.r4) {
-          clearInterval(doorProgress[deviceId]._interval);
-          const dpStop = doorCache.get(deviceId);
-          const stPos  = doorProgress[deviceId]?.pos ?? 0;
-          const stOpen = doorProgress[deviceId]?.isOpen ?? false;
-          doorProgress[deviceId] = { pos: stPos, isOpen: stOpen };
-          broadcast({ type: 'door_progress', deviceId, doorId: dpStop?.id, pos: stPos, isOpen: stOpen, stopped: true });
-        }
-      }
+
 
       const cached = doorStateCache.get(deviceId) || { r1:false, r2:false, r3:false, r4:false };
       const prev   = { ...cached };
@@ -414,22 +399,13 @@ async function openDoor(deviceId, dur) {
   mqttControl(deviceId, 1, true);
   // تتبع النسبة
   const startPos = doorProgress[deviceId]?.pos ?? 0.0;
-  const startTime = Date.now();
-  const totalMs = dur * 1000 * (1 - startPos);
-  doorProgress[deviceId] = { pos: startPos, isOpen: true, startTime, duration: dur, startPos };
-  // broadcast النسبة كل 200ms
-  doorProgress[deviceId]._interval = setInterval(() => {
-    const elapsed = Date.now() - startTime;
-    const progress = Math.min(elapsed / totalMs, 1);
-    const pos = startPos + (1 - startPos) * progress;
-    doorProgress[deviceId].pos = pos;
-    const dp = doorCache.get(deviceId);
-    broadcast({ type: 'door_progress', deviceId, doorId: dp?.id, pos, isOpen: true });
-  }, 200);
+  const door4open = doorCache.get(deviceId);
+  doorProgress[deviceId] = { pos: startPos, isOpen: true, duration: dur };
+  // إرسال موضع البداية فقط — الانيميشن تعمل محلياً
+  broadcast({ type: 'door_progress', deviceId, doorId: door4open?.id, pos: startPos, isOpen: true, duration: dur });
   broadcast({ type: 'door_event', action: 'open', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
     mqttControl(deviceId, 1, false);
-    if (doorProgress[deviceId]?._interval) { clearInterval(doorProgress[deviceId]._interval); }
     const dpDoorOpen = doorCache.get(deviceId);
     doorProgress[deviceId] = { pos: 1.0, isOpen: true };
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId, doorId: dpDoorOpen?.id });
@@ -447,22 +423,13 @@ async function closeDoor(deviceId, dur) {
   mqttControl(deviceId, 3, true);
   // تتبع النسبة
   const startPos = doorProgress[deviceId]?.pos ?? 1.0;
-  const startTime = Date.now();
-  const totalMs = dur * 1000 * startPos;
-  doorProgress[deviceId] = { pos: startPos, isOpen: false, startTime, duration: dur, startPos };
-  // broadcast النسبة كل 200ms
-  doorProgress[deviceId]._interval = setInterval(() => {
-    const elapsed = Date.now() - startTime;
-    const progress = Math.min(elapsed / totalMs, 1);
-    const pos = startPos - startPos * progress;
-    doorProgress[deviceId].pos = pos;
-    const dp2 = doorCache.get(deviceId);
-    broadcast({ type: 'door_progress', deviceId, doorId: dp2?.id, pos, isOpen: false });
-  }, 200);
+  const door4close = doorCache.get(deviceId);
+  doorProgress[deviceId] = { pos: startPos, isOpen: false, duration: dur };
+  // إرسال موضع البداية فقط
+  broadcast({ type: 'door_progress', deviceId, doorId: door4close?.id, pos: startPos, isOpen: false, duration: dur });
   broadcast({ type: 'door_event', action: 'close', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
     mqttControl(deviceId, 3, false);
-    if (doorProgress[deviceId]?._interval) { clearInterval(doorProgress[deviceId]._interval); }
     const dpDoor2 = doorCache.get(deviceId);
     doorProgress[deviceId] = { pos: 0.0, isOpen: false };
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId, doorId: dpDoor2?.id });
@@ -474,9 +441,6 @@ async function closeDoor(deviceId, dur) {
 
 async function stopDoor(deviceId) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  if (doorProgress[deviceId]?._interval) {
-    clearInterval(doorProgress[deviceId]._interval);
-  }
   const stopDoor2 = doorCache.get(deviceId);
   const currentPos = doorProgress[deviceId]?.pos ?? 0;
   const currentIsOpen = doorProgress[deviceId]?.isOpen ?? false;
