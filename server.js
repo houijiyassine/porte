@@ -402,7 +402,8 @@ async function openDoor(deviceId, dur) {
   const prevProgress = doorProgress[deviceId];
   const startPos = (prevProgress && !prevProgress.isOpen && prevProgress.pos > 0) ? prevProgress.pos : 0.0;
   const door4open = doorCache.get(deviceId);
-  doorProgress[deviceId] = { pos: startPos, isOpen: true, duration: dur };
+  const openStartTime = Date.now();
+  doorProgress[deviceId] = { pos: startPos, isOpen: true, duration: dur, startTime: openStartTime, startPos };
   broadcast({ type: 'door_progress', deviceId, doorId: door4open?.id, pos: startPos, isOpen: true, duration: dur });
   broadcast({ type: 'door_event', action: 'open', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
@@ -427,7 +428,8 @@ async function closeDoor(deviceId, dur) {
   const prevProgress2 = doorProgress[deviceId];
   const startPos = (prevProgress2 && prevProgress2.isOpen && prevProgress2.pos < 1) ? prevProgress2.pos : 1.0;
   const door4close = doorCache.get(deviceId);
-  doorProgress[deviceId] = { pos: startPos, isOpen: false, duration: dur };
+  const closeStartTime = Date.now();
+  doorProgress[deviceId] = { pos: startPos, isOpen: false, duration: dur, startTime: closeStartTime, startPos };
   broadcast({ type: 'door_progress', deviceId, doorId: door4close?.id, pos: startPos, isOpen: false, duration: dur });
   broadcast({ type: 'door_event', action: 'close', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
@@ -444,8 +446,20 @@ async function closeDoor(deviceId, dur) {
 async function stopDoor(deviceId) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
   const stopDoor2 = doorCache.get(deviceId);
-  const currentPos = doorProgress[deviceId]?.pos ?? 0;
-  const currentIsOpen = doorProgress[deviceId]?.isOpen ?? false;
+  const dp = doorProgress[deviceId];
+  let currentPos = dp?.pos ?? 0;
+  const currentIsOpen = dp?.isOpen ?? false;
+  // احسب الموضع الحالي من الوقت المنقضي
+  if (dp && dp.startTime && dp.duration) {
+    const elapsed = (Date.now() - dp.startTime) / 1000;
+    const frac = Math.min(elapsed / dp.duration, 1);
+    if (currentIsOpen) {
+      currentPos = (dp.startPos ?? 0) + (1 - (dp.startPos ?? 0)) * frac;
+    } else {
+      currentPos = (dp.startPos ?? 1) - (dp.startPos ?? 1) * frac;
+    }
+    currentPos = Math.max(0, Math.min(1, currentPos));
+  }
   doorProgress[deviceId] = { pos: currentPos, isOpen: currentIsOpen };
   broadcast({ type: 'door_progress', deviceId, doorId: stopDoor2?.id, pos: currentPos, isOpen: currentIsOpen, stopped: true });
   mqttControl(deviceId, 1, false);
