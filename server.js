@@ -108,8 +108,10 @@ async function loadDoorCache() {
         doorCache.forEach((door) => {
           if (door.duration_seconds && door.device_id) {
             const pt = Math.round(door.duration_seconds * 10);
+            mqttClient.publish(`cmnd/${door.device_id}/PulseTime1`, String(pt), { qos: 1 });
             mqttClient.publish(`cmnd/${door.device_id}/PulseTime2`, String(pt), { qos: 1 });
             mqttClient.publish(`cmnd/${door.device_id}/PulseTime3`, String(pt), { qos: 1 });
+            mqttClient.publish(`cmnd/${door.device_id}/PulseTime4`, String(pt), { qos: 1 });
             console.log(`[PulseTime] init ${door.device_id} → ${pt} (${door.duration_seconds}s)`);
           }
         });
@@ -271,28 +273,35 @@ function startMQTT() {
       const ch  = topic.slice(-1);
       const val = msg === 'ON';
 
-      const cached = doorStateCache.get(MQTT_TOPIC) || { r1: false, r2: false, r3: false };
-      const prev   = { r1: cached.r1, r2: cached.r2, r3: cached.r3 };
+      // R1+R3 = فتح, R2+R4 = غلق
+      // R1+R2 = زر الجهاز (يدوي), R3+R4 = RC
+      const cached = doorStateCache.get(MQTT_TOPIC) || { r1:false, r2:false, r3:false, r4:false };
+      const prev   = { r1:cached.r1, r2:cached.r2, r3:cached.r3, r4:cached.r4 };
       if (ch === '1') cached.r1 = val;
       if (ch === '2') cached.r2 = val;
       if (ch === '3') cached.r3 = val;
-      doorStateCache.set(MQTT_TOPIC, { r1: cached.r1, r2: cached.r2, r3: cached.r3 });
+      if (ch === '4') cached.r4 = val;
+      doorStateCache.set(MQTT_TOPIC, { r1:cached.r1, r2:cached.r2, r3:cached.r3, r4:cached.r4 });
 
-      const changed    = (prev.r2 !== cached.r2) || (prev.r3 !== cached.r3);
-      const doorAction = cached.r2 ? 'open' : cached.r3 ? 'close' : 'idle';
-      const lastApp    = appLastAction.get(MQTT_TOPIC);
-      const isFromApp  = !!(lastApp && (Date.now() - lastApp.time) < 15000);
-      const lastManual = manualAction.get(MQTT_TOPIC);
-      const isManual   = !!(lastManual && (Date.now() - lastManual) < 5000);
-      const door       = doorCache.get(MQTT_TOPIC);
-      console.log(`[MQTT DEBUG] ch=${ch} val=${val} prev=${JSON.stringify(prev)} cached=${JSON.stringify({r1:cached.r1,r2:cached.r2})} changed=${changed} action=${doorAction} isFromApp=${isFromApp} door=${door?.name||'NOT FOUND'}`);
+      // فتح = R1 أو R3 — غلق = R2 أو R4
+      const isOpen  = cached.r1 || cached.r3;
+      const isClose = cached.r2 || cached.r4;
+      const changed = (prev.r1!==cached.r1)||(prev.r2!==cached.r2)||(prev.r3!==cached.r3)||(prev.r4!==cached.r4);
+      const doorAction = isOpen ? 'open' : isClose ? 'close' : 'idle';
 
-      // بث للواجهة — r1_on = relay2 (فتح), r2_on = relay3 (غلق)
+      const lastApp   = appLastAction.get(MQTT_TOPIC);
+      const isFromApp = !!(lastApp && (Date.now() - lastApp.time) < 15000);
+      // RC = R3 أو R4, يدوي = R1 أو R2
+      const isRC     = (ch === '3' || ch === '4');
+      const isManual = (ch === '1' || ch === '2');
+      const door     = doorCache.get(MQTT_TOPIC);
+
+      // بث للواجهة — r1_on = فتح, r2_on = غلق
       broadcast({
         type: 'door_state', deviceId: MQTT_TOPIC,
         doorId: door?.id, instId: door?.inst_id,
-        channel: ch, r1_on: cached.r2, r2_on: cached.r3,
-        state: doorAction, source: isFromApp ? 'app' : 'rc',
+        channel: ch, r1_on: isOpen, r2_on: isClose,
+        state: doorAction, source: isFromApp ? 'app' : isRC ? 'rc' : 'manual',
         timestamp: Date.now(),
       });
 
@@ -306,14 +315,18 @@ function startMQTT() {
           logEntry.user_id = lastApp.userId;
           logEntry.source  = lastApp.userName;
           console.log(`[MQTT] 📱 App: ${doorAction} by ${lastApp.userName}`);
-        } else {
+        } else if (isRC) {
           logEntry.user_id = null;
-          logEntry.source  = isManual ? 'يدوي (أزرار الجهاز)' : 'RC (جهاز تحكم)';
-          console.log(`[MQTT] ${isManual ? '🖐️ Manual' : '📻 RC'}: ${doorAction} — ${door.name}`);
+          logEntry.source  = 'RC (جهاز تحكم)';
+          console.log(`[MQTT] 📻 RC: ${doorAction} — ${door.name}`);
           if (door.rc_notify) {
             const label = doorAction === 'open' ? 'فتح الباب' : 'غلق الباب';
             sendPushToAdmins(door.inst_id, { title: 'إشعار RC 📻', body: `${label} بواسطة RC — ${door.name}` });
           }
+        } else {
+          logEntry.user_id = null;
+          logEntry.source  = 'يدوي (أزرار الجهاز)';
+          console.log(`[MQTT] 🖐️ يدوي: ${doorAction} — ${door.name}`);
         }
         const { error } = await supabase.from('door_logs').insert(logEntry);
         if (error) console.error('[Log insert]', error.message);
@@ -343,12 +356,12 @@ function startMQTT() {
 // ═══════════════════════════════════════════════════════════════════════════════
 async function openDoor(deviceId, dur) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  mqttControl(3, false);
+  mqttControl(2, false);
   await new Promise(r => setTimeout(r, 200));
-  mqttControl(2, true);
+  mqttControl(1, true);
   broadcast({ type: 'door_event', action: 'open', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
-    mqttControl(2, false);
+    mqttControl(1, false);
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
     delete doorTimers[deviceId];
   }, dur * 1000);
@@ -357,12 +370,12 @@ async function openDoor(deviceId, dur) {
 
 async function closeDoor(deviceId, dur) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  mqttControl(2, false);
+  mqttControl(1, false);
   await new Promise(r => setTimeout(r, 200));
-  mqttControl(3, true);
+  mqttControl(2, true);
   broadcast({ type: 'door_event', action: 'close', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
-    mqttControl(3, false);
+    mqttControl(2, false);
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
     delete doorTimers[deviceId];
   }, dur * 1000);
@@ -371,8 +384,8 @@ async function closeDoor(deviceId, dur) {
 
 async function stopDoor(deviceId) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
+  mqttControl(1, false);
   mqttControl(2, false);
-  mqttControl(3, false);
   broadcast({ type: 'door_event', action: 'stop', deviceId });
   return { success: true };
 }
@@ -494,8 +507,10 @@ app.post('/api/auth/heartbeat', auth, async (req, res) => {
 // DOOR STATUS
 app.get('/api/door/status', auth, (req, res) => {
   const deviceId = req.query.deviceId || MQTT_TOPIC;
-  const s = doorStateCache.get(deviceId) || { r1: false, r2: false, r3: false };
-  res.json({ value: s.r2 ? 'open' : s.r3 ? 'close' : 'stop', r1_on: s.r2, r2_on: s.r3, timer_active: !!doorTimers[deviceId] });
+  const s = doorStateCache.get(deviceId) || { r1:false, r2:false, r3:false, r4:false };
+  const isOpen  = s.r1 || s.r3;
+  const isClose = s.r2 || s.r4;
+  res.json({ value: isOpen ? 'open' : isClose ? 'close' : 'stop', r1_on: isOpen, r2_on: isClose, timer_active: !!doorTimers[deviceId] });
 });
 
 // DOOR CONTROL
@@ -802,8 +817,10 @@ app.put('/api/doors/:id', auth, adminOnly, async (req, res) => {
     // إذا تغيّرت مدة n → أرسل PulseTime لـ Tasmota
     if (updates.duration_seconds && data.device_id && mqttClient?.connected) {
       const pulseTime = Math.round(updates.duration_seconds * 10);
+      mqttClient.publish(`cmnd/${data.device_id}/PulseTime1`, String(pulseTime), { qos: 1 });
       mqttClient.publish(`cmnd/${data.device_id}/PulseTime2`, String(pulseTime), { qos: 1 });
       mqttClient.publish(`cmnd/${data.device_id}/PulseTime3`, String(pulseTime), { qos: 1 });
+      mqttClient.publish(`cmnd/${data.device_id}/PulseTime4`, String(pulseTime), { qos: 1 });
       console.log(`[PulseTime] ${data.device_id} → ${pulseTime} (${updates.duration_seconds}s)`);
     }
 
