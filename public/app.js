@@ -421,11 +421,10 @@ function showPendingScreen() {
       '<div style="width:100%;aspect-ratio:4/3;background:var(--surface2);border-radius:12px;margin-bottom:12px;display:flex;align-items:center;justify-content:center">' +
         '<span style="font-size:2rem;opacity:0.3">🔒</span>' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">' +
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">' +
         '<div style="padding:14px 4px;border-radius:14px;background:var(--surface2);text-align:center;font-size:0.8rem;color:var(--muted)">فتح</div>' +
         '<div style="padding:14px 4px;border-radius:14px;background:var(--surface2);text-align:center;font-size:0.8rem;color:var(--muted)">غلق</div>' +
-        '<div style="padding:14px 4px;border-radius:14px;background:var(--surface2);text-align:center;font-size:0.8rem;color:var(--muted)">إيقاف</div>' +
-        '<div style="padding:14px 4px;border-radius:14px;background:var(--surface2);text-align:center;font-size:0.8rem;color:var(--muted)">40ث</div>' +
+        '<div style="padding:14px 4px;border-radius:14px;background:var(--surface2);text-align:center;font-size:0.8rem;color:var(--muted)">فتح 40ث</div>' +
       '</div>' +
     '</div>' +
 
@@ -2708,19 +2707,19 @@ async function loadAdminDoors() {
       stateBar.style.cssText = 'background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;min-height:40px';
       card.appendChild(stateBar);
 
-      // ─── Row 5: أزرار التحكم 4 ───
+      // ─── Row 5: أزرار التحكم 3 ───
       var grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px';
       [
-        ['فتح',        'open',   'rgba(0,230,118,0.15)','rgba(0,230,118,0.3)','var(--success)','🟢'],
-        ['غلق',        'close',  'rgba(255,61,113,0.15)','rgba(255,61,113,0.3)','var(--danger)','🔴'],
-        ['إيقاف',      'stop',   'rgba(255,179,0,0.15)','rgba(255,179,0,0.3)','var(--warning)','🟡'],
-        ['فتح 40ث','open40','rgba(0,212,255,0.15)','rgba(0,212,255,0.3)','var(--accent)','⏱'],
+        ['فتح',    'open',   'rgba(0,230,118,0.15)','rgba(0,230,118,0.3)','var(--success)','🟢'],
+        ['غلق',    'close',  'rgba(255,61,113,0.15)','rgba(255,61,113,0.3)','var(--danger)','🔴'],
+        ['فتح 40ث','open40', 'rgba(0,212,255,0.15)','rgba(0,212,255,0.3)','var(--accent)','⏱'],
       ].forEach(function(item) {
         var btn = document.createElement('button');
+        btn.id = 'user-btn-' + item[1] + '-' + door.id;
         btn.style.cssText = 'padding:14px 4px;border-radius:14px;border:1px solid ' + item[3] + ';background:' + item[2] + ';color:' + item[4] + ';font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;line-height:1.3';
         btn.innerHTML = '<span style="font-size:1rem">' + item[5] + '</span><span>' + item[0] + '</span>';
-        btn.addEventListener('click', (function(did, act, dur){ return function(){ sendDoorAction(did, act, dur); }; })(door.device_id, item[1], door.duration_seconds||5));
+        btn.addEventListener('click', (function(did, act, dur, dId){ return function(){ userToggleDoorAction({id:dId,device_id:did,duration_seconds:dur}, act, dur); }; })(door.device_id, item[1], door.duration_seconds||5, door.id));
         grid.appendChild(btn);
       });
       card.appendChild(grid);
