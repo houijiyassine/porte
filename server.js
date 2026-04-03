@@ -61,7 +61,7 @@ const VAPID_PRIVATE        = process.env.VAPID_PRIVATE;
 const DEFAULT_DURATION     = parseInt(process.env.DEFAULT_DURATION || '5');
 const MQTT_HOST            = process.env.MQTT_HOST  || 'eclipse-mosquitto';
 const MQTT_PORT            = parseInt(process.env.MQTT_PORT || '1883');
-const MQTT_TOPIC           = process.env.MQTT_TOPIC || 'sonoff4ch';
+const MQTT_TOPIC           = process.env.MQTT_TOPIC || 'sonoff4ch'; // الـ topic الافتراضي
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Init
@@ -79,15 +79,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 // State
 // ═══════════════════════════════════════════════════════════════════════════════
 const wsClients      = new Map(); // userId → ws
-const doorStateCache = new Map(); // deviceId → { r1, r2 }
+const doorStateCache = new Map(); // deviceId → { r1,r2,r3,r4, isOpen, isClose }
 const appLastAction  = new Map(); // deviceId → { userId, userName, action, time }
 const doorTimers     = {};        // deviceId → timer
-const manualAction   = new Map(); // deviceId → timestamp (زر Sonoff)
-let   doorCache      = new Map(); // device_id → door object
+let   doorCache      = new Map(); // device_id → door object (النقطة 8: متعدد)
 let   mqttClient     = null;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Door Cache — المصدر الوحيد لبيانات الأبواب
+// Door Cache
 // ═══════════════════════════════════════════════════════════════════════════════
 async function loadDoorCache() {
   try {
@@ -102,16 +101,13 @@ async function loadDoorCache() {
       }
     });
     console.log(`[DoorCache] loaded ${doorCache.size} door(s): [${[...doorCache.keys()].join(', ')}]`);
-    // إرسال PulseTime بعد اتصال MQTT
+    // إرسال PulseTime لكل الأبواب بعد 3 ثوانٍ
     setTimeout(() => {
       if (mqttClient?.connected) {
-        doorCache.forEach((door) => {
+        doorCache.forEach(door => {
           if (door.duration_seconds && door.device_id) {
             const pt = Math.round(door.duration_seconds * 10);
-            mqttClient.publish(`cmnd/${door.device_id}/PulseTime1`, String(pt), { qos: 1 });
-            mqttClient.publish(`cmnd/${door.device_id}/PulseTime2`, String(pt), { qos: 1 });
-            mqttClient.publish(`cmnd/${door.device_id}/PulseTime3`, String(pt), { qos: 1 });
-            mqttClient.publish(`cmnd/${door.device_id}/PulseTime4`, String(pt), { qos: 1 });
+            [1,2,3,4].forEach(ch => mqttClient.publish(`cmnd/${door.device_id}/PulseTime${ch}`, String(pt), { qos: 1 }));
             console.log(`[PulseTime] init ${door.device_id} → ${pt} (${door.duration_seconds}s)`);
           }
         });
@@ -161,6 +157,10 @@ function broadcast(data) {
   const msg = JSON.stringify(data);
   wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg); });
 }
+function broadcastToInst(instId, data) {
+  const msg = JSON.stringify(data);
+  wss.clients.forEach(c => { if (c.readyState === 1 && c._instId === instId) c.send(msg); });
+}
 function broadcastToUser(userId, data) {
   const c = wsClients.get(String(userId));
   if (c?.readyState === 1) { c.send(JSON.stringify(data)); return true; }
@@ -171,9 +171,31 @@ wss.on('connection', (ws, req) => {
   const token = new URL(req.url, 'http://localhost').searchParams.get('token');
   let userId = null;
   if (token) {
-    try { userId = verifyToken(token).id; wsClients.set(userId, ws); } catch {}
+    try {
+      const payload = verifyToken(token);
+      userId = payload.id;
+      ws._instId = payload.inst_id; // النقطة 8: حفظ inst_id للـ broadcast
+      wsClients.set(userId, ws);
+    } catch {}
   }
   ws.send(JSON.stringify({ type: 'connected' }));
+
+  // النقطة 2: إرسال حالة الأبواب فور الاتصال
+  if (userId) {
+    doorCache.forEach(door => {
+      const s = doorStateCache.get(door.device_id) || { r1:false, r2:false, r3:false, r4:false };
+      const isOpen  = s.r1 || s.r2; // R1=يدوي فتح, R2=RC فتح
+      const isClose = s.r3 || s.r4; // R3=يدوي غلق, R4=RC غلق
+      ws.send(JSON.stringify({
+        type: 'door_state', deviceId: door.device_id,
+        doorId: door.id, instId: door.inst_id,
+        r1_on: isOpen, r2_on: isClose,
+        state: isOpen ? 'open' : isClose ? 'close' : 'idle',
+        source: 'init', timestamp: Date.now(),
+      }));
+    });
+  }
+
   ws.on('message', async (raw) => {
     try {
       const msg = JSON.parse(raw);
@@ -222,11 +244,11 @@ async function sendPushToAll(notification) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MQTT
+// MQTT — النقطة 8: دعم topics متعددة
 // ═══════════════════════════════════════════════════════════════════════════════
-function mqttControl(channel, value) {
+function mqttControl(deviceId, channel, value) {
   if (!mqttClient?.connected) { console.error('[MQTT] not connected'); return; }
-  const topic = `cmnd/${MQTT_TOPIC}/POWER${channel}`;
+  const topic = `cmnd/${deviceId}/POWER${channel}`;
   mqttClient.publish(topic, value ? 'ON' : 'OFF', { qos: 1 });
   console.log(`[MQTT] ⬆️ ${topic}: ${value ? 'ON' : 'OFF'}`);
 }
@@ -240,68 +262,78 @@ function startMQTT() {
 
   client.on('connect', () => {
     console.log('[MQTT] ✅ متصل');
-    ['POWER1','POWER2','POWER3','POWER4'].forEach(p => client.subscribe(`stat/${MQTT_TOPIC}/${p}`));
-    client.subscribe(`tele/${MQTT_TOPIC}/STATE`);
-    client.subscribe(`tele/${MQTT_TOPIC}/LWT`);
-    client.subscribe(`stat/${MQTT_TOPIC}/SOURCE`);
-    console.log(`[MQTT] 📡 topic: ${MQTT_TOPIC}`);
+    // النقطة 8: الاشتراك في كل الأبواب
+    doorCache.forEach(door => subscribeToDevice(client, door.device_id));
+    console.log(`[MQTT] 📡 مشترك في ${doorCache.size} باب`);
   });
 
   client.on('message', async (topic, message) => {
     const msg = message.toString();
-    console.log(`[MQTT] 📩 ${topic}: ${msg}`);
+
+    // استخراج deviceId من الـ topic
+    // تنسيق: stat/DEVICEID/POWER1 أو tele/DEVICEID/LWT
+    const topicParts = topic.split('/');
+    if (topicParts.length < 3) return;
+    const deviceId = topicParts[1];
+    const topicType = topicParts[0];
+    const topicSuffix = topicParts.slice(2).join('/');
 
     // LWT — online/offline
-    if (topic === `tele/${MQTT_TOPIC}/LWT`) {
+    if (topicType === 'tele' && topicSuffix === 'LWT') {
       const isOnline = msg === 'Online';
-      broadcast({ type: 'device_online', deviceId: MQTT_TOPIC, online: isOnline, timestamp: Date.now() });
+      broadcast({ type: 'device_online', deviceId, online: isOnline, timestamp: Date.now() });
       if (!isOnline) {
-        const door = doorCache.get(MQTT_TOPIC);
+        const door = doorCache.get(deviceId);
         if (door) sendPushToAdmins(door.inst_id, { title: '⚠️ انقطع اتصال الجهاز', body: `الباب "${door.name}" غير متصل` });
       }
       return;
     }
 
-    // SOURCE — زر Sonoff يدوي
-    if (topic === `stat/${MQTT_TOPIC}/SOURCE` && msg === 'manual') {
-      manualAction.set(MQTT_TOPIC, Date.now());
+    // STATE كاملة — تحديث cache
+    if (topicType === 'tele' && topicSuffix === 'STATE') {
+      try {
+        const s = JSON.parse(msg);
+        const c = doorStateCache.get(deviceId) || { r1:false, r2:false, r3:false, r4:false };
+        if (s.POWER1 !== undefined) c.r1 = s.POWER1 === 'ON';
+        if (s.POWER2 !== undefined) c.r2 = s.POWER2 === 'ON';
+        if (s.POWER3 !== undefined) c.r3 = s.POWER3 === 'ON';
+        if (s.POWER4 !== undefined) c.r4 = s.POWER4 === 'ON';
+        doorStateCache.set(deviceId, { ...c });
+      } catch {}
       return;
     }
 
     // POWER state
-    if (topic.startsWith(`stat/${MQTT_TOPIC}/POWER`)) {
-      const ch  = topic.slice(-1);
+    if (topicType === 'stat' && topicSuffix.startsWith('POWER')) {
+      const ch  = topicSuffix.slice(-1); // '1','2','3','4'
       const val = msg === 'ON';
 
-      // R1+R3 = فتح, R2+R4 = غلق
-      // R1+R2 = زر الجهاز (يدوي), R3+R4 = RC
-      const cached = doorStateCache.get(MQTT_TOPIC) || { r1:false, r2:false, r3:false, r4:false };
-      const prev   = { r1:cached.r1, r2:cached.r2, r3:cached.r3, r4:cached.r4 };
+      const cached = doorStateCache.get(deviceId) || { r1:false, r2:false, r3:false, r4:false };
+      const prev   = { ...cached };
       if (ch === '1') cached.r1 = val;
       if (ch === '2') cached.r2 = val;
       if (ch === '3') cached.r3 = val;
       if (ch === '4') cached.r4 = val;
-      doorStateCache.set(MQTT_TOPIC, { r1:cached.r1, r2:cached.r2, r3:cached.r3, r4:cached.r4 });
+      doorStateCache.set(deviceId, { ...cached });
 
-      // فتح = R1 أو R3 — غلق = R2 أو R4
-      const isOpen  = cached.r1 || cached.r3;
-      const isClose = cached.r2 || cached.r4;
+      // R1+R2 = فتح (R1=يدوي, R2=RC), R3+R4 = غلق (R3=يدوي, R4=RC)
+      const isOpen  = cached.r1 || cached.r2;
+      const isClose = cached.r3 || cached.r4;
       const changed = (prev.r1!==cached.r1)||(prev.r2!==cached.r2)||(prev.r3!==cached.r3)||(prev.r4!==cached.r4);
       const doorAction = isOpen ? 'open' : isClose ? 'close' : 'idle';
 
-      const lastApp   = appLastAction.get(MQTT_TOPIC);
+      const lastApp   = appLastAction.get(deviceId);
       const isFromApp = !!(lastApp && (Date.now() - lastApp.time) < 15000);
-      // RC = R3 أو R4, يدوي = R1 أو R2
-      const isRC     = (ch === '3' || ch === '4');
-      const isManual = (ch === '1' || ch === '2');
-      const door     = doorCache.get(MQTT_TOPIC);
+      const isRC      = (ch === '2' || ch === '4'); // R2+R4 = RC
+      const door      = doorCache.get(deviceId);
 
-      // بث للواجهة — r1_on = فتح, r2_on = غلق
+      // بث للواجهة
       broadcast({
-        type: 'door_state', deviceId: MQTT_TOPIC,
+        type: 'door_state', deviceId,
         doorId: door?.id, instId: door?.inst_id,
         channel: ch, r1_on: isOpen, r2_on: isClose,
-        state: doorAction, source: isFromApp ? 'app' : isRC ? 'rc' : 'manual',
+        state: doorAction,
+        source: isFromApp ? 'app' : isRC ? 'rc' : 'manual',
         timestamp: Date.now(),
       });
 
@@ -314,7 +346,7 @@ function startMQTT() {
         if (isFromApp) {
           logEntry.user_id = lastApp.userId;
           logEntry.source  = lastApp.userName;
-          console.log(`[MQTT] 📱 App: ${doorAction} by ${lastApp.userName}`);
+          console.log(`[MQTT] 📱 App: ${doorAction} by ${lastApp.userName} on ${door.name}`);
         } else if (isRC) {
           logEntry.user_id = null;
           logEntry.source  = 'RC (جهاز تحكم)';
@@ -331,18 +363,6 @@ function startMQTT() {
         const { error } = await supabase.from('door_logs').insert(logEntry);
         if (error) console.error('[Log insert]', error.message);
       }
-      return;
-    }
-
-    // STATE كاملة — تحديث cache فقط
-    if (topic === `tele/${MQTT_TOPIC}/STATE`) {
-      try {
-        const s = JSON.parse(msg);
-        const c = doorStateCache.get(MQTT_TOPIC) || { r1: false, r2: false };
-        if (s.POWER1 !== undefined) c.r1 = s.POWER1 === 'ON';
-        if (s.POWER2 !== undefined) c.r2 = s.POWER2 === 'ON';
-        doorStateCache.set(MQTT_TOPIC, { r1: c.r1, r2: c.r2 });
-      } catch {}
     }
   });
 
@@ -351,17 +371,26 @@ function startMQTT() {
   return client;
 }
 
+// الاشتراك في topics جهاز معين
+function subscribeToDevice(client, deviceId) {
+  if (!client || !deviceId) return;
+  [1,2,3,4].forEach(p => client.subscribe(`stat/${deviceId}/POWER${p}`));
+  client.subscribe(`tele/${deviceId}/STATE`);
+  client.subscribe(`tele/${deviceId}/LWT`);
+  console.log(`[MQTT] 📡 subscribed: ${deviceId}`);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// Door Actions
+// Door Actions — النقطة 8: يقبل deviceId متغير
 // ═══════════════════════════════════════════════════════════════════════════════
 async function openDoor(deviceId, dur) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  mqttControl(2, false);
+  mqttControl(deviceId, 2, false);
   await new Promise(r => setTimeout(r, 200));
-  mqttControl(1, true);
+  mqttControl(deviceId, 1, true);
   broadcast({ type: 'door_event', action: 'open', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
-    mqttControl(1, false);
+    mqttControl(deviceId, 1, false);
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
     delete doorTimers[deviceId];
   }, dur * 1000);
@@ -370,12 +399,12 @@ async function openDoor(deviceId, dur) {
 
 async function closeDoor(deviceId, dur) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  mqttControl(1, false);
+  mqttControl(deviceId, 1, false);
   await new Promise(r => setTimeout(r, 200));
-  mqttControl(2, true);
+  mqttControl(deviceId, 2, true);
   broadcast({ type: 'door_event', action: 'close', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
-    mqttControl(2, false);
+    mqttControl(deviceId, 2, false);
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
     delete doorTimers[deviceId];
   }, dur * 1000);
@@ -384,26 +413,26 @@ async function closeDoor(deviceId, dur) {
 
 async function stopDoor(deviceId) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  mqttControl(1, false);
-  mqttControl(2, false);
+  mqttControl(deviceId, 1, false);
+  mqttControl(deviceId, 2, false);
   broadcast({ type: 'door_event', action: 'stop', deviceId });
   return { success: true };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Auto Schedule — كل دقيقة
+// Auto Schedule
 // ═══════════════════════════════════════════════════════════════════════════════
 function checkAutoSchedule() {
   const now      = new Date();
   const dayMap   = [6,0,1,2,3,4,5];
   const todayIdx = dayMap[now.getDay()];
   const timeStr  = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
-  for (const [, door] of doorCache) {
+  for (const [deviceId, door] of doorCache) {
     if (!door.auto_schedule) continue;
     const day = door.auto_schedule[todayIdx];
     if (!day?.enabled) continue;
-    if (day.open_time && timeStr === day.open_time) { mqttControl(1, true); console.log(`[AutoSchedule] فتح: ${door.name}`); }
-    if (day.close_time && timeStr === day.close_time) { mqttControl(2, true); console.log(`[AutoSchedule] غلق: ${door.name}`); }
+    if (day.open_time  && timeStr === day.open_time)  { mqttControl(deviceId, 1, true); console.log(`[AutoSchedule] فتح: ${door.name}`); }
+    if (day.close_time && timeStr === day.close_time) { mqttControl(deviceId, 2, true); console.log(`[AutoSchedule] غلق: ${door.name}`); }
   }
 }
 setInterval(checkAutoSchedule, 60000);
@@ -411,7 +440,7 @@ setInterval(checkAutoSchedule, 60000);
 // ═══════════════════════════════════════════════════════════════════════════════
 // API
 // ═══════════════════════════════════════════════════════════════════════════════
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', doors: doorCache.size }));
 
 // AUTH
 app.post('/api/auth/send-otp', rl(3, 600000), async (req, res) => {
@@ -479,6 +508,7 @@ app.post('/api/auth/change-password', auth, async (req, res) => {
   try {
     const { old_pw, new_pw } = req.body;
     const { data: u } = await supabase.from('users').select('pw_hash').eq('id', req.user.id).single();
+    if (!u) return res.status(404).json({ error: 'المستخدم غير موجود' });
     if (u.pw_hash !== crypto.createHash('sha256').update(old_pw).digest('hex')) return res.status(400).json({ error: 'كلمة المرور القديمة غير صحيحة' });
     await supabase.from('users').update({ pw_hash: crypto.createHash('sha256').update(new_pw).digest('hex'), pw_plain: encryptPw(new_pw) }).eq('id', req.user.id);
     res.json({ success: true });
@@ -504,12 +534,32 @@ app.post('/api/auth/heartbeat', auth, async (req, res) => {
   res.json({ success: true });
 });
 
-// DOOR STATUS
+// النقطة 2: جلب حالة كل الأبواب دفعة واحدة
+app.get('/api/doors/status', auth, (req, res) => {
+  const result = [];
+  doorCache.forEach(door => {
+    const s = doorStateCache.get(door.device_id) || { r1:false, r2:false, r3:false, r4:false };
+    const isOpen  = s.r1 || s.r3;
+    const isClose = s.r2 || s.r4;
+    result.push({
+      doorId:   door.id,
+      deviceId: door.device_id,
+      instId:   door.inst_id,
+      r1_on:    isOpen,
+      r2_on:    isClose,
+      state:    isOpen ? 'open' : isClose ? 'close' : 'idle',
+      timer_active: !!doorTimers[door.device_id],
+    });
+  });
+  res.json(result);
+});
+
+// DOOR STATUS (باب واحد)
 app.get('/api/door/status', auth, (req, res) => {
   const deviceId = req.query.deviceId || MQTT_TOPIC;
   const s = doorStateCache.get(deviceId) || { r1:false, r2:false, r3:false, r4:false };
-  const isOpen  = s.r1 || s.r3;
-  const isClose = s.r2 || s.r4;
+  const isOpen  = s.r1 || s.r2;
+  const isClose = s.r3 || s.r4;
   res.json({ value: isOpen ? 'open' : isClose ? 'close' : 'stop', r1_on: isOpen, r2_on: isClose, timer_active: !!doorTimers[deviceId] });
 });
 
@@ -518,7 +568,13 @@ app.post('/api/door/control', auth, async (req, res) => {
   try {
     const { action } = req.body;
     const deviceId   = req.body.deviceId || MQTT_TOPIC;
-    const duration   = req.body.duration || DEFAULT_DURATION;
+    const duration   = parseInt(req.body.duration) || DEFAULT_DURATION;
+
+    // النقطة 3: تحقق من أن الطلب لم يُرسَل مؤخراً (منع الضغط المزدوج)
+    const lastApp = appLastAction.get(deviceId);
+    if (lastApp && (Date.now() - lastApp.time) < 1000 && lastApp.userId === req.user.id) {
+      return res.status(429).json({ error: 'انتظر لحظة', code: 'TOO_FAST' });
+    }
 
     const { data: cu } = await supabase.from('users').select('status,request_status').eq('id', req.user.id).single();
     if (!cu || cu.status === 'blocked') return res.status(403).json({ error: 'حسابك موقوف، تواصل مع المسؤول', code: 'ACCOUNT_BLOCKED' });
@@ -573,7 +629,7 @@ app.post('/api/door/control', auth, async (req, res) => {
     }
 
     // سجّل الأمر من التطبيق قبل إرسال MQTT
-    appLastAction.set(MQTT_TOPIC, { userId: req.user.id, userName: req.user.name, action, time: Date.now() });
+    appLastAction.set(deviceId, { userId: req.user.id, userName: req.user.name, action, time: Date.now() });
 
     let result;
     if      (action==='open')   result = await openDoor(deviceId, duration);
@@ -584,7 +640,7 @@ app.post('/api/door/control', auth, async (req, res) => {
 
     if (!result?.success) return res.status(500).json({ error: result?.msg });
 
-    broadcast({ type: 'door_event', action, userId: req.user.id });
+    broadcast({ type: 'door_event', action, userId: req.user.id, deviceId });
     await sendPushToAll({ title: `🚪 ${['open','open40'].includes(action)?'فتح الباب':action==='close'?'غلق الباب':'إيقاف الباب'}`, body: `بواسطة ${req.user.name}` });
     res.json({ success: true, action });
   } catch(e) { console.error('[Control]', e); res.status(500).json({ error: e.message }); }
@@ -799,9 +855,12 @@ app.get('/api/doors', auth, async (req, res) => {
 app.post('/api/doors', auth, adminOnly, async (req, res) => {
   try {
     const { inst_id, name, location, device_id, duration_seconds } = req.body;
-    const { data, error } = await supabase.from('doors').insert({ inst_id:inst_id||req.user.inst_id, name, location, device_id, duration_seconds:duration_seconds||5, created_at:new Date().toISOString() }).select().single();
+    const cleanDeviceId = device_id?.replace(/[\r\n\t]/g,'').trim();
+    const { data, error } = await supabase.from('doors').insert({ inst_id:inst_id||req.user.inst_id, name, location, device_id:cleanDeviceId, duration_seconds:duration_seconds||5, created_at:new Date().toISOString() }).select().single();
     if (error) throw error;
     await loadDoorCache();
+    // الاشتراك في الـ topic الجديد
+    if (mqttClient?.connected && cleanDeviceId) subscribeToDevice(mqttClient, cleanDeviceId);
     res.json(data);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -810,20 +869,18 @@ app.put('/api/doors/:id', auth, adminOnly, async (req, res) => {
   try {
     const updates = {};
     ['name','location','device_id','duration_seconds','is_active','gps','schedule','rc_notify','door_type','auto_schedule'].forEach(k => { if (req.body[k]!==undefined) updates[k]=req.body[k]; });
+    if (updates.device_id) updates.device_id = updates.device_id.replace(/[\r\n\t]/g,'').trim();
     const { data, error } = await supabase.from('doors').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     await loadDoorCache();
-
-    // إذا تغيّرت مدة n → أرسل PulseTime لـ Tasmota
+    // إرسال PulseTime إذا تغيّرت المدة
     if (updates.duration_seconds && data.device_id && mqttClient?.connected) {
-      const pulseTime = Math.round(updates.duration_seconds * 10);
-      mqttClient.publish(`cmnd/${data.device_id}/PulseTime1`, String(pulseTime), { qos: 1 });
-      mqttClient.publish(`cmnd/${data.device_id}/PulseTime2`, String(pulseTime), { qos: 1 });
-      mqttClient.publish(`cmnd/${data.device_id}/PulseTime3`, String(pulseTime), { qos: 1 });
-      mqttClient.publish(`cmnd/${data.device_id}/PulseTime4`, String(pulseTime), { qos: 1 });
-      console.log(`[PulseTime] ${data.device_id} → ${pulseTime} (${updates.duration_seconds}s)`);
+      const pt = Math.round(updates.duration_seconds * 10);
+      [1,2,3,4].forEach(ch => mqttClient.publish(`cmnd/${data.device_id}/PulseTime${ch}`, String(pt), { qos: 1 }));
+      console.log(`[PulseTime] ${data.device_id} → ${pt} (${updates.duration_seconds}s)`);
     }
-
+    // اشتراك في topic جديد إذا تغيّر device_id
+    if (updates.device_id && mqttClient?.connected) subscribeToDevice(mqttClient, updates.device_id);
     res.json(data);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -872,8 +929,10 @@ app.get('/api/alerts', auth, adminOnly, async (req, res) => {
 
 // DEVICE STATUS
 app.get('/api/device/status/:deviceId', auth, (req, res) => {
-  const s = doorStateCache.get(req.params.deviceId) || { r1: false, r2: false };
-  res.json({ success: true, online: true, device_id: req.params.deviceId, r1: s.r1, r2: s.r2 });
+  const s = doorStateCache.get(req.params.deviceId) || { r1:false, r2:false, r3:false, r4:false };
+  const isOpen  = s.r1 || s.r2;
+  const isClose = s.r3 || s.r4;
+  res.json({ success: true, online: true, device_id: req.params.deviceId, r1_on: isOpen, r2_on: isClose });
 });
 
 // DEVICE FINGERPRINT
@@ -911,14 +970,12 @@ app.delete('/api/doors/:id/access-list/:userId', auth, adminOnly, async (req, re
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// START — الترتيب مهم جداً
+// START
 // ═══════════════════════════════════════════════════════════════════════════════
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   console.log(`✅ Server running on port ${PORT}`);
-  // 1. تحميل cache الأبواب أولاً
   await loadDoorCache();
-  // 2. بدء MQTT بعد تحميل الـ cache
   mqttClient = startMQTT();
-  console.log(`📡 MQTT: ${MQTT_HOST}:${MQTT_PORT} / topic: ${MQTT_TOPIC}`);
+  console.log(`📡 MQTT: ${MQTT_HOST}:${MQTT_PORT}`);
 });
