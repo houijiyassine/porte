@@ -741,10 +741,9 @@ function connectWS() {
 
         // idle — الـ relay توقف
         if (rawState === 'idle') {
-          // تجاهل idle فقط إذا كانت الانيميشن شغّالة من التطبيق (app)
-          // لكن إذا كان RC أو يدوي → أوقف الانيميشن
-          if (doorId && doorTimers[doorId] && doorTimers[doorId]._raf && msg.source === 'app') {
-            return; // الانيميشن من التطبيق شغّالة → تجاهل idle
+          // تجاهل idle إذا الانيميشن شغّالة — PulseTime ينتهي قبل اكتمال الانيميشن
+          if (doorId && doorTimers[doorId] && doorTimers[doorId]._raf) {
+            return;
           }
           if (doorId) {
             doorCurrentState[doorId] = 'idle';
