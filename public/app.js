@@ -648,7 +648,7 @@ function connectWS() {
         loadRecentHistory();
         // عند التوقف — أوقف الانيميشن فوراً
         if (msg.action === 'stop' || msg.action === 'auto_stop') {
-          if (msg.doorId) updateDoorButtons(msg.doorId, null);
+          if (msg.doorId) { updateDoorButtons(msg.doorId, null); updateUserDoorButtons(msg.doorId, null); }
           Object.keys(doorTimers).forEach(function(dId) {
             var t = doorTimers[dId];
             if (t && t._raf) { cancelAnimationFrame(t._raf); t._raf = null; }
@@ -671,7 +671,7 @@ function connectWS() {
 
         // idle = الـ relay توقف — أوقف الانيميشن وأعد الأزرار
         if (rawState === 'idle') {
-          if (doorId) updateDoorButtons(doorId, null);
+          if (doorId) { updateDoorButtons(doorId, null); updateUserDoorButtons(doorId, null); }
           Object.keys(doorTimers).forEach(function(dId) {
             var t2 = doorTimers[dId];
             if (t2 && t2._raf) { cancelAnimationFrame(t2._raf); t2._raf = null; }
@@ -2467,21 +2467,21 @@ async function loadUserDoors() {
       stateBar.innerHTML = '<span style="color:var(--muted)">جاري التحقق...</span>';
       card.appendChild(stateBar);
 
-      // ─── Row 5: أزرار التحكم 4 ───
+      // ─── Row 5: أزرار التحكم 3 ───
       var grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:8px';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:8px';
       [
         ['فتح',    'open',   'rgba(0,230,118,0.15)','rgba(0,230,118,0.3)','var(--success)','🟢'],
         ['غلق',    'close',  'rgba(255,61,113,0.15)','rgba(255,61,113,0.3)','var(--danger)','🔴'],
-        ['إيقاف',  'stop',   'rgba(255,179,0,0.15)','rgba(255,179,0,0.3)','var(--warning)','🟡'],
         ['فتح 40ث','open40', 'rgba(0,212,255,0.15)','rgba(0,212,255,0.3)','var(--accent)','⏱'],
       ].forEach(function(item) {
         var btn = document.createElement('button');
+        btn.id = 'user-btn-' + item[1] + '-' + door.id;
         btn.style.cssText = 'padding:14px 4px;border-radius:14px;border:1px solid ' + item[3] + ';background:' + item[2] + ';color:' + item[4] + ';font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px';
         btn.innerHTML = '<span style="font-size:1rem">' + item[5] + '</span><span>' + item[0] + '</span>';
-        btn.addEventListener('click', (function(d, act) {
-          return function() { userDoorAction(d, act); };
-        })(door, item[1]));
+        btn.addEventListener('click', (function(d, act, dur) {
+          return function() { userToggleDoorAction(d, act, dur); };
+        })(door, item[1], door.duration_seconds||5));
         grid.appendChild(btn);
       });
       card.appendChild(grid);
@@ -2571,6 +2571,45 @@ function updateTimeBadge(badge, doorEl) {
       ';font-size:0.78rem;font-weight:700;text-align:center;color:' + (check.allowed ? 'var(--success)' : 'var(--danger)');
     badge.innerHTML = (check.allowed ? '⏰ متاح' : '⛔ مغلق الآن') + '<br><span style="font-size:0.68rem;font-weight:600">' + (check.reason||'') + '</span>';
   } catch(e) {}
+}
+
+function updateUserDoorButtons(doorId, activeAction) {
+  var actions = ['open', 'close', 'open40'];
+  var defaults = {
+    open:   { bg:'rgba(0,230,118,0.15)', border:'rgba(0,230,118,0.3)', color:'var(--success)', icon:'🟢', label:'فتح' },
+    close:  { bg:'rgba(255,61,113,0.15)', border:'rgba(255,61,113,0.3)', color:'var(--danger)', icon:'🔴', label:'غلق' },
+    open40: { bg:'rgba(0,212,255,0.15)', border:'rgba(0,212,255,0.3)', color:'var(--accent)', icon:'⏱', label:'فتح 40ث' },
+  };
+  var stopLabels = { open:'إيقاف الفتح', close:'إيقاف الغلق', open40:'إيقاف 40ث' };
+  actions.forEach(function(act) {
+    var btn = document.getElementById('user-btn-' + act + '-' + doorId);
+    if (!btn) return;
+    var d = defaults[act];
+    if (act === activeAction) {
+      btn.style.background = 'rgba(255,179,0,0.2)';
+      btn.style.border = '1px solid rgba(255,179,0,0.5)';
+      btn.style.color = 'var(--warning)';
+      btn.innerHTML = '<span style="font-size:1rem">🟡</span><span>' + stopLabels[act] + '</span>';
+    } else {
+      btn.style.background = d.bg;
+      btn.style.border = '1px solid ' + d.border;
+      btn.style.color = d.color;
+      btn.innerHTML = '<span style="font-size:1rem">' + d.icon + '</span><span>' + d.label + '</span>';
+    }
+  });
+}
+
+async function userToggleDoorAction(door, action, duration) {
+  var doorId = door.id;
+  var t = doorTimers[doorId];
+  var isOpenAction = (action === 'open' || action === 'open40');
+  if (t && t.isOpen === isOpenAction) {
+    await userDoorAction(door, 'stop');
+    updateUserDoorButtons(doorId, null);
+  } else {
+    await userDoorAction(door, action);
+    updateUserDoorButtons(doorId, action);
+  }
 }
 
 async function userDoorAction(door, action) {
