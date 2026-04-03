@@ -385,7 +385,7 @@ function subscribeToDevice(client, deviceId) {
 // ═══════════════════════════════════════════════════════════════════════════════
 async function openDoor(deviceId, dur) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
-  mqttControl(deviceId, 2, false);
+  mqttControl(deviceId, 3, false);
   await new Promise(r => setTimeout(r, 200));
   mqttControl(deviceId, 1, true);
   broadcast({ type: 'door_event', action: 'open', deviceId });
@@ -401,10 +401,10 @@ async function closeDoor(deviceId, dur) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
   mqttControl(deviceId, 1, false);
   await new Promise(r => setTimeout(r, 200));
-  mqttControl(deviceId, 2, true);
+  mqttControl(deviceId, 3, true);
   broadcast({ type: 'door_event', action: 'close', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
-    mqttControl(deviceId, 2, false);
+    mqttControl(deviceId, 3, false);
     broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
     delete doorTimers[deviceId];
   }, dur * 1000);
@@ -414,7 +414,7 @@ async function closeDoor(deviceId, dur) {
 async function stopDoor(deviceId) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
   mqttControl(deviceId, 1, false);
-  mqttControl(deviceId, 2, false);
+  mqttControl(deviceId, 3, false);
   broadcast({ type: 'door_event', action: 'stop', deviceId });
   return { success: true };
 }
@@ -432,7 +432,7 @@ function checkAutoSchedule() {
     const day = door.auto_schedule[todayIdx];
     if (!day?.enabled) continue;
     if (day.open_time  && timeStr === day.open_time)  { mqttControl(deviceId, 1, true); console.log(`[AutoSchedule] فتح: ${door.name}`); }
-    if (day.close_time && timeStr === day.close_time) { mqttControl(deviceId, 2, true); console.log(`[AutoSchedule] غلق: ${door.name}`); }
+    if (day.close_time && timeStr === day.close_time) { mqttControl(deviceId, 3, true); console.log(`[AutoSchedule] غلق: ${door.name}`); }
   }
 }
 setInterval(checkAutoSchedule, 60000);
