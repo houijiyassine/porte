@@ -648,6 +648,7 @@ function connectWS() {
         loadRecentHistory();
         // عند التوقف — أوقف الانيميشن فوراً
         if (msg.action === 'stop' || msg.action === 'auto_stop') {
+          if (msg.doorId) updateDoorButtons(msg.doorId, null);
           Object.keys(doorTimers).forEach(function(dId) {
             var t = doorTimers[dId];
             if (t && t._raf) { cancelAnimationFrame(t._raf); t._raf = null; }
@@ -668,8 +669,9 @@ function connectWS() {
 
         updateDoorStatusUI(rawState);
 
-        // idle = الـ relay توقف — أوقف الانيميشن
+        // idle = الـ relay توقف — أوقف الانيميشن وأعد الأزرار
         if (rawState === 'idle') {
+          if (doorId) updateDoorButtons(doorId, null);
           Object.keys(doorTimers).forEach(function(dId) {
             var t2 = doorTimers[dId];
             if (t2 && t2._raf) { cancelAnimationFrame(t2._raf); t2._raf = null; }
@@ -1084,6 +1086,59 @@ async function sendAction(action) {
 }
 
 // إرسال أمر لباب محدد من صفحة المؤسسات
+function updateDoorButtons(doorId, activeAction) {
+  var btnOpen   = document.getElementById('btn-open-' + doorId);
+  var btnClose  = document.getElementById('btn-close-' + doorId);
+  var btnOpen40 = document.getElementById('btn-open40-' + doorId);
+
+  // إعادة كل الأزرار للحالة الافتراضية
+  if (btnOpen) {
+    btnOpen.style.background = 'rgba(0,230,118,0.15)';
+    btnOpen.style.border = '1px solid rgba(0,230,118,0.3)';
+    btnOpen.style.color = 'var(--success)';
+    btnOpen.innerHTML = '🟢<span>فتح</span>';
+  }
+  if (btnClose) {
+    btnClose.style.background = 'rgba(255,61,113,0.15)';
+    btnClose.style.border = '1px solid rgba(255,61,113,0.3)';
+    btnClose.style.color = 'var(--danger)';
+    btnClose.innerHTML = '🔴<span>غلق</span>';
+  }
+  if (btnOpen40) {
+    btnOpen40.style.background = 'rgba(0,212,255,0.15)';
+    btnOpen40.style.border = '1px solid rgba(0,212,255,0.3)';
+    btnOpen40.style.color = 'var(--accent)';
+    btnOpen40.innerHTML = '⏱<span>فتح 40ث</span>';
+  }
+
+  // تحويل الزر النشط إلى برتقالي إيقاف
+  var activeBtn = null;
+  var stopLabel = '';
+  if (activeAction === 'open')   { activeBtn = btnOpen;   stopLabel = 'إيقاف الفتح'; }
+  if (activeAction === 'close')  { activeBtn = btnClose;  stopLabel = 'إيقاف الغلق'; }
+  if (activeAction === 'open40') { activeBtn = btnOpen40; stopLabel = 'إيقاف 40ث'; }
+
+  if (activeBtn && activeAction) {
+    activeBtn.style.background = 'rgba(255,179,0,0.2)';
+    activeBtn.style.border = '1px solid rgba(255,179,0,0.5)';
+    activeBtn.style.color = 'var(--warning)';
+    activeBtn.innerHTML = '🟡<span>' + stopLabel + '</span>';
+  }
+}
+
+async function toggleDoorAction(deviceId, action, duration, doorId) {
+  var t = doorTimers[doorId];
+  var isOpenAction = (action === 'open' || action === 'open40');
+  if (t && t.isOpen === isOpenAction) {
+    // نفس الاتجاه → إيقاف
+    await sendDoorAction(deviceId, 'stop', 0);
+    updateDoorButtons(doorId, null);
+  } else {
+    await sendDoorAction(deviceId, action, duration);
+    updateDoorButtons(doorId, action);
+  }
+}
+
 async function sendDoorAction(deviceId, action, duration) {
   try {
     // إذا الباب يتحرك بنفس الاتجاه → إيقاف
@@ -1684,11 +1739,10 @@ function renderInstDetail(inst) {
           </div>
           <span id="door-status-${doorId}" style="font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface);color:var(--muted)">...</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
-          <button onclick="sendDoorAction('${deviceId}','open',${duration})" style="background:rgba(0,230,118,0.15);border:1px solid rgba(0,230,118,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--success)">🟢<span>فتح</span></button>
-          <button onclick="sendDoorAction('${deviceId}','close',${duration})" style="background:rgba(255,61,113,0.15);border:1px solid rgba(255,61,113,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--danger)">🔴<span>غلق</span></button>
-          <button onclick="sendDoorAction('${deviceId}','stop',0)" style="background:rgba(255,179,0,0.15);border:1px solid rgba(255,179,0,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--warning)">🟡<span>إيقاف</span></button>
-          <button onclick="sendDoorAction('${deviceId}','open40',40)" style="background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--accent)">⏱<span>40ث</span></button>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+          <button id="btn-open-${doorId}" onclick="toggleDoorAction('${deviceId}','open',${duration},'${doorId}')" style="background:rgba(0,230,118,0.15);border:1px solid rgba(0,230,118,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--success)">🟢<span>فتح</span></button>
+          <button id="btn-close-${doorId}" onclick="toggleDoorAction('${deviceId}','close',${duration},'${doorId}')" style="background:rgba(255,61,113,0.15);border:1px solid rgba(255,61,113,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--danger)">🔴<span>غلق</span></button>
+          <button id="btn-open40-${doorId}" onclick="toggleDoorAction('${deviceId}','open40',40,'${doorId}')" style="background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:12px;padding:14px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:Cairo,sans-serif;font-weight:700;font-size:0.82rem;color:var(--accent)">⏱<span>فتح 40ث</span></button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
           <button onclick="openEditDoor('${inst.id}','${doorId}','${doorName}','${location}','${deviceId}',${duration},'${door.door_type||'battante'}')" style="background:rgba(124,92,252,0.15);border:1px solid rgba(124,92,252,0.3);border-radius:12px;padding:12px 6px;cursor:pointer;font-size:1.1rem" title="تعديل">✏️</button>
