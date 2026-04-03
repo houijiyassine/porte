@@ -642,6 +642,45 @@ function connectWS() {
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
+      // door_progress — نسبة الانيميشن من السيرفر
+      if (msg.type === 'door_progress') {
+        var doorId2 = msg.doorId || (function() {
+          // ابحث عن doorId من deviceId
+          var found = null;
+          if (typeof institutesCache !== 'undefined') {
+            institutesCache.forEach(function(inst) {
+              (inst.doors||[]).forEach(function(d) {
+                if (d.device_id === msg.deviceId) found = d.id;
+              });
+            });
+          }
+          return found;
+        })();
+        if (doorId2) {
+          // أوقف الانيميشن المحلية — السيرفر هو المصدر الوحيد
+          if (doorTimers[doorId2] && doorTimers[doorId2]._raf) {
+            cancelAnimationFrame(doorTimers[doorId2]._raf);
+            doorTimers[doorId2]._raf = null;
+          }
+          doorPos[doorId2] = msg.pos;
+          var imgEl3   = document.getElementById('door-img-' + doorId2);
+          var stateEl3 = document.getElementById('user-state-' + doorId2)
+                      || document.getElementById('door-progress-bar-' + doorId2)
+                      || document.getElementById('door-progress-' + doorId2);
+          var displayPct = msg.isOpen ? msg.pos : (1 - msg.pos);
+          if (imgEl3 && typeof _drawDoorProgress === 'function') {
+            _drawDoorProgress(imgEl3, stateEl3, displayPct, msg.isOpen, msg.stopped || false, msg.pos);
+          }
+          // تحديث النسبة المئوية
+          var pctEl3 = document.getElementById('door-pct-' + doorId2);
+          if (pctEl3) {
+            pctEl3.style.color = msg.isOpen ? 'var(--success)' : 'var(--danger)';
+            pctEl3.textContent = Math.round(displayPct * 100) + '%';
+          }
+        }
+        return;
+      }
+
       if (msg.type === 'door_event') {
         updateDoorStatusUI(msg.action);
         loadRecentHistory();
