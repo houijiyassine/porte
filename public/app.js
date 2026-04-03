@@ -668,6 +668,26 @@ function connectWS() {
 
         updateDoorStatusUI(rawState);
 
+        // تحديث الأزرار حسب الحالة
+        if (rawState === 'open' || rawState === 'open40') {
+          updateDoorButtons(doorId, 'open');
+          updateUserDoorButtons(doorId, 'open');
+        } else if (rawState === 'close') {
+          updateDoorButtons(doorId, 'close');
+          updateUserDoorButtons(doorId, 'close');
+        }
+
+        // النقطة 2: عند الاتصال الأولي — عرض الحالة بدون انيميشن
+        if (msg.source === 'init') {
+          if (doorId) {
+            var imgEl0 = document.getElementById('door-img-' + doorId);
+            if (imgEl0 && typeof _drawDoorStatic === 'function') {
+              _drawDoorStatic(imgEl0, null, rawState === 'idle' ? 'closed' : rawState);
+            }
+          }
+          return;
+        }
+
         // idle = الـ relay توقف — أوقف الانيميشن وأعد الأزرار
         if (rawState === 'idle') {
           if (doorId) { updateDoorButtons(doorId, null); updateUserDoorButtons(doorId, null); }
@@ -693,15 +713,6 @@ function connectWS() {
         var durEl   = document.querySelector('[data-door-id="' + doorId + '"]');
         var nSecs   = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
         var newIsOpen = (rawState === 'open' || rawState === 'open40');
-
-        // تحديث الأزرار حسب الحالة الجديدة
-        if (rawState === 'open' || rawState === 'open40') {
-          updateDoorButtons(doorId, 'open');
-          updateUserDoorButtons(doorId, 'open');
-        } else if (rawState === 'close') {
-          updateDoorButtons(doorId, 'close');
-          updateUserDoorButtons(doorId, 'close');
-        }
 
         if (msg.source === 'rc') {
           lastKnownState[doorId] = rawState;
