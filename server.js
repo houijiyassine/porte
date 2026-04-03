@@ -412,9 +412,10 @@ async function openDoor(deviceId, dur) {
   doorTimers[deviceId] = setTimeout(() => {
     mqttControl(deviceId, 1, false);
     if (doorProgress[deviceId]?._interval) { clearInterval(doorProgress[deviceId]._interval); }
+    const dpDoorOpen = doorCache.get(deviceId);
     doorProgress[deviceId] = { pos: 1.0, isOpen: true };
-    broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
-    broadcast({ type: 'door_progress', deviceId, pos: 1.0, isOpen: true });
+    broadcast({ type: 'door_event', action: 'auto_stop', deviceId, doorId: dpDoorOpen?.id });
+    broadcast({ type: 'door_progress', deviceId, doorId: dpDoorOpen?.id, pos: 1.0, isOpen: true, stopped: true });
     delete doorTimers[deviceId];
   }, dur * 1000);
   return { success: true };
@@ -444,9 +445,10 @@ async function closeDoor(deviceId, dur) {
   doorTimers[deviceId] = setTimeout(() => {
     mqttControl(deviceId, 3, false);
     if (doorProgress[deviceId]?._interval) { clearInterval(doorProgress[deviceId]._interval); }
+    const dpDoor2 = doorCache.get(deviceId);
     doorProgress[deviceId] = { pos: 0.0, isOpen: false };
-    broadcast({ type: 'door_event', action: 'auto_stop', deviceId });
-    broadcast({ type: 'door_progress', deviceId, pos: 0.0, isOpen: false });
+    broadcast({ type: 'door_event', action: 'auto_stop', deviceId, doorId: dpDoor2?.id });
+    broadcast({ type: 'door_progress', deviceId, doorId: dpDoor2?.id, pos: 0.0, isOpen: false, stopped: true });
     delete doorTimers[deviceId];
   }, dur * 1000);
   return { success: true };
@@ -456,10 +458,12 @@ async function stopDoor(deviceId) {
   if (doorTimers[deviceId]) { clearTimeout(doorTimers[deviceId]); delete doorTimers[deviceId]; }
   if (doorProgress[deviceId]?._interval) {
     clearInterval(doorProgress[deviceId]._interval);
-    const currentPos = doorProgress[deviceId]?.pos ?? 0;
-    doorProgress[deviceId] = { pos: currentPos, isOpen: doorProgress[deviceId]?.isOpen };
-    broadcast({ type: 'door_progress', deviceId, pos: currentPos, isOpen: doorProgress[deviceId]?.isOpen, stopped: true });
   }
+  const stopDoor2 = doorCache.get(deviceId);
+  const currentPos = doorProgress[deviceId]?.pos ?? 0;
+  const currentIsOpen = doorProgress[deviceId]?.isOpen ?? false;
+  doorProgress[deviceId] = { pos: currentPos, isOpen: currentIsOpen };
+  broadcast({ type: 'door_progress', deviceId, doorId: stopDoor2?.id, pos: currentPos, isOpen: currentIsOpen, stopped: true });
   mqttControl(deviceId, 1, false);
   mqttControl(deviceId, 3, false);
   broadcast({ type: 'door_event', action: 'stop', deviceId });
