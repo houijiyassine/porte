@@ -574,9 +574,9 @@ app.post('/api/door/control', auth, async (req, res) => {
     const deviceId   = req.body.deviceId || MQTT_TOPIC;
     const duration   = parseInt(req.body.duration) || DEFAULT_DURATION;
 
-    // النقطة 3: تحقق من أن الطلب لم يُرسَل مؤخراً (منع الضغط المزدوج)
+    // النقطة 3: منع نفس الأمر مرتين خلال 500ms من نفس المستخدم
     const lastApp = appLastAction.get(deviceId);
-    if (lastApp && (Date.now() - lastApp.time) < 1000 && lastApp.userId === req.user.id) {
+    if (lastApp && (Date.now() - lastApp.time) < 500 && lastApp.userId === req.user.id && lastApp.action === action) {
       return res.status(429).json({ error: 'انتظر لحظة', code: 'TOO_FAST' });
     }
 
