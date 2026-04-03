@@ -1176,8 +1176,9 @@ async function toggleDoorAction(deviceId, action, duration, doorId) {
   var isActive = btn && btn.dataset.active === '1';
 
   if (isActive) {
-    // الزر برتقالي → إيقاف
-    await sendDoorAction(deviceId, 'stop', 0);
+    // الزر برتقالي → إيقاف — خذ الموضع الحالي قبل أي شيء
+    var posAtStop = (doorPos[doorId] !== undefined) ? doorPos[doorId] : null;
+    await sendDoorAction(deviceId, 'stop', 0, posAtStop);
     updateDoorButtons(doorId, null);
     updateUserDoorButtons(doorId, null);
     doorCurrentState[doorId] = 'idle';
@@ -1191,22 +1192,26 @@ async function toggleDoorAction(deviceId, action, duration, doorId) {
   }
 }
 
-async function sendDoorAction(deviceId, action, duration) {
+async function sendDoorAction(deviceId, action, duration, currentPosOverride) {
   try {
     var body = { action, deviceId, duration };
     if (userLocation) { body.lat = userLocation.lat; body.lng = userLocation.lng; body.accuracy = userLocation.accuracy || 999; }
     // عند الإيقاف — أرسل الموضع الحالي للسيرفر
     if (action === 'stop') {
-      var doorId4stop = null;
-      if (typeof institutesCache !== 'undefined') {
-        institutesCache.forEach(function(inst) {
-          (inst.doors||[]).forEach(function(d) {
-            if (d.device_id === deviceId) doorId4stop = d.id;
+      if (currentPosOverride !== undefined && currentPosOverride !== null) {
+        body.currentPos = currentPosOverride;
+      } else {
+        var doorId4stop = null;
+        if (typeof institutesCache !== 'undefined') {
+          institutesCache.forEach(function(inst) {
+            (inst.doors||[]).forEach(function(d) {
+              if (d.device_id === deviceId) doorId4stop = d.id;
+            });
           });
-        });
-      }
-      if (doorId4stop !== null && doorPos[doorId4stop] !== undefined) {
-        body.currentPos = doorPos[doorId4stop];
+        }
+        if (doorId4stop !== null && doorPos[doorId4stop] !== undefined) {
+          body.currentPos = doorPos[doorId4stop];
+        }
       }
     }
     await apiFetch('/api/door/control', 'POST', body);
@@ -2660,7 +2665,8 @@ async function userToggleDoorAction(door, action, duration) {
   var isActive = btn && btn.dataset.active === '1';
 
   if (isActive) {
-    await userDoorAction(door, 'stop');
+    var posAtStop2 = (doorPos[doorId] !== undefined) ? doorPos[doorId] : null;
+    await userDoorAction(door, 'stop', posAtStop2);
     updateUserDoorButtons(doorId, null);
     updateDoorButtons(doorId, null);
     doorCurrentState[doorId] = 'idle';
@@ -2673,8 +2679,11 @@ async function userToggleDoorAction(door, action, duration) {
   }
 }
 
-async function userDoorAction(door, action) {
+async function userDoorAction(door, action, currentPosOverride) {
   var body = { action: action, deviceId: door.device_id, duration: door.duration_seconds || 5 };
+  if (action === 'stop' && currentPosOverride !== undefined && currentPosOverride !== null) {
+    body.currentPos = currentPosOverride;
+  }
   var gpsNeeded = (user.role === 'user' && door.gps && door.gps.user_required) ||
                   (user.role === 'admin' && door.gps && door.gps.admin_required);
   if (gpsNeeded) {
