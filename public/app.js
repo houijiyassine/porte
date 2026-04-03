@@ -676,8 +676,8 @@ function connectWS() {
                       || document.getElementById('door-progress-bar-' + dpId)
                       || document.getElementById('door-progress-' + dpId);
             if (dpImg3) {
-              // مزامنة الموضع من السيرفر ثم ابدأ الانيميشن المحلية
-              doorPos[dpId] = msg.pos;
+              // لا نُعيّن doorPos من msg.pos — نحتفظ بالموضع المحفوظ من الإيقاف السابق
+              // doorPos[dpId] تم تعيينه عند stopped=true
               var actualDur = msg.duration || nSecs2;
               startDoorTimer(dpId, dpImg3, dpSt3, actualDur, msg.isOpen ? 'open' : 'close');
             }
