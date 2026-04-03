@@ -647,36 +647,35 @@ function connectWS() {
       // ═══════════════════════════════════════════════════════
       if (msg.type === 'door_progress') {
         var dpId = msg.doorId;
-        if (!dpId && msg.deviceId && typeof institutesCache !== 'undefined') {
-          institutesCache.forEach(function(inst) {
-            (inst.doors||[]).forEach(function(d) {
-              if (d.device_id === msg.deviceId) dpId = d.id;
-            });
-          });
-        }
         if (!dpId) return;
 
-        // أوقف أي انيميشن محلية
-        _cancelDoorTimer(dpId);
-
-        // حدّث الحالة الحالية
-        if (!msg.stopped) {
-          doorCurrentState[dpId] = msg.isOpen ? 'open' : 'close';
-        } else {
-          doorCurrentState[dpId] = 'idle';
-        }
-
-        // حدّث موضع الباب
+        // حدّث الحالة
+        doorCurrentState[dpId] = msg.stopped ? 'idle' : (msg.isOpen ? 'open' : 'close');
         doorPos[dpId] = msg.pos;
+
         var displayPct = msg.isOpen ? msg.pos : (1 - msg.pos);
 
-        // ارسم الباب
+        // ارسم الباب مباشرة
         var dpImg = document.getElementById('door-img-' + dpId);
         var dpSt  = document.getElementById('user-state-' + dpId)
                  || document.getElementById('door-progress-bar-' + dpId)
                  || document.getElementById('door-progress-' + dpId);
-        if (dpImg && typeof _drawDoorProgress === 'function') {
-          _drawDoorProgress(dpImg, dpSt, displayPct, msg.isOpen, msg.stopped || false, msg.pos);
+
+        // دالة الرسم
+        function doDrawProgress() {
+          var img = document.getElementById('door-img-' + dpId);
+          var st  = document.getElementById('user-state-' + dpId)
+                 || document.getElementById('door-progress-bar-' + dpId)
+                 || document.getElementById('door-progress-' + dpId);
+          if (img && typeof _drawDoorProgress === 'function') {
+            _drawDoorProgress(img, st, displayPct, msg.isOpen, msg.stopped || false, msg.pos);
+            return true;
+          }
+          return false;
+        }
+        if (!doDrawProgress()) {
+          // العنصر غير موجود بعد — حاول مرة أخرى بعد 100ms
+          setTimeout(doDrawProgress, 100);
         }
 
         // النسبة المئوية
@@ -686,7 +685,7 @@ function connectWS() {
           dpPct.textContent = Math.round(displayPct * 100) + '%';
         }
 
-        // عند الإيقاف — أعد الأزرار وحدّث السجل
+        // عند الإيقاف
         if (msg.stopped) {
           updateDoorButtons(dpId, null);
           updateUserDoorButtons(dpId, null);
