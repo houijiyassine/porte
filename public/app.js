@@ -744,6 +744,7 @@ function connectWS() {
         // idle — الـ relay توقف فيزيائياً
         if (rawState === 'idle') {
           if (doorId) {
+            doorCurrentState[doorId] = 'idle';
             updateDoorButtons(doorId, null);
             updateUserDoorButtons(doorId, null);
           }
@@ -1169,6 +1170,9 @@ async function toggleDoorAction(deviceId, action, duration, doorId) {
     updateDoorButtons(doorId, null);
     updateUserDoorButtons(doorId, null);
   } else {
+    // تحديث الحالة مباشرة عند الضغط
+    if (action === 'open' || action === 'open40') doorCurrentState[doorId] = 'open';
+    else if (action === 'close') doorCurrentState[doorId] = 'close';
     await sendDoorAction(deviceId, action, duration);
     updateDoorButtons(doorId, action);
     updateUserDoorButtons(doorId, action);
