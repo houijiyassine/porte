@@ -1166,18 +1166,21 @@ const doorCurrentState = {}; // doorId → 'open' | 'close' | 'idle'
 
 async function toggleDoorAction(deviceId, action, duration, doorId) {
   var isOpenAction = (action === 'open' || action === 'open40');
-  var currentState = doorCurrentState[doorId] || lastKnownState[doorId] || 'idle';
-  var isMovingOpen  = (currentState === 'open');
-  var isMovingClose = (currentState === 'close');
-  var isMoving = isMovingOpen || isMovingClose;
 
-  if (isMoving && ((isOpenAction && isMovingOpen) || (!isOpenAction && isMovingClose))) {
-    // نفس الاتجاه → إيقاف
+  // تحقق إذا الزر نفسه برتقالي (مضغوط) — هذا يعني إيقاف
+  var btnId = isOpenAction ? 'btn-open-' : (action === 'close' ? 'btn-close-' : 'btn-open40-');
+  var btn = document.getElementById(btnId + doorId)
+         || document.getElementById('user-btn-' + action + '-' + doorId);
+  var isActive = btn && btn.style.background && btn.style.background.indexOf('255,179,0') !== -1;
+
+  if (isActive) {
+    // الزر برتقالي → إيقاف
     await sendDoorAction(deviceId, 'stop', 0);
     updateDoorButtons(doorId, null);
     updateUserDoorButtons(doorId, null);
+    doorCurrentState[doorId] = 'idle';
   } else {
-    // تحديث الحالة مباشرة عند الضغط
+    // الزر عادي → تنفيذ الأمر
     if (action === 'open' || action === 'open40') doorCurrentState[doorId] = 'open';
     else if (action === 'close') doorCurrentState[doorId] = 'close';
     await sendDoorAction(deviceId, action, duration);
