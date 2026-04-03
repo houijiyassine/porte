@@ -1132,18 +1132,21 @@ function updateDoorButtons(doorId, activeAction) {
     btnOpen.style.border = '1px solid rgba(0,230,118,0.3)';
     btnOpen.style.color = 'var(--success)';
     btnOpen.innerHTML = '🟢<span>فتح</span>';
+    btnOpen.dataset.active = '';
   }
   if (btnClose) {
     btnClose.style.background = 'rgba(255,61,113,0.15)';
     btnClose.style.border = '1px solid rgba(255,61,113,0.3)';
     btnClose.style.color = 'var(--danger)';
     btnClose.innerHTML = '🔴<span>غلق</span>';
+    btnClose.dataset.active = '';
   }
   if (btnOpen40) {
     btnOpen40.style.background = 'rgba(0,212,255,0.15)';
     btnOpen40.style.border = '1px solid rgba(0,212,255,0.3)';
     btnOpen40.style.color = 'var(--accent)';
     btnOpen40.innerHTML = '⏱<span>فتح 40ث</span>';
+    btnOpen40.dataset.active = '';
   }
 
   // تحويل الزر النشط إلى برتقالي إيقاف
@@ -1158,6 +1161,7 @@ function updateDoorButtons(doorId, activeAction) {
     activeBtn.style.border = '1px solid rgba(255,179,0,0.5)';
     activeBtn.style.color = 'var(--warning)';
     activeBtn.innerHTML = '🟡<span>' + stopLabel + '</span>';
+    activeBtn.dataset.active = '1';
   }
 }
 
@@ -1171,7 +1175,7 @@ async function toggleDoorAction(deviceId, action, duration, doorId) {
   var btnId = isOpenAction ? 'btn-open-' : (action === 'close' ? 'btn-close-' : 'btn-open40-');
   var btn = document.getElementById(btnId + doorId)
          || document.getElementById('user-btn-' + action + '-' + doorId);
-  var isActive = btn && btn.style.background && btn.style.background.indexOf('255,179,0') !== -1;
+  var isActive = btn && btn.dataset.active === '1';
 
   if (isActive) {
     // الزر برتقالي → إيقاف
@@ -2623,11 +2627,13 @@ function updateUserDoorButtons(doorId, activeAction) {
       btn.style.border = '1px solid rgba(255,179,0,0.5)';
       btn.style.color = 'var(--warning)';
       btn.innerHTML = '<span style="font-size:1rem">🟡</span><span>' + stopLabels[act] + '</span>';
+      btn.dataset.active = '1';
     } else {
       btn.style.background = d.bg;
       btn.style.border = '1px solid ' + d.border;
       btn.style.color = d.color;
       btn.innerHTML = '<span style="font-size:1rem">' + d.icon + '</span><span>' + d.label + '</span>';
+      btn.dataset.active = '';
     }
   });
 }
@@ -2639,7 +2645,7 @@ async function userToggleDoorAction(door, action, duration) {
   // تحقق من لون الزر — برتقالي = إيقاف
   var btnKey = isOpenAction ? 'open' : (action === 'close' ? 'close' : 'open40');
   var btn = document.getElementById('user-btn-' + btnKey + '-' + doorId);
-  var isActive = btn && btn.style.background && btn.style.background.indexOf('255,179,0') !== -1;
+  var isActive = btn && btn.dataset.active === '1';
 
   if (isActive) {
     await userDoorAction(door, 'stop');
