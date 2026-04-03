@@ -1195,6 +1195,20 @@ async function sendDoorAction(deviceId, action, duration) {
   try {
     var body = { action, deviceId, duration };
     if (userLocation) { body.lat = userLocation.lat; body.lng = userLocation.lng; body.accuracy = userLocation.accuracy || 999; }
+    // عند الإيقاف — أرسل الموضع الحالي للسيرفر
+    if (action === 'stop') {
+      var doorId4stop = null;
+      if (typeof institutesCache !== 'undefined') {
+        institutesCache.forEach(function(inst) {
+          (inst.doors||[]).forEach(function(d) {
+            if (d.device_id === deviceId) doorId4stop = d.id;
+          });
+        });
+      }
+      if (doorId4stop !== null && doorPos[doorId4stop] !== undefined) {
+        body.currentPos = doorPos[doorId4stop];
+      }
+    }
     await apiFetch('/api/door/control', 'POST', body);
     toast(`تم: ${action}`, 'success');
   } catch(e) {
