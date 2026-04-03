@@ -102,6 +102,19 @@ async function loadDoorCache() {
       }
     });
     console.log(`[DoorCache] loaded ${doorCache.size} door(s): [${[...doorCache.keys()].join(', ')}]`);
+    // إرسال PulseTime بعد اتصال MQTT
+    setTimeout(() => {
+      if (mqttClient?.connected) {
+        doorCache.forEach((door) => {
+          if (door.duration_seconds && door.device_id) {
+            const pt = Math.round(door.duration_seconds * 10);
+            mqttClient.publish(`cmnd/${door.device_id}/PulseTime2`, String(pt), { qos: 1 });
+            mqttClient.publish(`cmnd/${door.device_id}/PulseTime3`, String(pt), { qos: 1 });
+            console.log(`[PulseTime] init ${door.device_id} → ${pt} (${door.duration_seconds}s)`);
+          }
+        });
+      }
+    }, 3000);
   } catch(e) { console.error('[DoorCache]', e.message); }
 }
 
@@ -785,6 +798,15 @@ app.put('/api/doors/:id', auth, adminOnly, async (req, res) => {
     const { data, error } = await supabase.from('doors').update(updates).eq('id', req.params.id).select().single();
     if (error) throw error;
     await loadDoorCache();
+
+    // إذا تغيّرت مدة n → أرسل PulseTime لـ Tasmota
+    if (updates.duration_seconds && data.device_id && mqttClient?.connected) {
+      const pulseTime = Math.round(updates.duration_seconds * 10);
+      mqttClient.publish(`cmnd/${data.device_id}/PulseTime2`, String(pulseTime), { qos: 1 });
+      mqttClient.publish(`cmnd/${data.device_id}/PulseTime3`, String(pulseTime), { qos: 1 });
+      console.log(`[PulseTime] ${data.device_id} → ${pulseTime} (${updates.duration_seconds}s)`);
+    }
+
     res.json(data);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
