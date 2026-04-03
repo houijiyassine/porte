@@ -309,6 +309,24 @@ function startMQTT() {
       const ch  = topicSuffix.slice(-1); // '1','2','3','4'
       const val = msg === 'ON';
 
+      // عند OFF — تحقق إذا كل الـ relays ستكون OFF → إيقاف interval
+      if (!val && doorProgress[deviceId]?._interval) {
+        const curCached = doorStateCache.get(deviceId) || { r1:false, r2:false, r3:false, r4:false };
+        const nextR = { ...curCached };
+        if (ch==='1') nextR.r1=false;
+        if (ch==='2') nextR.r2=false;
+        if (ch==='3') nextR.r3=false;
+        if (ch==='4') nextR.r4=false;
+        if (!nextR.r1 && !nextR.r2 && !nextR.r3 && !nextR.r4) {
+          clearInterval(doorProgress[deviceId]._interval);
+          const dpStop = doorCache.get(deviceId);
+          const stPos  = doorProgress[deviceId]?.pos ?? 0;
+          const stOpen = doorProgress[deviceId]?.isOpen ?? false;
+          doorProgress[deviceId] = { pos: stPos, isOpen: stOpen };
+          broadcast({ type: 'door_progress', deviceId, doorId: dpStop?.id, pos: stPos, isOpen: stOpen, stopped: true });
+        }
+      }
+
       const cached = doorStateCache.get(deviceId) || { r1:false, r2:false, r3:false, r4:false };
       const prev   = { ...cached };
       if (ch === '1') cached.r1 = val;
