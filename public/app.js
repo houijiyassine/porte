@@ -667,7 +667,9 @@ function connectWS() {
           updateUserDoorButtons(dpId, null);
           setTimeout(loadRecentHistory, 500);
         } else {
-          // تحرك — إذا لا يوجد انيميشن محلية، ابدأها من الموضع الحالي
+          // تجاهل door_progress إذا انيميشن شغّالة أو RC pending
+          if (doorTimers[dpId] && (doorTimers[dpId]._raf || doorTimers[dpId]._rcPending)) return;
+          // تحرك — ابدأ الانيميشن
           if (!doorTimers[dpId] || !doorTimers[dpId]._raf) {
             var durEl2 = document.querySelector('[data-door-id="' + dpId + '"]');
             var nSecs2 = durEl2 ? parseInt(durEl2.getAttribute('data-duration') || '10') : 10;
@@ -792,7 +794,12 @@ function connectWS() {
           } else {
             // لا انيميشن — ابدأ جديد بعد تأخير صغير للتأكد أن idle لن يوقفها
             (function(dId, rState) {
+              // ضع flag فوراً لمنع door_progress من التدخل
+              if (!doorTimers[dId]) doorTimers[dId] = {};
+              doorTimers[dId]._rcPending = true;
               setTimeout(function() {
+                doorTimers[dId] = doorTimers[dId] || {};
+                doorTimers[dId]._rcPending = false;
                 var imgElRC = document.getElementById('door-img-' + dId);
                 var stElRC  = document.getElementById('user-state-' + dId)
                            || document.getElementById('door-progress-bar-' + dId)
