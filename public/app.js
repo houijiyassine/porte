@@ -2748,37 +2748,26 @@ async function loadAdminDoors() {
       var userReq      = door.gps && door.gps.user_required;
       var rcNotify     = door.rc_notify === true;
       var manualNotify = door.manual_notify === true;
+      // GPS + RC notify + Manual notify في سطر واحد
       var toggleRow = document.createElement('div');
-      toggleRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px';
+      toggleRow.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px';
       toggleRow.innerHTML =
-        '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">' +
-          '<div>' +
-            '<div style="font-size:0.75rem;font-weight:700">📍 GPS</div>' +
-            '<div style="font-size:0.7rem;color:' + (userReq?'var(--success)':'var(--danger)') + ';font-weight:700">' + (userReq?'مفعّل':'معطّل') + '</div>' +
-          '</div>' +
+        '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center">' +
+          '<div style="font-size:0.72rem;font-weight:700">📍 GPS</div>' +
           '<label class="toggle-switch"><input type="checkbox" ' + (userReq?'checked':'') + ' id="gps-toggle-' + door.id + '"><span class="toggle-knob"></span></label>' +
+          '<div style="font-size:0.65rem;color:' + (userReq?'var(--success)':'var(--danger)') + ';font-weight:700">' + (userReq?'مفعّل':'معطّل') + '</div>' +
         '</div>' +
-        '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">' +
-          '<div>' +
-            '<div style="font-size:0.75rem;font-weight:700">📻 إشعار RC</div>' +
-            '<div style="font-size:0.7rem;color:' + (rcNotify?'var(--success)':'var(--danger)') + ';font-weight:700">' + (rcNotify?'مفعّل':'معطّل') + '</div>' +
-          '</div>' +
+        '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center">' +
+          '<div style="font-size:0.72rem;font-weight:700">📻 إشعار RC</div>' +
           '<label class="toggle-switch"><input type="checkbox" ' + (rcNotify?'checked':'') + ' id="rc-toggle-' + door.id + '"><span class="toggle-knob"></span></label>' +
+          '<div style="font-size:0.65rem;color:' + (rcNotify?'var(--success)':'var(--danger)') + ';font-weight:700">' + (rcNotify?'مفعّل':'معطّل') + '</div>' +
+        '</div>' +
+        '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center">' +
+          '<div style="font-size:0.72rem;font-weight:700">🖐️ إشعار أزرار</div>' +
+          '<label class="toggle-switch"><input type="checkbox" ' + (manualNotify?'checked':'') + ' id="manual-toggle-' + door.id + '"><span class="toggle-knob"></span></label>' +
+          '<div style="font-size:0.65rem;color:' + (manualNotify?'var(--success)':'var(--danger)') + ';font-weight:700">' + (manualNotify?'مفعّل':'معطّل') + '</div>' +
         '</div>';
       card.appendChild(toggleRow);
-
-      // إشعار يدوي
-      var manualRow = document.createElement('div');
-      manualRow.style.cssText = 'margin-bottom:12px';
-      manualRow.innerHTML =
-        '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between">' +
-          '<div>' +
-            '<div style="font-size:0.75rem;font-weight:700">🖐️ إشعار عند استعمال الأزرار</div>' +
-            '<div style="font-size:0.7rem;color:' + (manualNotify?'var(--success)':'var(--danger)') + ';font-weight:700">' + (manualNotify?'مفعّل':'معطّل') + '</div>' +
-          '</div>' +
-          '<label class="toggle-switch"><input type="checkbox" ' + (manualNotify?'checked':'') + ' id="manual-toggle-' + door.id + '"><span class="toggle-knob"></span></label>' +
-        '</div>';
-      card.appendChild(manualRow);
 
       (function(did) {
         setTimeout(function() {
