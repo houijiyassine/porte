@@ -760,12 +760,37 @@ function connectWS() {
           return;
         }
 
-        // RC أو يدوي — ابدأ الانيميشن المحلية
+        // RC أو يدوي
         if (msg.source === 'rc' || msg.source === 'manual') {
           lastKnownState[doorId] = rawState;
           updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
-          // ابدأ الانيميشن إذا لم تكن شغّالة
-          if (!doorTimers[doorId] || !doorTimers[doorId]._raf) {
+          var existingTimer = doorTimers[doorId];
+          if (existingTimer && existingTimer._raf) {
+            // انيميشن شغّالة — تحقق إذا نفس الاتجاه = إيقاف
+            var timerIsOpen = existingTimer.isOpen;
+            var newIsOpen = (rawState === 'open' || rawState === 'open40');
+            if (timerIsOpen === newIsOpen) {
+              // نفس الاتجاه → إيقاف الانيميشن
+              var imgElRC2 = document.getElementById('door-img-' + doorId);
+              var stElRC2  = document.getElementById('user-state-' + doorId)
+                          || document.getElementById('door-progress-bar-' + doorId)
+                          || document.getElementById('door-progress-' + doorId);
+              stopDoorTimer(doorId, imgElRC2, stElRC2);
+              updateDoorButtons(doorId, null);
+              updateUserDoorButtons(doorId, null);
+            } else {
+              // اتجاه معاكس → أوقف وابدأ جديد
+              stopDoorTimer(doorId, null, null);
+              var imgElRC3 = document.getElementById('door-img-' + doorId);
+              var stElRC3  = document.getElementById('user-state-' + doorId)
+                          || document.getElementById('door-progress-bar-' + doorId)
+                          || document.getElementById('door-progress-' + doorId);
+              var durElRC3 = document.querySelector('[data-door-id="' + doorId + '"]');
+              var nSecsRC3 = durElRC3 ? parseInt(durElRC3.getAttribute('data-duration') || '10') : 10;
+              if (imgElRC3) startDoorTimer(doorId, imgElRC3, stElRC3, nSecsRC3, rawState);
+            }
+          } else {
+            // لا انيميشن — ابدأ جديد
             var imgElRC = document.getElementById('door-img-' + doorId);
             var stElRC  = document.getElementById('user-state-' + doorId)
                        || document.getElementById('door-progress-bar-' + doorId)
