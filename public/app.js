@@ -659,6 +659,13 @@ function connectWS() {
         // أوقف أي انيميشن محلية
         _cancelDoorTimer(dpId);
 
+        // حدّث الحالة الحالية
+        if (!msg.stopped) {
+          doorCurrentState[dpId] = msg.isOpen ? 'open' : 'close';
+        } else {
+          doorCurrentState[dpId] = 'idle';
+        }
+
         // حدّث موضع الباب
         doorPos[dpId] = msg.pos;
         var displayPct = msg.isOpen ? msg.pos : (1 - msg.pos);
