@@ -2634,14 +2634,24 @@ function updateUserDoorButtons(doorId, activeAction) {
 
 async function userToggleDoorAction(door, action, duration) {
   var doorId = door.id;
-  var t = doorTimers[doorId];
   var isOpenAction = (action === 'open' || action === 'open40');
-  if (t && t.isOpen === isOpenAction) {
+
+  // تحقق من لون الزر — برتقالي = إيقاف
+  var btnKey = isOpenAction ? 'open' : (action === 'close' ? 'close' : 'open40');
+  var btn = document.getElementById('user-btn-' + btnKey + '-' + doorId);
+  var isActive = btn && btn.style.background && btn.style.background.indexOf('255,179,0') !== -1;
+
+  if (isActive) {
     await userDoorAction(door, 'stop');
     updateUserDoorButtons(doorId, null);
+    updateDoorButtons(doorId, null);
+    doorCurrentState[doorId] = 'idle';
   } else {
+    if (action === 'open' || action === 'open40') doorCurrentState[doorId] = 'open';
+    else if (action === 'close') doorCurrentState[doorId] = 'close';
     await userDoorAction(door, action);
     updateUserDoorButtons(doorId, action);
+    updateDoorButtons(doorId, action);
   }
 }
 
