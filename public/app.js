@@ -643,53 +643,45 @@ function connectWS() {
     try {
       const msg = JSON.parse(e.data);
       // ═══════════════════════════════════════════════════════
-      // door_progress — السيرفر يُرسل النسبة كل 200ms
+      // door_progress — مزامنة الموضع من السيرفر
       // ═══════════════════════════════════════════════════════
       if (msg.type === 'door_progress') {
         var dpId = msg.doorId;
         if (!dpId) return;
 
-        // حدّث الحالة
         doorCurrentState[dpId] = msg.stopped ? 'idle' : (msg.isOpen ? 'open' : 'close');
-        doorPos[dpId] = msg.pos;
 
-        var displayPct = msg.isOpen ? msg.pos : (1 - msg.pos);
-
-        // ارسم الباب مباشرة
-        var dpImg = document.getElementById('door-img-' + dpId);
-        var dpSt  = document.getElementById('user-state-' + dpId)
-                 || document.getElementById('door-progress-bar-' + dpId)
-                 || document.getElementById('door-progress-' + dpId);
-
-        // دالة الرسم
-        function doDrawProgress() {
-          var img = document.getElementById('door-img-' + dpId);
-          var st  = document.getElementById('user-state-' + dpId)
-                 || document.getElementById('door-progress-bar-' + dpId)
-                 || document.getElementById('door-progress-' + dpId);
-          if (img && typeof _drawDoorProgress === 'function') {
-            _drawDoorProgress(img, st, displayPct, msg.isOpen, msg.stopped || false, msg.pos);
-            return true;
-          }
-          return false;
-        }
-        if (!doDrawProgress()) {
-          // العنصر غير موجود بعد — حاول مرة أخرى بعد 100ms
-          setTimeout(doDrawProgress, 100);
-        }
-
-        // النسبة المئوية
-        var dpPct = document.getElementById('door-pct-' + dpId);
-        if (dpPct) {
-          dpPct.style.color = msg.isOpen ? 'var(--success)' : 'var(--danger)';
-          dpPct.textContent = Math.round(displayPct * 100) + '%';
-        }
-
-        // عند الإيقاف
         if (msg.stopped) {
+          // إيقاف — أوقف الانيميشن وارسم الوضع النهائي
+          _cancelDoorTimer(dpId);
+          doorPos[dpId] = msg.pos;
+          var dpImg2 = document.getElementById('door-img-' + dpId);
+          var dpSt2  = document.getElementById('user-state-' + dpId)
+                    || document.getElementById('door-progress-bar-' + dpId)
+                    || document.getElementById('door-progress-' + dpId);
+          if (dpImg2 && typeof _drawDoorProgress === 'function') {
+            var dPct2 = msg.isOpen ? msg.pos : (1 - msg.pos);
+            _drawDoorProgress(dpImg2, dpSt2, dPct2, msg.isOpen, true, msg.pos);
+          }
           updateDoorButtons(dpId, null);
           updateUserDoorButtons(dpId, null);
           setTimeout(loadRecentHistory, 500);
+        } else {
+          // تحرك — إذا لا يوجد انيميشن محلية، ابدأها من الموضع الحالي
+          if (!doorTimers[dpId] || !doorTimers[dpId]._raf) {
+            var durEl2 = document.querySelector('[data-door-id="' + dpId + '"]');
+            var nSecs2 = durEl2 ? parseInt(durEl2.getAttribute('data-duration') || '10') : 10;
+            var dpImg3 = document.getElementById('door-img-' + dpId);
+            var dpSt3  = document.getElementById('user-state-' + dpId)
+                      || document.getElementById('door-progress-bar-' + dpId)
+                      || document.getElementById('door-progress-' + dpId);
+            if (dpImg3) {
+              // مزامنة الموضع من السيرفر ثم ابدأ الانيميشن المحلية
+              doorPos[dpId] = msg.pos;
+              var actualDur = msg.duration || nSecs2;
+              startDoorTimer(dpId, dpImg3, dpSt3, actualDur, msg.isOpen ? 'open' : 'close');
+            }
+          }
         }
         return;
       }
