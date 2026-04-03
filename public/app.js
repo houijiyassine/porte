@@ -753,48 +753,17 @@ function connectWS() {
         var nSecs   = durEl ? parseInt(durEl.getAttribute('data-duration') || '5') : 5;
         var newIsOpen = (rawState === 'open' || rawState === 'open40');
 
-        if (msg.source === 'rc') {
+        if (msg.source === 'rc' || msg.source === 'manual') {
+          // RC أو يدوي — أوقف الانيميشن المحلية، السيرفر يتحكم
           lastKnownState[doorId] = rawState;
-          if (hasTimer) {
-            var t = doorTimers[doorId];
-            if (t.isOpen === newIsOpen) {
-              // نفس الاتجاه = ضغط نفس الزر → إيقاف
-              stopDoorTimer(doorId, imgEl, stateEl);
-            } else {
-              // اتجاه معاكس → أوقف وابدأ من الموضع الحالي
-              stopDoorTimer(doorId, imgEl, stateEl);
-              // doorPos يبقى على الموضع الحالي
-              var img2 = document.getElementById('door-img-' + doorId);
-              var st2  = document.getElementById('user-state-' + doorId)
-                      || document.getElementById('door-progress-' + doorId);
-              startDoorTimer(doorId, img2, st2, nSecs, rawState);
-              updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
-            }
-          } else {
-            // doorPos يبقى على الموضع الحالي — RC يكمل من حيث توقف
-            startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
-            updateDoorCardState(doorId, msg.deviceId, rawState, 'rc');
-          }
+          if (hasTimer) stopDoorTimer(doorId, imgEl, stateEl);
+          updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
           setTimeout(loadRecentHistory, 500);
-        } else {
-          // أمر من التطبيق — أوقف الـ timer القديم وابدأ الجديد
+        } else if (msg.source === 'app') {
+          // أمر من التطبيق — السيرفر يُرسل door_progress، نوقف الانيميشن المحلية
           lastKnownState[doorId] = rawState;
-          if (hasTimer) {
-            var t = doorTimers[doorId];
-            if (t.isOpen === newIsOpen) {
-              // نفس الاتجاه → إيقاف
-              stopDoorTimer(doorId, imgEl, stateEl);
-            } else {
-              // اتجاه معاكس → أوقف وابدأ من الموضع الحالي
-              stopDoorTimer(doorId, imgEl, stateEl);
-              // doorPos يبقى على الموضع الحالي — لا نعيد تعيينه
-              startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
-              updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
-            }
-          } else {
-            startDoorTimer(doorId, imgEl, stateEl, nSecs, rawState);
-            updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
-          }
+          if (hasTimer) stopDoorTimer(doorId, imgEl, stateEl);
+          updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
         }
       }
       if (msg.type === 'new_join_request') {
