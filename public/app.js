@@ -1,3 +1,28 @@
+// ─── PWA Install ──────────────────────────────
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  var btn = document.getElementById('install-btn');
+  if (btn) btn.style.display = 'flex';
+});
+
+window.addEventListener('appinstalled', function() {
+  deferredInstallPrompt = null;
+  var btn = document.getElementById('install-btn');
+  if (btn) btn.style.display = 'none';
+});
+
+async function installApp() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  var result = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  var btn = document.getElementById('install-btn');
+  if (btn) btn.style.display = 'none';
+}
+
 function updateDeviceOnlineBadge(deviceId, online) {
   var color = online ? 'var(--success)' : 'var(--danger)';
   var bg    = online ? 'rgba(0,230,118,0.12)' : 'rgba(255,61,113,0.12)';
@@ -2152,7 +2177,6 @@ function updatePushBtnUI(status) {
   btn.disabled = s.disabled;
 }
 
-// ─── طلب كل الصلاحيات عند أول تشغيل ──────────────────────────────────────────
 async function requestAllPermissions() {
   var alreadyAsked = localStorage.getItem('porte_permissions_asked');
   var notifPerm    = ('Notification' in window) ? Notification.permission : 'denied';
