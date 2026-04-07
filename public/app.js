@@ -476,6 +476,7 @@ function bootApp() {
 
   connectWS();
   subscribePush();
+  setTimeout(function() { updatePushBtnUI(Notification.permission); }, 1000);
   startLocationTracking();
   // إرسال fingerprint الجهاز
   setTimeout(function() {
@@ -2099,15 +2100,56 @@ async function saveGps() {
 
 // ─── Push ─────────────────────────────────────
 async function subscribePush() {
-  if (!('Notification' in window)) return;
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+  if (Notification.permission === 'granted') {
+    await doSubscribePush();
+  } else {
+    updatePushBtnUI('default');
+  }
+}
+
+async function doSubscribePush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(
+          'BOfIw6laarxGfV8Ezc04YzfCzq4Njm7ewizkfnGDIWJGpsfHkqUHVG8SXGb8cJZJxOTIzFeauX4K0Z8oYdfgKTw'
+        )
+      });
+    }
+    await apiFetch('/api/push/subscribe', 'POST', { subscription: sub });
+    updatePushBtnUI('granted');
+    console.log('[Push] ✅ مسجّل');
+  } catch(e) { console.error('[Push]', e.message); }
+}
+
+async function requestPushPermission() {
+  if (!('Notification' in window)) { toast('الإشعارات غير مدعومة في هذا المتصفح', 'error'); return; }
   const perm = await Notification.requestPermission();
-  if (perm !== 'granted') return;
-  const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array('BOfIw6laarxGfV8Ezc04YzfCzq4Njm7ewizkfnGDIWJGpsfHkqUHVG8SXGb8cJZJxOTIzFeauX4K0Z8oYdfgKTw')
-  });
-  await apiFetch('/api/push/subscribe', 'POST', { subscription: sub });
+  if (perm === 'granted') {
+    await doSubscribePush();
+    toast('✅ تم تفعيل الإشعارات', 'success');
+  } else {
+    updatePushBtnUI('denied');
+    toast('❌ تم رفض الإشعارات — فعّلها من إعدادات المتصفح', 'error');
+  }
+}
+
+function updatePushBtnUI(status) {
+  var btn = document.getElementById('push-permission-btn');
+  if (!btn) return;
+  var styles = {
+    granted: { text:'🔔 الإشعارات مفعّلة', bg:'rgba(0,230,118,0.15)', color:'var(--success)', border:'rgba(0,230,118,0.3)', disabled: true },
+    denied:  { text:'🔕 محظورة — فعّلها من إعدادات المتصفح', bg:'rgba(255,61,113,0.15)', color:'var(--danger)', border:'rgba(255,61,113,0.3)', disabled: true },
+    default: { text:'🔔 تفعيل الإشعارات', bg:'rgba(255,179,0,0.15)', color:'var(--warning)', border:'rgba(255,179,0,0.3)', disabled: false },
+  };
+  var s = styles[status] || styles.default;
+  btn.style.cssText = 'width:100%;padding:12px;border-radius:12px;font-family:Cairo,sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;margin-top:10px;background:'+s.bg+';color:'+s.color+';border:1px solid '+s.border;
+  btn.textContent = s.text;
+  btn.disabled = s.disabled;
 }
 
 function urlBase64ToUint8Array(base64String) {
