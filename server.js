@@ -228,7 +228,11 @@ async function sendPushToAdmins(instId, notification) {
     const payload = JSON.stringify(notification);
     await Promise.allSettled(subs.map(sub =>
       webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload)
-        .catch(err => { if (err.statusCode===410) supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); })
+        .then(() => console.log('[Push] ✅ إرسال ناجح:', sub.endpoint.slice(-20)))
+        .catch(err => {
+          console.error('[Push] ❌ FCM error:', err.statusCode, err.body);
+          if (err.statusCode===410) supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+        })
     ));
   } catch(e) { console.error('[Push]', e.message); }
 }
@@ -241,7 +245,11 @@ async function sendPushToAll(notification) {
     const payload = JSON.stringify(notification);
     await Promise.allSettled(subs.map(sub =>
       webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload)
-        .catch(err => { if (err.statusCode===410) supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); })
+        .then(() => console.log('[Push] ✅ إرسال ناجح (all):', sub.endpoint.slice(-20)))
+        .catch(err => {
+          console.error('[Push] ❌ FCM error (all):', err.statusCode, err.body);
+          if (err.statusCode===410) supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+        })
     ));
   } catch {}
 }
