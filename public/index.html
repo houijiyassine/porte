@@ -550,6 +550,9 @@
       <div class="header-avatar" id="header-avatar" style="display:none">؟</div>
       <div style="width:8px"></div>
       <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()" title="Mode Sombre/Clair">🌙</button>
+      <button id="install-btn" onclick="installApp()"
+        style="display:none;width:36px;height:36px;border-radius:50%;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.2);cursor:pointer;align-items:center;justify-content:center;font-size:1.1rem"
+        title="تثبيت التطبيق">⊕</button>
       <button onclick="logout()" title="تسجيل الخروج" style="width:36px;height:36px;border-radius:50%;background:rgba(255,61,113,0.1);border:1px solid rgba(255,61,113,0.2);cursor:pointer;display:flex;align-items:center;justify-content:center">
         <svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" width="16" height="16"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
       </button>
@@ -990,12 +993,9 @@
         <div class="form-group"><label>تأكيد كلمة المرور</label><input type="password" id="settings-new-pw2" placeholder="••••••"></div>
         <div id="settings-pw-error" style="display:none;color:var(--danger);font-size:0.82rem;margin-bottom:8px"></div>
       </div>
-      <!-- زر الإشعارات -->
       <div style="margin-top:20px">
         <div style="font-weight:700;margin-bottom:12px">🔔 الإشعارات</div>
-        <button
-          id="push-permission-btn"
-          onclick="requestPushPermission()"
+        <button id="push-permission-btn" onclick="requestPushPermission()"
           style="width:100%;padding:12px;border-radius:12px;font-family:Cairo,sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;background:rgba(255,179,0,0.15);color:var(--warning);border:1px solid rgba(255,179,0,0.3)">
           🔔 تفعيل الإشعارات
         </button>
