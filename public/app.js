@@ -477,7 +477,6 @@ function bootApp() {
   connectWS();
   subscribePush();
   startLocationTracking();
-  // طلب الصلاحيات عند أول تشغيل
   setTimeout(requestAllPermissions, 1500);
   // إرسال fingerprint الجهاز
   setTimeout(function() {
@@ -2117,7 +2116,7 @@ async function doSubscribePush() {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(
-          'BOfIw6laarxGfV8Ezc04YzfCzq4Njm7ewizkfnGDIWJGpsfHkqUHVG8SXGb8cJZJxOTIzFeauX4K0Z8oYdfgKTw'
+          'BEafI6uSHJsGU5hkOuPCqYDf8GxmPK_qjN7d-XchVxYU3P5JWU1GkL6EeKHsNqyhCjgkmNka_fl8xbI9zcO9QXs'
         )
       });
     }
@@ -2143,9 +2142,9 @@ function updatePushBtnUI(status) {
   var btn = document.getElementById('push-permission-btn');
   if (!btn) return;
   var styles = {
-    granted: { text:'🔔 الإشعارات مفعّلة',       bg:'rgba(0,230,118,0.15)',  color:'var(--success)', border:'rgba(0,230,118,0.3)',  disabled: true  },
+    granted: { text:'🔔 الإشعارات مفعّلة',            bg:'rgba(0,230,118,0.15)',  color:'var(--success)', border:'rgba(0,230,118,0.3)',  disabled: true  },
     denied:  { text:'🔕 محظورة — فعّلها من الإعدادات', bg:'rgba(255,61,113,0.15)', color:'var(--danger)',  border:'rgba(255,61,113,0.3)', disabled: true  },
-    default: { text:'🔔 تفعيل الإشعارات',          bg:'rgba(255,179,0,0.15)', color:'var(--warning)', border:'rgba(255,179,0,0.3)', disabled: false },
+    default: { text:'🔔 تفعيل الإشعارات',              bg:'rgba(255,179,0,0.15)',  color:'var(--warning)', border:'rgba(255,179,0,0.3)',  disabled: false },
   };
   var s = styles[status] || styles.default;
   btn.style.cssText = 'width:100%;padding:12px;border-radius:12px;font-family:Cairo,sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;margin-top:10px;background:'+s.bg+';color:'+s.color+';border:1px solid '+s.border;
@@ -2155,56 +2154,34 @@ function updatePushBtnUI(status) {
 
 // ─── طلب كل الصلاحيات عند أول تشغيل ──────────────────────────────────────────
 async function requestAllPermissions() {
-  // لا تعرض إذا سبق وطُلبت الصلاحيات
   var alreadyAsked = localStorage.getItem('porte_permissions_asked');
   var notifPerm    = ('Notification' in window) ? Notification.permission : 'denied';
-
-  // إذا كل شيء مضبوط → لا تعرض شيئاً
   if (alreadyAsked && notifPerm === 'granted') {
     await doSubscribePush();
     return;
   }
-
-  // أنشئ overlay
   var overlay = document.createElement('div');
   overlay.id = 'permissions-overlay';
   overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-
   overlay.innerHTML =
     '<div style="background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:28px;max-width:360px;width:100%;text-align:center">' +
       '<div style="font-size:2.5rem;margin-bottom:12px">🔐</div>' +
       '<div style="font-size:1.1rem;font-weight:900;margin-bottom:8px">صلاحيات التطبيق</div>' +
-      '<div style="font-size:0.85rem;color:var(--muted);margin-bottom:24px;line-height:1.8">' +
-        'يحتاج التطبيق الصلاحيات التالية للعمل بشكل صحيح' +
-      '</div>' +
-
-      // الإشعارات
+      '<div style="font-size:0.85rem;color:var(--muted);margin-bottom:24px;line-height:1.8">يحتاج التطبيق الصلاحيات التالية للعمل بشكل صحيح</div>' +
       '<div style="background:var(--surface2);border-radius:14px;padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:12px;text-align:right">' +
         '<span style="font-size:1.5rem">🔔</span>' +
-        '<div style="flex:1">' +
-          '<div style="font-weight:700;font-size:0.88rem">الإشعارات</div>' +
-          '<div style="font-size:0.75rem;color:var(--muted);margin-top:2px">لاستلام تنبيهات RC والأزرار</div>' +
-        '</div>' +
+        '<div style="flex:1"><div style="font-weight:700;font-size:0.88rem">الإشعارات</div><div style="font-size:0.75rem;color:var(--muted);margin-top:2px">لاستلام تنبيهات RC والأزرار</div></div>' +
         '<span id="perm-notif-status" style="font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(255,179,0,0.15);color:var(--warning)">مطلوب</span>' +
       '</div>' +
-
-      // الموقع
       '<div style="background:var(--surface2);border-radius:14px;padding:14px;margin-bottom:24px;display:flex;align-items:center;gap:12px;text-align:right">' +
         '<span style="font-size:1.5rem">📍</span>' +
-        '<div style="flex:1">' +
-          '<div style="font-weight:700;font-size:0.88rem">الموقع</div>' +
-          '<div style="font-size:0.75rem;color:var(--muted);margin-top:2px">للتحقق من نطاق الباب (GPS)</div>' +
-        '</div>' +
+        '<div style="flex:1"><div style="font-weight:700;font-size:0.88rem">الموقع</div><div style="font-size:0.75rem;color:var(--muted);margin-top:2px">للتحقق من نطاق الباب (GPS)</div></div>' +
         '<span id="perm-location-status" style="font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(255,179,0,0.15);color:var(--warning)">مطلوب</span>' +
       '</div>' +
-
       '<button id="perm-allow-btn" onclick="grantAllPermissions()" style="width:100%;padding:14px;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;font-family:Cairo,sans-serif;font-size:0.95rem;font-weight:800;cursor:pointer;margin-bottom:10px">السماح بالكل</button>' +
       '<button onclick="dismissPermissions()" style="width:100%;padding:10px;border-radius:14px;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:Cairo,sans-serif;font-size:0.82rem;cursor:pointer">لاحقاً</button>' +
     '</div>';
-
   document.body.appendChild(overlay);
-
-  // تحديث حالة الإشعارات إذا كانت مسموحة مسبقاً
   if (notifPerm === 'granted') {
     var ns = document.getElementById('perm-notif-status');
     if (ns) { ns.textContent = '✅ مسموح'; ns.style.background = 'rgba(0,230,118,0.15)'; ns.style.color = 'var(--success)'; }
@@ -2212,17 +2189,12 @@ async function requestAllPermissions() {
     var ns2 = document.getElementById('perm-notif-status');
     if (ns2) { ns2.textContent = '❌ محظور'; ns2.style.background = 'rgba(255,61,113,0.15)'; ns2.style.color = 'var(--danger)'; }
   }
-
-  // تحديث حالة الموقع
   if (navigator.permissions) {
     navigator.permissions.query({ name: 'geolocation' }).then(function(r) {
       var ls = document.getElementById('perm-location-status');
       if (!ls) return;
-      if (r.state === 'granted') {
-        ls.textContent = '✅ مسموح'; ls.style.background = 'rgba(0,230,118,0.15)'; ls.style.color = 'var(--success)';
-      } else if (r.state === 'denied') {
-        ls.textContent = '❌ محظور'; ls.style.background = 'rgba(255,61,113,0.15)'; ls.style.color = 'var(--danger)';
-      }
+      if (r.state === 'granted') { ls.textContent = '✅ مسموح'; ls.style.background = 'rgba(0,230,118,0.15)'; ls.style.color = 'var(--success)'; }
+      else if (r.state === 'denied') { ls.textContent = '❌ محظور'; ls.style.background = 'rgba(255,61,113,0.15)'; ls.style.color = 'var(--danger)'; }
     }).catch(function(){});
   }
 }
@@ -2230,24 +2202,17 @@ async function requestAllPermissions() {
 async function grantAllPermissions() {
   var btn = document.getElementById('perm-allow-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'جاري الطلب...'; }
-
-  // 1) الإشعارات
   if ('Notification' in window && Notification.permission !== 'granted') {
     var perm = await Notification.requestPermission();
     var ns = document.getElementById('perm-notif-status');
     if (ns) {
-      if (perm === 'granted') {
-        ns.textContent = '✅ مسموح'; ns.style.background = 'rgba(0,230,118,0.15)'; ns.style.color = 'var(--success)';
-      } else {
-        ns.textContent = '❌ مرفوض'; ns.style.background = 'rgba(255,61,113,0.15)'; ns.style.color = 'var(--danger)';
-      }
+      if (perm === 'granted') { ns.textContent = '✅ مسموح'; ns.style.background = 'rgba(0,230,118,0.15)'; ns.style.color = 'var(--success)'; }
+      else { ns.textContent = '❌ مرفوض'; ns.style.background = 'rgba(255,61,113,0.15)'; ns.style.color = 'var(--danger)'; }
     }
     if (perm === 'granted') await doSubscribePush();
   } else if (Notification.permission === 'granted') {
     await doSubscribePush();
   }
-
-  // 2) الموقع
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       function(pos) {
@@ -2262,10 +2227,7 @@ async function grantAllPermissions() {
       { enableHighAccuracy: false, timeout: 8000 }
     );
   }
-
   localStorage.setItem('porte_permissions_asked', '1');
-
-  // أغلق بعد ثانية
   setTimeout(function() { dismissPermissions(); }, 1500);
 }
 
