@@ -217,11 +217,13 @@ wss.on('connection', (ws, req) => {
 // Push
 // ═══════════════════════════════════════════════════════════════════════════════
 async function sendPushToAdmins(instId, notification) {
-  if (!VAPID_PRIVATE) return;
+  if (!VAPID_PRIVATE) { console.log('[Push] VAPID_PRIVATE غير موجود'); return; }
   try {
     const { data: admins } = await supabase.from('users').select('id').eq('inst_id', instId).eq('role','admin').eq('status','active');
+    console.log(`[Push] admins found: ${admins?.length || 0} for inst_id=${instId}`);
     if (!admins?.length) return;
     const { data: subs } = await supabase.from('push_subscriptions').select('*').in('user_id', admins.map(a=>a.id));
+    console.log(`[Push] subscriptions found: ${subs?.length || 0}`);
     if (!subs?.length) return;
     const payload = JSON.stringify(notification);
     await Promise.allSettled(subs.map(sub =>
@@ -354,18 +356,24 @@ function startMQTT() {
         } else if (isRC) {
           logEntry.user_id = null;
           logEntry.source  = 'RC (جهاز تحكم)';
-          console.log(`[MQTT] 📻 RC: ${doorAction} — ${door.name}`);
+          console.log(`[MQTT] 📻 RC: ${doorAction} — ${door.name} rc_notify=${door.rc_notify} inst_id=${door.inst_id}`);
           if (door.rc_notify) {
             const label = doorAction === 'open' ? 'فتح الباب' : 'غلق الباب';
+            console.log(`[Push] إرسال إشعار RC لـ inst_id=${door.inst_id}`);
             sendPushToAdmins(door.inst_id, { title: 'إشعار RC 📻', body: `${label} بواسطة RC — ${door.name}` });
+          } else {
+            console.log(`[Push] rc_notify معطّل للباب ${door.name}`);
           }
         } else {
           logEntry.user_id = null;
           logEntry.source  = 'يدوي (أزرار الجهاز)';
-          console.log(`[MQTT] 🖐️ يدوي: ${doorAction} — ${door.name}`);
+          console.log(`[MQTT] 🖐️ يدوي: ${doorAction} — ${door.name} manual_notify=${door.manual_notify} inst_id=${door.inst_id}`);
           if (door.manual_notify) {
             const label = doorAction === 'open' ? 'فتح الباب' : 'غلق الباب';
+            console.log(`[Push] إرسال إشعار يدوي لـ inst_id=${door.inst_id}`);
             sendPushToAdmins(door.inst_id, { title: 'إشعار يدوي 🖐️', body: `${label} بالأزرار — ${door.name}` });
+          } else {
+            console.log(`[Push] manual_notify معطّل للباب ${door.name}`);
           }
         }
         const { error } = await supabase.from('door_logs').insert(logEntry);
