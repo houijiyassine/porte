@@ -727,46 +727,40 @@ function connectWS() {
 
         // RC أو يدوي
         if (msg.source === 'rc' || msg.source === 'manual') {
-          var timerActive = doorTimers[doorId] && doorTimers[doorId]._raf;
+          var timerActive = !!(doorTimers[doorId] && doorTimers[doorId]._raf);
 
           if (rawState === 'idle') {
-            // idle من RC — تجاهل إذا الانيميشن شغّالة
-            if (timerActive) return;
+            // idle = الباب توقف فيزيائياً → أوقف الانيميشن دائماً
             doorCurrentState[doorId] = 'idle';
             updateDoorButtons(doorId, null);
             updateUserDoorButtons(doorId, null);
-            _cancelDoorTimer(doorId);
+            if (timerActive) {
+              var idImg = document.getElementById('door-img-' + doorId);
+              var idSt  = document.getElementById('user-state-' + doorId) || document.getElementById('door-progress-' + doorId);
+              stopDoorTimer(doorId, idImg, idSt);
+            } else {
+              _cancelDoorTimer(doorId);
+            }
             setTimeout(loadRecentHistory, 500);
             return;
           }
 
-          // تحديث الأزرار
-          updateDoorButtons(doorId, rawState === 'open' ? 'open' : 'close');
-          updateUserDoorButtons(doorId, rawState === 'open' ? 'open' : 'close');
-          updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
+          // RC/يدوي مع state=open أو close
+          var rcIsOpen = (rawState === 'open');
 
           if (timerActive) {
-            // انيميشن شغّالة — نفس الاتجاه = إيقاف، عكسي = تغيير
-            var timerIsOpen = doorTimers[doorId].isOpen;
-            var rcIsOpen = (rawState === 'open');
-            if (timerIsOpen === rcIsOpen) {
-              // نفس الاتجاه → إيقاف
-              var sImg = document.getElementById('door-img-' + doorId);
-              var sSt  = document.getElementById('user-state-' + doorId) || document.getElementById('door-progress-' + doorId);
-              stopDoorTimer(doorId, sImg, sSt);
-              updateDoorButtons(doorId, null);
-              updateUserDoorButtons(doorId, null);
-            } else {
-              // عكسي → أوقف وابدأ جديد
-              stopDoorTimer(doorId, null, null);
-              var rImg = document.getElementById('door-img-' + doorId);
-              var rSt  = document.getElementById('user-state-' + doorId) || document.getElementById('door-progress-' + doorId);
-              var rDur = document.querySelector('[data-door-id="' + doorId + '"]');
-              var rSec = rDur ? parseInt(rDur.getAttribute('data-duration') || '10') : 10;
-              if (rImg) startDoorTimer(doorId, rImg, rSt, rSec, rawState);
-            }
+            // انيميشن شغّالة → ضغطة ثانية = إيقاف دائماً
+            var sImg = document.getElementById('door-img-' + doorId);
+            var sSt  = document.getElementById('user-state-' + doorId) || document.getElementById('door-progress-' + doorId);
+            stopDoorTimer(doorId, sImg, sSt);
+            updateDoorButtons(doorId, null);
+            updateUserDoorButtons(doorId, null);
+            doorCurrentState[doorId] = 'idle';
           } else {
-            // لا انيميشن — ابدأ مباشرة
+            // لا انيميشن → ابدأ انيميشن جديد
+            updateDoorButtons(doorId, rcIsOpen ? 'open' : 'close');
+            updateUserDoorButtons(doorId, rcIsOpen ? 'open' : 'close');
+            updateDoorCardState(doorId, msg.deviceId, rawState, msg.source);
             var aImg = document.getElementById('door-img-' + doorId);
             var aSt  = document.getElementById('user-state-' + doorId) || document.getElementById('door-progress-' + doorId);
             var aDur = document.querySelector('[data-door-id="' + doorId + '"]');
