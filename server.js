@@ -136,11 +136,20 @@ function verifyToken(token) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Middleware
 // ═══════════════════════════════════════════════════════════════════════════════
-function auth(req, res, next) {
+async function auth(req, res, next) {
   const h = req.headers['authorization'];
   if (!h) return res.status(401).json({ error: 'غير مصرح' });
-  try { req.user = verifyToken(h.replace('Bearer ', '')); next(); }
-  catch { res.status(401).json({ error: 'جلسة منتهية' }); }
+  try {
+    req.user = verifyToken(h.replace('Bearer ', ''));
+    const { data: u } = await supabase.from('users')
+      .select('status, expire_date')
+      .eq('id', req.user.id)
+      .single();
+    if (!u) return res.status(401).json({ error: 'الحساب غير موجود', code: 'USER_NOT_FOUND' });
+    if (u.status === 'blocked') return res.status(403).json({ error: 'الحساب موقوف', code: 'BLOCKED' });
+    if (u.expire_date && new Date(u.expire_date) < new Date()) return res.status(403).json({ error: 'انتهت صلاحية الحساب', code: 'EXPIRED' });
+    next();
+  } catch { res.status(401).json({ error: 'جلسة منتهية', code: 'INVALID_TOKEN' }); }
 }
 function adminOnly(req, res, next) {
   if (!['admin','super_admin'].includes(req.user.role)) return res.status(403).json({ error: 'غير مسموح' });
@@ -613,7 +622,9 @@ app.post('/api/auth/login', rl(5, 60000), async (req, res) => {
     if (u.pw_hash !== crypto.createHash('sha256').update(pw).digest('hex')) return res.status(401).json({ error: 'كلمة المرور غير صحيحة' });
     if (u.expire_date && new Date(u.expire_date) < new Date()) return res.status(401).json({ error: 'انتهت صلاحية الحساب' });
     const token = signToken({ id: u.id, role: u.role, inst_id: u.inst_id, name: u.name });
-    res.json({ token, user: { id: u.id, name: u.name, phone: u.phone, role: u.role, inst_id: u.inst_id, request_status: u.request_status } });
+    // auto_logout_minutes: من قاعدة البيانات أو الافتراضي 15 دقيقة
+    const autoLogout = u.auto_logout_minutes || 15;
+    res.json({ token, user: { id: u.id, name: u.name, phone: u.phone, role: u.role, inst_id: u.inst_id, request_status: u.request_status, auto_logout_minutes: autoLogout } });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
