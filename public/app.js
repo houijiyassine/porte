@@ -105,7 +105,19 @@ window.addEventListener('load', async () => {
   setTimeout(() => {
     document.getElementById('loading').style.display = 'none';
     if (token && user) {
-      bootApp();
+      var loginTime = parseInt(localStorage.getItem('porte_login_time') || '0');
+      var elapsed   = Date.now() - loginTime;
+      if (elapsed > SESSION_MS) {
+        // انتهت الجلسة
+        localStorage.removeItem('porte_token');
+        localStorage.removeItem('porte_user');
+        localStorage.removeItem('porte_login_time');
+        token = null; user = null;
+        document.getElementById('login-page').style.display = 'flex';
+      } else {
+        // جلسة لا تزال صالحة — أكمل وابدأ المؤقت
+        bootApp();
+      }
     } else {
       document.getElementById('login-page').style.display = 'flex';
     }
@@ -151,6 +163,7 @@ async function doLogin() {
     user  = res.user;
     localStorage.setItem('porte_token', token);
     localStorage.setItem('porte_user', JSON.stringify(user));
+    localStorage.setItem('porte_login_time', String(Date.now()));
     document.getElementById('login-page').style.display = 'none';
     bootApp();
   } catch(e) {
@@ -268,6 +281,7 @@ async function verifyOtp() {
       user  = res.user;
       localStorage.setItem('porte_token', token);
       localStorage.setItem('porte_user', JSON.stringify(user));
+      localStorage.setItem('porte_login_time', String(Date.now()));
       document.getElementById('otp-page').style.display = 'none';
       bootApp();
     } else {
@@ -393,19 +407,24 @@ setInterval(function() {
   if (token) apiFetch('/api/auth/heartbeat', 'POST', {}).catch(function(){});
 }, 5 * 60 * 1000);
 
-// ─── تسجيل خروج تلقائي بعد عدم نشاط ────────────────────────────────────────
-var _lastActivity = Date.now();
-var _autoLogoutMs = 60 * 60 * 1000; // ساعة واحدة
-['click','keydown','touchstart'].forEach(function(ev) {
-  document.addEventListener(ev, function() { _lastActivity = Date.now(); });
-});
-setInterval(function() {
-  if (!token) return;
-  if (Date.now() - _lastActivity > _autoLogoutMs) {
-    toast('تم تسجيل خروجك تلقائياً لعدم النشاط', 'info');
-    setTimeout(logout, 2000);
+// ─── تسجيل خروج تلقائي بعد 15 دقيقة من تسجيل الدخول ────────────────────────
+var SESSION_MS = 15 * 60 * 1000; // 15 دقيقة
+var _sessionTimer = null;
+
+function startSessionTimer() {
+  clearTimeout(_sessionTimer);
+  var loginTime = parseInt(localStorage.getItem('porte_login_time') || '0');
+  var elapsed   = Date.now() - loginTime;
+  var remaining = SESSION_MS - elapsed;
+  if (remaining <= 0) {
+    logout();
+    return;
   }
-}, 60000);
+  _sessionTimer = setTimeout(function() {
+    toast('انتهت جلستك، يرجى تسجيل الدخول مجدداً', 'info');
+    setTimeout(logout, 2000);
+  }, remaining);
+}
 
 
 function showPendingScreen() {
@@ -468,6 +487,7 @@ function showPendingScreen() {
 
 // ─── Boot ─────────────────────────────────────
 function bootApp() {
+  startSessionTimer(); // ← ابدأ مؤقت الجلسة
   selectedInstId = null; // صفّر عند كل تشغيل
   document.getElementById('main-app').style.display = 'block';
 
@@ -3361,8 +3381,10 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 function showLogout() { logout(); }
 
 function logout() {
+  clearTimeout(_sessionTimer);
   localStorage.removeItem('porte_token');
   localStorage.removeItem('porte_user');
+  localStorage.removeItem('porte_login_time');
   token = null; user = null;
   document.getElementById('main-app').style.display = 'none';
   document.getElementById('login-page').style.display = 'flex';
