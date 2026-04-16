@@ -167,6 +167,14 @@ function broadcastToUser(userId, data) {
   if (c?.readyState === 1) { c.send(JSON.stringify(data)); return true; }
   return false;
 }
+function broadcastSmart(instId, data) {
+  const msg = JSON.stringify(data);
+  wss.clients.forEach(c => {
+    if (c.readyState !== 1) return;
+    if (c._role === 'super_admin') { c.send(msg); return; }
+    if (c._instId === instId) c.send(msg);
+  });
+}
 
 wss.on('connection', (ws, req) => {
   const token = new URL(req.url, 'http://localhost').searchParams.get('token');
@@ -175,15 +183,18 @@ wss.on('connection', (ws, req) => {
     try {
       const payload = verifyToken(token);
       userId = payload.id;
-      ws._instId = payload.inst_id; // النقطة 8: حفظ inst_id للـ broadcast
+      ws._instId = payload.inst_id;
+      ws._role   = payload.role; // حفظ الدور للـ broadcastSmart
       wsClients.set(userId, ws);
     } catch {}
   }
   ws.send(JSON.stringify({ type: 'connected' }));
 
-  // النقطة 2: إرسال حالة الأبواب فور الاتصال
+  // إرسال حالة الأبواب فور الاتصال — حسب الدور
   if (userId) {
     doorCache.forEach(door => {
+      // super_admin يرى كل الأبواب — باقي المستخدمين مؤسستهم فقط
+      if (ws._role !== 'super_admin' && door.inst_id !== ws._instId) return;
       const s = doorStateCache.get(door.device_id) || { r1:false, r2:false, r3:false, r4:false };
       const isOpen  = s.r1 || s.r2; // R1=يدوي فتح, R2=RC فتح
       const isClose = s.r3 || s.r4; // R3=يدوي غلق, R4=RC غلق
@@ -201,7 +212,12 @@ wss.on('connection', (ws, req) => {
     try {
       const msg = JSON.parse(raw);
       if (msg.type === 'location' && userId) {
-        broadcast({ type: 'user_location', userId, coords: msg.coords });
+        // موقع المستخدم — السوبر أدمن فقط يراه
+        wss.clients.forEach(c => {
+          if (c.readyState === 1 && c._role === 'super_admin') {
+            c.send(JSON.stringify({ type: 'user_location', userId, coords: msg.coords }));
+          }
+        });
         const now = new Date().toISOString();
         const { data: u } = await supabase.from('users').select('inst_id').eq('id', userId).single();
         await supabase.from('user_locations').insert({ user_id: userId, inst_id: u?.inst_id, lat: msg.coords.lat, lng: msg.coords.lng, accuracy: msg.coords.accuracy||null, created_at: now });
@@ -292,9 +308,9 @@ function startMQTT() {
     // LWT — online/offline
     if (topicType === 'tele' && topicSuffix === 'LWT') {
       const isOnline = msg === 'Online';
-      broadcast({ type: 'device_online', deviceId, online: isOnline, timestamp: Date.now() });
+      const door = doorCache.get(deviceId);
+      broadcastSmart(door?.inst_id, { type: 'device_online', deviceId, online: isOnline, timestamp: Date.now() });
       if (!isOnline) {
-        const door = doorCache.get(deviceId);
         if (door) sendPushToAdmins(door.inst_id, { title: '⚠️ انقطع اتصال الجهاز', body: `الباب "${door.name}" غير متصل` });
       }
       return;
@@ -341,8 +357,8 @@ function startMQTT() {
       const isRC      = (ch === '2' || ch === '4'); // R2+R4 = RC
       const door      = doorCache.get(deviceId);
 
-      // بث للواجهة
-      broadcast({
+      // بث للواجهة — حسب المؤسسة
+      broadcastSmart(door?.inst_id, {
         type: 'door_state', deviceId,
         doorId: door?.id, instId: door?.inst_id,
         channel: ch, r1_on: isOpen, r2_on: isClose,
@@ -420,14 +436,14 @@ async function openDoor(deviceId, dur) {
   const door4open = doorCache.get(deviceId);
   const openStartTime = Date.now();
   doorProgress[deviceId] = { pos: startPos, isOpen: true, duration: dur, startTime: openStartTime, startPos };
-  broadcast({ type: 'door_progress', deviceId, doorId: door4open?.id, pos: startPos, isOpen: true, duration: dur });
-  broadcast({ type: 'door_event', action: 'open', deviceId });
+  broadcastSmart(door4open?.inst_id, { type: 'door_progress', deviceId, doorId: door4open?.id, pos: startPos, isOpen: true, duration: dur });
+  broadcastSmart(door4open?.inst_id, { type: 'door_event', action: 'open', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
     mqttControl(deviceId, 1, false);
     const dpDoorOpen = doorCache.get(deviceId);
     doorProgress[deviceId] = { pos: 1.0, isOpen: true };
-    broadcast({ type: 'door_event', action: 'auto_stop', deviceId, doorId: dpDoorOpen?.id });
-    broadcast({ type: 'door_progress', deviceId, doorId: dpDoorOpen?.id, pos: 1.0, isOpen: true, stopped: true });
+    broadcastSmart(dpDoorOpen?.inst_id, { type: 'door_event', action: 'auto_stop', deviceId, doorId: dpDoorOpen?.id });
+    broadcastSmart(dpDoorOpen?.inst_id, { type: 'door_progress', deviceId, doorId: dpDoorOpen?.id, pos: 1.0, isOpen: true, stopped: true });
     delete doorTimers[deviceId];
   }, dur * 1000);
   return { success: true };
@@ -446,14 +462,14 @@ async function closeDoor(deviceId, dur) {
   const door4close = doorCache.get(deviceId);
   const closeStartTime = Date.now();
   doorProgress[deviceId] = { pos: startPos, isOpen: false, duration: dur, startTime: closeStartTime, startPos };
-  broadcast({ type: 'door_progress', deviceId, doorId: door4close?.id, pos: startPos, isOpen: false, duration: dur });
-  broadcast({ type: 'door_event', action: 'close', deviceId });
+  broadcastSmart(door4close?.inst_id, { type: 'door_progress', deviceId, doorId: door4close?.id, pos: startPos, isOpen: false, duration: dur });
+  broadcastSmart(door4close?.inst_id, { type: 'door_event', action: 'close', deviceId });
   doorTimers[deviceId] = setTimeout(() => {
     mqttControl(deviceId, 3, false);
     const dpDoor2 = doorCache.get(deviceId);
     doorProgress[deviceId] = { pos: 0.0, isOpen: false };
-    broadcast({ type: 'door_event', action: 'auto_stop', deviceId, doorId: dpDoor2?.id });
-    broadcast({ type: 'door_progress', deviceId, doorId: dpDoor2?.id, pos: 0.0, isOpen: false, stopped: true });
+    broadcastSmart(dpDoor2?.inst_id, { type: 'door_event', action: 'auto_stop', deviceId, doorId: dpDoor2?.id });
+    broadcastSmart(dpDoor2?.inst_id, { type: 'door_progress', deviceId, doorId: dpDoor2?.id, pos: 0.0, isOpen: false, stopped: true });
     delete doorTimers[deviceId];
   }, dur * 1000);
   return { success: true };
@@ -484,10 +500,10 @@ async function stopDoor(deviceId, clientPos) {
   }
 
   doorProgress[deviceId] = { pos: currentPos, isOpen: currentIsOpen };
-  broadcast({ type: 'door_progress', deviceId, doorId: stopDoor2?.id, pos: currentPos, isOpen: currentIsOpen, stopped: true });
+  broadcastSmart(stopDoor2?.inst_id, { type: 'door_progress', deviceId, doorId: stopDoor2?.id, pos: currentPos, isOpen: currentIsOpen, stopped: true });
   mqttControl(deviceId, 1, false);
   mqttControl(deviceId, 3, false);
-  broadcast({ type: 'door_event', action: 'stop', deviceId });
+  broadcastSmart(stopDoor2?.inst_id, { type: 'door_event', action: 'stop', deviceId });
   return { success: true };
 }
 
@@ -712,8 +728,15 @@ app.post('/api/door/control', auth, async (req, res) => {
 
     if (!result?.success) return res.status(500).json({ error: result?.msg });
 
-    broadcast({ type: 'door_event', action, userId: req.user.id, deviceId });
-    await sendPushToAll({ title: `🚪 ${['open','open40'].includes(action)?'فتح الباب':action==='close'?'غلق الباب':'إيقاف الباب'}`, body: `بواسطة ${req.user.name}` });
+    const doorInst = doorCache.get(deviceId);
+    broadcastSmart(doorInst?.inst_id, { type: 'door_event', action, userId: req.user.id, deviceId });
+    // إشعار Push لأدمن المؤسسة فقط
+    if (doorInst?.inst_id) {
+      await sendPushToAdmins(doorInst.inst_id, {
+        title: `🚪 ${['open','open40'].includes(action)?'فتح الباب':action==='close'?'غلق الباب':'إيقاف الباب'}`,
+        body: `بواسطة ${req.user.name}`
+      });
+    }
     res.json({ success: true, action });
   } catch(e) { console.error('[Control]', e); res.status(500).json({ error: e.message }); }
 });
@@ -781,7 +804,12 @@ app.put('/api/users/:id', auth, adminOnly, async (req, res) => {
     const { id } = req.params;
     const updates = {};
     ['name','phone','role','status','request_status','expire_date','note'].forEach(k => { if (req.body[k]!==undefined) updates[k]=req.body[k]; });
-    if (req.body.pw) { updates.pw_hash=crypto.createHash('sha256').update(req.body.pw).digest('hex'); updates.pw_plain=encryptPw(req.body.pw); }
+    // تغيير كلمة المرور للسوبر أدمن فقط
+    if (req.body.pw) {
+      if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'تغيير كلمة المرور للسوبر أدمن فقط' });
+      updates.pw_hash = crypto.createHash('sha256').update(req.body.pw).digest('hex');
+      updates.pw_plain = encryptPw(req.body.pw);
+    }
     const { data, error } = await supabase.from('users').update(updates).eq('id', id).select().single();
     if (error) throw error;
     if (updates.request_status === 'approved') broadcastToUser(id, { type: 'request_approved' });
