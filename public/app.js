@@ -408,11 +408,14 @@ setInterval(function() {
 }, 5 * 60 * 1000);
 
 // ─── تسجيل خروج تلقائي بعد 15 دقيقة من تسجيل الدخول ────────────────────────
-var SESSION_MS = 15 * 60 * 1000; // 15 دقيقة
+var SESSION_MS = 15 * 60 * 1000; // افتراضي 15 دقيقة — يُحدَّث من السيرفر
 var _sessionTimer = null;
 
 function startSessionTimer() {
   clearTimeout(_sessionTimer);
+  // استخدم auto_logout_minutes من بيانات المستخدم إذا وجد
+  var minutes = (user && user.auto_logout_minutes) ? user.auto_logout_minutes : 15;
+  SESSION_MS = minutes * 60 * 1000;
   var loginTime = parseInt(localStorage.getItem('porte_login_time') || '0');
   var elapsed   = Date.now() - loginTime;
   var remaining = SESSION_MS - elapsed;
@@ -3412,7 +3415,14 @@ async function apiFetch(url, method = 'GET', body = null, auth = true) {
   const res  = await fetch(url, opts);
   let data;
   try { data = await res.json(); } catch(e) { data = {}; }
-  if (!res.ok) throw new Error(data.error || 'خطأ في الخادم');
+  if (!res.ok) {
+    // تسجيل خروج تلقائي إذا كان الحساب موقوفاً أو محذوفاً
+    if (data.code === 'BLOCKED' || data.code === 'USER_NOT_FOUND' || data.code === 'EXPIRED') {
+      toast(data.error || 'تم إيقاف حسابك', 'error');
+      setTimeout(logout, 2000);
+    }
+    throw new Error(data.error || 'خطأ في الخادم');
+  }
   return data;
 }
 
